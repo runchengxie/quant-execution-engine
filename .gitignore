@@ -1,0 +1,57 @@
+# Byte-code and cache
+__pycache__/
+*.pyc
+
+# Virtual environments (common patterns)
+.venv/
+venv/
+env/
+stock-analysis-env/
+
+# Build artifacts and packaging
+build/
+dist/
+*.egg-info/
+
+# --- Project-specific ---
+# Data files
+/data/
+
+# Generated output files
+outputs/
+
+# Debugging or temporary files
+full_project_source.txt
+strategy_full_project_source.txt
+
+# --- Generated Documents ---
+# Ignore binary/compiled document formats. Track the source (.md, .tex) instead.
+*.pdf
+*.docx
+*.xlsx
+
+# --- Editor & IDE Specific ---
+
+# Visual Studio Code
+.vscode/
+!.vscode/settings.json
+!.vscode/launch.json
+!.vscode/extensions.json
+!.vscode/tasks.json
+
+# Codex CLI
+# AGENTS.md
+.codex/
+
+# Environment variables
+.env
+
+# Ignore direnv environment file
+.envrc
+
+# Unit test / coverage reports
+.coverage
+
+# Configuration files
+# Ignore actual config file, keep template in version control
+config/config.yaml
