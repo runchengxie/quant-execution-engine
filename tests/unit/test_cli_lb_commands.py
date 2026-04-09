@@ -9,7 +9,9 @@ import pytest
 import stock_analysis.app.cli as cli
 
 
-@pytest.mark.unit
+pytestmark = pytest.mark.unit
+
+
 def test_cli_dispatch_lb_quote(monkeypatch):
     """Test CLI dispatch of lb-quote to run_lb_quote."""
     called = {}
@@ -29,79 +31,49 @@ def test_cli_dispatch_lb_quote(monkeypatch):
     assert called["tickers"] == ["AAPL", "MSFT"]
 
 
-@pytest.mark.unit
-def test_cli_dispatch_lb_rebalance(monkeypatch):
-    """Test CLI dispatch of lb-rebalance to run_lb_rebalance."""
-    called = {}
+def test_main_routes_lb_rebalance():
+    """Test lb-rebalance routing and argument translation."""
+    with patch.object(cli, "run_lb_rebalance", return_value=0) as mock_run:
+        with patch.object(
+            sys,
+            "argv",
+            [
+                "stockq",
+                "lb-rebalance",
+                "targets.json",
+                "--account",
+                "main-2",
+                "--execute",
+                "--target-gross-exposure",
+                "0.9",
+            ],
+        ):
+            result = cli.main()
 
-    def fake_run_lb_rebalance(input_file, account="main", dry_run=True, env="real"):
-        called["input_file"] = input_file
-        called["account"] = account
-        called["dry_run"] = dry_run
-        called["env"] = env
-        return 0
-
-    monkeypatch.setattr(cli, "run_lb_rebalance", fake_run_lb_rebalance)
-
-    # Test with default arguments
-    result = cli.run_lb_rebalance("test.xlsx")
     assert result == 0
-    assert called["input_file"] == "test.xlsx"
-    assert called["account"] == "main"
-    assert called["dry_run"]
+    mock_run.assert_called_once_with("targets.json", "main-2", False, "real", 0.9)
 
-    # Test with custom arguments
-    result = cli.run_lb_rebalance("test2.xlsx", "account2", False)
+
+def test_main_routes_lb_account():
+    """Test lb-account routing."""
+    with patch.object(cli, "run_lb_account", return_value=0) as mock_run:
+        with patch.object(sys, "argv", ["stockq", "lb-account", "--format", "json"]):
+            result = cli.main()
+
     assert result == 0
-    assert called["input_file"] == "test2.xlsx"
-    assert called["account"] == "account2"
-    assert not called["dry_run"]
+    mock_run.assert_called_once_with(only_funds=False, only_positions=False, fmt="json")
 
 
-@pytest.mark.unit
-def test_main_command_routing():
-    """Test the command routing logic of the main function."""
-    # Create a mock args object
-    args = SimpleNamespace()
+def test_main_routes_lb_config():
+    """Test lb-config routing."""
+    with patch.object(cli, "run_lb_config", return_value=0) as mock_run:
+        with patch.object(sys, "argv", ["stockq", "lb-config"]):
+            result = cli.main()
 
-    with patch.object(cli, "create_parser") as mock_parser:
-        with patch.object(cli, "run_lb_quote", return_value=0) as mock_lb_quote:
-            with patch.object(
-                cli, "run_lb_rebalance", return_value=0
-            ) as mock_lb_rebalance:
-                # Mock the parser's return value
-                mock_parser_instance = Mock()
-                mock_parser.return_value = mock_parser_instance
-
-                # Test the lb-quote command
-                args.command = "lb-quote"
-                args.tickers = ["AAPL", "GOOGL"]
-                mock_parser_instance.parse_args.return_value = args
-
-                result = cli.main()
-                assert result == 0
-                mock_lb_quote.assert_called_once_with(["AAPL", "GOOGL"])
-
-                # Reset the mocks
-                mock_lb_quote.reset_mock()
-                mock_lb_rebalance.reset_mock()
-
-                # Test the lb-rebalance command
-                args.command = "lb-rebalance"
-                args.input_file = "portfolio.xlsx"
-                args.account = "test_account"
-                args.execute = False  # This means dry_run = True
-
-                result = cli.main()
-                assert result == 0
-                # Assert the first three arguments (the fourth, env, defaults to 'real')
-                call_args, kwargs = mock_lb_rebalance.call_args
-                assert call_args[0] == "portfolio.xlsx"
-                assert call_args[1] == "test_account"
-                assert call_args[2] is True
+    assert result == 0
+    mock_run.assert_called_once_with(True)
 
 
-@pytest.mark.unit
 def test_main_no_command():
     """Test that help information is displayed when no command is provided."""
     args = SimpleNamespace()
@@ -117,7 +89,6 @@ def test_main_no_command():
         mock_parser_instance.print_help.assert_called_once()
 
 
-@pytest.mark.unit
 def test_main_unknown_command(caplog):
     """Test the handling of an unknown command."""
     args = SimpleNamespace()
@@ -134,10 +105,8 @@ def test_main_unknown_command(caplog):
         assert "Unknown command: unknown-command" in caplog.text
 
 
-@pytest.mark.unit
-def test_run_lb_quote_import_error(monkeypatch, caplog):
+def test_run_lb_quote_import_error(caplog):
     """Test the handling of an ImportError in run_lb_quote."""
-    # Simulate an error when importing the longport_client module
     original_import = __builtins__["__import__"]
 
     def mock_import(name, *args, **kwargs):
@@ -152,7 +121,6 @@ def test_run_lb_quote_import_error(monkeypatch, caplog):
     assert "longport" in caplog.text.lower()
 
 
-@pytest.mark.unit
 def test_run_lb_rebalance_file_not_found(capsys):
     """Test the handling of a non-existent file in run_lb_rebalance."""
     result = cli.run_lb_rebalance("non_existent_file.xlsx")
@@ -161,9 +129,8 @@ def test_run_lb_rebalance_file_not_found(capsys):
     assert "File not found" in err
 
 
-@pytest.mark.unit
 def test_run_lb_rebalance_rejects_legacy_workbook(tmp_path: Path, caplog):
-    """Test that execution rejects legacy workbook inputs with a migration hint."""
+    """Test that execution rejects legacy workbook inputs with a schema hint."""
     legacy_file = tmp_path / "legacy.xlsx"
     legacy_file.write_text("legacy workbook placeholder", encoding="utf-8")
 
@@ -172,10 +139,9 @@ def test_run_lb_rebalance_rejects_legacy_workbook(tmp_path: Path, caplog):
 
     assert result == 1
     assert "deprecated" in caplog.text.lower()
-    assert "stockq targets gen" in caplog.text
+    assert "schema-v2" in caplog.text.lower()
 
 
-@pytest.mark.unit
 def test_app_function():
     """Test the app function as the entry point."""
     with patch.object(cli, "main", return_value=0) as mock_main:

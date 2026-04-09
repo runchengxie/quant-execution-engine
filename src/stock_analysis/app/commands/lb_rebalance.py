@@ -36,8 +36,6 @@ def run_lb_rebalance(
         int: Exit code (0 indicates success)
     """
     try:
-        # Validate LongPort dependency early so tests can patch import
-        __import__("stock_analysis.execution.broker.longport_client")
         # Force use REAL environment; without --execute it's dry run preview
         env = "real"
         if dry_run:
@@ -59,12 +57,15 @@ def run_lb_rebalance(
         if file_path.suffix.lower() != ".json":
             msg = (
                 "Legacy workbook inputs are deprecated for live execution. "
-                "Generate a canonical schema-v2 target file with "
-                "'stockq targets gen --from ai|preliminary' and rerun "
+                "Provide a canonical schema-v2 targets JSON and rerun "
                 "'stockq lb-rebalance <targets.json>'."
             )
             logger.error(msg)
             return CommandResult(exit_code=1, stderr=msg)
+
+        # Validate LongPort dependency after local input validation so basic
+        # user errors still surface even when the broker SDK is unavailable.
+        __import__("stock_analysis.execution.broker.longport_client")
 
         # Import heavy dependencies lazily after basic validation
         from ...execution.services.account_snapshot import (

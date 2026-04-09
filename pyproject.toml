@@ -5,16 +5,9 @@ requires-python = ">=3.10, <3.13"
 
 dependencies = [
   "pandas",
-  "matplotlib",
-  "openpyxl",
-  "scipy",
-  "backtrader",
-  "python-dotenv",
   "requests",
-  "google-generativeai",
   "longport>=0.2.77",
   "pyyaml",
-  "pydantic>=2",
 ]
 
 [dependency-groups]

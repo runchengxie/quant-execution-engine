@@ -285,7 +285,7 @@ def read_targets_json(
     if require_schema_v2:
         raise ValueError(
             "legacy ticker-list targets are no longer canonical execution inputs; "
-            "regenerate the file with 'stockq targets gen' to produce schema v2"
+            "provide a schema-v2 targets JSON before live execution"
         )
 
     tickers = [str(t).upper().strip() for t in (raw.get("tickers") or []) if t]
