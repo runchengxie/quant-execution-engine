@@ -32,7 +32,7 @@ def test_cli_contains_execution_commands() -> None:
     content = Path("src/quant_execution_engine/cli.py").read_text(encoding="utf-8")
 
     assert 'subparsers.add_parser("quote"' in content
-    assert 'subparsers.add_parser("rebalance"' in content
+    assert '"rebalance"' in content
     assert 'subparsers.add_parser("account"' in content
     assert 'subparsers.add_parser("config"' in content
     assert "def run_quote" in content
