@@ -1,3 +1,15 @@
+<!-- START doctoc generated TOC please keep comment here to allow auto update -->
+<!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
+
+- [Execution Engine](#execution-engine)
+  - [安装](#%E5%AE%89%E8%A3%85)
+  - [CLI](#cli)
+  - [Targets JSON](#targets-json)
+  - [配置文件](#%E9%85%8D%E7%BD%AE%E6%96%87%E4%BB%B6)
+  - [测试](#%E6%B5%8B%E8%AF%95)
+
+<!-- END doctoc generated TOC please keep comment here to allow auto update -->
+
 # Execution Engine
 
 这个仓库现在只承载交易执行侧能力，不再包含 research、AI 选股、数据导入或回测流程。
