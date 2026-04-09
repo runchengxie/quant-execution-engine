@@ -5,7 +5,7 @@ from unittest.mock import Mock, patch
 
 import pytest
 
-from quant_execution_engine.broker.longport import LongPortClient
+from quant_execution_engine.broker.longport import BrokerLimits, LongPortClient
 
 
 @pytest.mark.unit
@@ -189,3 +189,42 @@ def test_portfolio_snapshot_basic(monkeypatch: pytest.MonkeyPatch) -> None:
     assert pos_map == {"AAPL.US": 10, "TSLA.US": 5}
     assert net_assets == 2000.0
     assert base_ccy == "HKD"
+
+
+@pytest.mark.unit
+def test_place_order_dry_run_returns_estimate() -> None:
+    client = LongPortClient.__new__(LongPortClient)
+    client.env = SimpleNamespace(value="real")
+    client.limits = BrokerLimits()
+
+    with (
+        patch.object(client, "lot_size", return_value=1),
+        patch.object(client, "quote_last", return_value={"AAPL.US": (150.0, "")}),
+    ):
+        result = client.place_order("AAPL", 2, "BUY", dry_run=True)
+
+    assert result["dry_run"] is True
+    assert result["symbol"] == "AAPL.US"
+    assert result["qty"] == 2
+    assert result["side"] == "BUY"
+    assert result["est_px"] == 150.0
+    assert result["est_notional"] == 300.0
+
+
+@pytest.mark.unit
+def test_place_order_live_mode_is_currently_simulated() -> None:
+    client = LongPortClient.__new__(LongPortClient)
+    client.env = SimpleNamespace(value="real")
+    client.limits = BrokerLimits()
+
+    with (
+        patch.object(client, "_check_window"),
+        patch.object(client, "_check_lot"),
+        patch.object(client, "quote_last", return_value={"AAPL.US": (150.0, "")}),
+    ):
+        result = client.place_order("AAPL", 2, "BUY", dry_run=False)
+
+    assert result["dry_run"] is False
+    assert result["symbol"] == "AAPL.US"
+    assert result["qty"] == 2
+    assert result["order_id"] == "SIMULATED_ID"

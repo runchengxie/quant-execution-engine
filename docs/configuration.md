@@ -16,11 +16,14 @@
 - `LONGPORT_MAX_QTY_PER_ORDER`
 - `LONGPORT_TRADING_WINDOW_START`
 - `LONGPORT_TRADING_WINDOW_END`
+- `FX_<CCY>_USD`，例如 `FX_HKD_USD=0.128`
+- `LONGPORT_FX_<CCY>_USD`，例如 `LONGPORT_FX_HKD_USD=0.128`
 
 兼容读取：
 
 - 旧的 `LONGBRIDGE_*` 前缀仍会被兼容读取
 - `LONGPORT_ACCESS_TOKEN_REAL` 仍会作为 `LONGPORT_ACCESS_TOKEN` 的兼容兜底
+- `LONGPORT_FX_<CCY>_USD` 会作为 `FX_<CCY>_USD` 的兼容兜底
 
 ## 本地 YAML
 
@@ -56,6 +59,14 @@ fx:
     HKD: 0.128
 ```
 
+也兼容这个 FX 结构：
+
+```yaml
+fx:
+  rates:
+    HKDUSD: 0.128
+```
+
 ## 加载顺序
 
 配置文件按这个顺序查找：
@@ -64,3 +75,9 @@ fx:
 2. `config.yaml`
 
 都不存在时，运行时使用空配置。
+
+## 行为说明
+
+- `LONGPORT_TRADING_WINDOW_START/END` 只是 session API 不可用时的本地降级判断。
+- `LONGPORT_MAX_QTY_PER_ORDER` 只在非 dry-run 路径强制拦截。
+- `LONGPORT_MAX_NOTIONAL_PER_ORDER` 当前只做告警提示，不会在本地直接拦截；最终仍以 broker 风控为准。

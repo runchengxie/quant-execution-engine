@@ -14,6 +14,11 @@ execution-engine 只接受 schema-v2 `targets.json`。
 - `target_weight`
 - `target_quantity`
 
+可选字段：
+
+- `notes`
+- `metadata`
+
 ## 最小示例
 
 ```json
@@ -52,6 +57,13 @@ execution-engine 只接受 schema-v2 `targets.json`。
 - `notes`
   可选备注。
 
+每个 target entry 还支持：
+
+- `notes`
+  单个标的备注。
+- `metadata`
+  透传的扩展字段。
+
 ## 市场标识
 
 当前支持：
@@ -60,6 +72,8 @@ execution-engine 只接受 schema-v2 `targets.json`。
 - `HK`
 - `CN`
 - `SG`
+
+如果 `symbol` 自带 `.US` / `.HK` / `.CN` / `.SG` 后缀，会自动解析对应市场；未提供市场时默认按 `US` 处理。
 
 ## 兼容行为
 

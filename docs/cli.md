@@ -51,10 +51,11 @@ qexec quote AAPL 700.HK
 
 ### `rebalance`
 
-从 canonical `targets.json` 生成预览或执行调仓。
+从 canonical `targets.json` 生成预览或进入 live-mode 调仓路径。
 
 ```bash
 qexec rebalance outputs/targets/2026-04-09.json
+qexec rebalance outputs/targets/2026-04-09.json --account main
 qexec rebalance outputs/targets/2026-04-09.json --execute
 qexec rebalance outputs/targets/2026-04-09.json --target-gross-exposure 0.9
 ```
@@ -65,3 +66,7 @@ qexec rebalance outputs/targets/2026-04-09.json --target-gross-exposure 0.9
 - 非 `.json` 输入会被直接拒绝。
 - schema-v1 / legacy ticker-list 不能作为 live execution 输入。
 - `--execute` 缺省关闭；默认是 dry-run。
+- `--execute` 当前会进入 live-mode 校验与审计输出路径，但 broker submit 分支仍返回模拟 `order_id`，还没有真正调用 LongPort 下单接口。
+- `--account` 当前只作为兼容参数记录到日志里，不会切换实际 broker 账户。
+- `rebalance` 每次运行都会写审计日志到 `outputs/orders/*.jsonl`。
+- `account` 子命令当前固定读取 `env="real"`。

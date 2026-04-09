@@ -48,7 +48,7 @@ if _RICH_AVAILABLE:
 def create_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="qexec",
-        description="Quant Execution Engine - LongPort-based live portfolio execution",
+        description="Quant Execution Engine - LongPort account, quote, and rebalance CLI",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
@@ -68,12 +68,19 @@ Examples:
 
     rebalance_parser = subparsers.add_parser(
         "rebalance",
-        help="Preview or execute rebalance orders from a schema-v2 targets JSON",
+        help="Preview rebalance orders from a schema-v2 targets JSON",
     )
     rebalance_parser.add_argument("input_file", type=str, help="targets JSON file")
-    rebalance_parser.add_argument("--account", type=str, default="main")
     rebalance_parser.add_argument(
-        "--execute", action="store_true", help="Place real orders instead of dry-run preview"
+        "--account",
+        type=str,
+        default="main",
+        help="Compatibility label used in logs; does not switch broker account yet",
+    )
+    rebalance_parser.add_argument(
+        "--execute",
+        action="store_true",
+        help="Run the live-mode path (broker submission is currently simulated)",
     )
     rebalance_parser.add_argument(
         "--target-gross-exposure",

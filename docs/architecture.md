@@ -8,8 +8,8 @@
 
 - broker 凭证与连接封装
 - 账户快照与行情抓取
-- 调仓计划生成
-- dry-run / live execution
+- 调仓计划生成与 diff 预览
+- dry-run / live-mode 调仓流程
 - 审计输出与终端渲染
 
 它不再负责：
@@ -66,3 +66,8 @@ src/quant_execution_engine/
 - 不保留 monolith 时代的 `shared/`、`app/commands/`、`contracts/` 套娃层级。
 - 尽量让模块名直接表达职责。
 - live execution 的输入边界严格收敛到 schema-v2 JSON。
+
+## 当前限制
+
+- `cli.py` 的 `rebalance --account` 目前只做兼容和日志记录，不会切换实际 broker 账户。
+- `broker/longport.py` 的 live-mode `place_order()` 分支当前仍返回模拟 `order_id`，还没有真正提交 LongPort 订单。
