@@ -5,10 +5,12 @@ from pathlib import Path
 
 import pytest
 
-from stock_analysis.contracts.targets import read_targets_json, write_targets_json
+from quant_execution_engine.targets import read_targets_json, write_targets_json
 
 
-@pytest.mark.unit
+pytestmark = pytest.mark.unit
+
+
 def test_write_targets_json_schema_v2_roundtrip(tmp_path: Path) -> None:
     out_path = tmp_path / "targets.json"
 
@@ -34,10 +36,7 @@ def test_write_targets_json_schema_v2_roundtrip(tmp_path: Path) -> None:
     assert [target.key for target in parsed.targets] == ["AAPL.US", "700.HK"]
 
 
-@pytest.mark.unit
-def test_read_targets_json_rejects_legacy_for_live_execution(
-    tmp_path: Path,
-) -> None:
+def test_read_targets_json_rejects_legacy_for_live_execution(tmp_path: Path) -> None:
     legacy_path = tmp_path / "legacy_targets.json"
     legacy_path.write_text(
         json.dumps(
@@ -55,7 +54,6 @@ def test_read_targets_json_rejects_legacy_for_live_execution(
         read_targets_json(legacy_path, require_schema_v2=True)
 
 
-@pytest.mark.unit
 def test_write_targets_json_legacy_tickers_defaults_to_equal_weights(
     tmp_path: Path,
 ) -> None:

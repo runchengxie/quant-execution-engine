@@ -6,7 +6,7 @@ __pycache__/
 .venv/
 venv/
 env/
-stock-analysis-env/
+quant-execution-engine-env/
 
 # Build artifacts and packaging
 build/
@@ -41,6 +41,7 @@ strategy_full_project_source.txt
 
 # Codex CLI
 # AGENTS.md
+.codex
 .codex/
 
 # Environment variables
@@ -51,6 +52,9 @@ strategy_full_project_source.txt
 
 # Unit test / coverage reports
 .coverage
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
 
 # Configuration files
 # Ignore actual config file, keep template in version control

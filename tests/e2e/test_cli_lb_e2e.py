@@ -6,132 +6,143 @@ from pathlib import Path
 import pytest
 
 
-@pytest.mark.e2e
-def test_cli_lb_quote_help():
-    """Tests the help message for the lb-quote command."""
-    result = subprocess.run(
-        [sys.executable, "-m", "stock_analysis.cli", "lb-quote", "--help"],
-        capture_output=True,
-        text=True,
-        cwd=Path.cwd(),
+def _cli_env() -> dict[str, str]:
+    env = os.environ.copy()
+    src_path = str(Path.cwd() / "src")
+    existing = env.get("PYTHONPATH")
+    env["PYTHONPATH"] = (
+        src_path if not existing else f"{src_path}{os.pathsep}{existing}"
     )
-
-    assert result.returncode == 0, f"Help command failed: {result.stderr}"
-    assert "lb-quote" in result.stdout.lower()
-    assert "tickers" in result.stdout.lower() or "股票代码" in result.stdout
+    return env
 
 
 @pytest.mark.e2e
-def test_cli_lb_rebalance_help():
-    """Tests the help message for the lb-rebalance command."""
+def test_cli_quote_help() -> None:
     result = subprocess.run(
-        [sys.executable, "-m", "stock_analysis.cli", "lb-rebalance", "--help"],
+        [sys.executable, "-m", "quant_execution_engine.cli", "quote", "--help"],
         capture_output=True,
         text=True,
         cwd=Path.cwd(),
+        env=_cli_env(),
     )
 
-    assert result.returncode == 0, f"Help command failed: {result.stderr}"
-    assert "lb-rebalance" in result.stdout.lower()
+    assert result.returncode == 0, result.stderr
+    assert "quote" in result.stdout.lower()
+    assert "tickers" in result.stdout.lower()
+
+
+@pytest.mark.e2e
+def test_cli_rebalance_help() -> None:
+    result = subprocess.run(
+        [sys.executable, "-m", "quant_execution_engine.cli", "rebalance", "--help"],
+        capture_output=True,
+        text=True,
+        cwd=Path.cwd(),
+        env=_cli_env(),
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "rebalance" in result.stdout.lower()
     assert "json" in result.stdout.lower()
     assert "target-gross-exposure" in result.stdout
 
 
 @pytest.mark.e2e
-def test_cli_main_help_is_execution_only():
-    """Tests the main CLI help message."""
+def test_cli_main_help_is_execution_only() -> None:
     result = subprocess.run(
-        [sys.executable, "-m", "stock_analysis.cli", "--help"],
+        [sys.executable, "-m", "quant_execution_engine.cli", "--help"],
         capture_output=True,
         text=True,
         cwd=Path.cwd(),
+        env=_cli_env(),
     )
 
-    assert result.returncode == 0, f"Main help command failed: {result.stderr}"
-    assert "lb-quote" in result.stdout
-    assert "lb-rebalance" in result.stdout
-    assert "lb-account" in result.stdout
-    assert "lb-config" in result.stdout
+    assert result.returncode == 0, result.stderr
+    assert "quote" in result.stdout
+    assert "rebalance" in result.stdout
+    assert "account" in result.stdout
+    assert "config" in result.stdout
     assert "backtest" not in result.stdout.lower()
     assert "ai-pick" not in result.stdout.lower()
     assert "load-data" not in result.stdout.lower()
 
 
 @pytest.mark.e2e
-def test_cli_no_command():
-    """Tests the behavior when no command is provided."""
+def test_cli_no_command() -> None:
     result = subprocess.run(
-        [sys.executable, "-m", "stock_analysis.cli"],
+        [sys.executable, "-m", "quant_execution_engine.cli"],
         capture_output=True,
         text=True,
         cwd=Path.cwd(),
+        env=_cli_env(),
     )
 
     assert result.returncode == 0
-    assert "usage" in result.stdout.lower() or "用法" in result.stdout
+    assert "usage" in result.stdout.lower()
 
 
 @pytest.mark.e2e
-def test_cli_unknown_command():
-    """Tests the handling of an unknown command."""
+def test_cli_unknown_command() -> None:
     result = subprocess.run(
-        [sys.executable, "-m", "stock_analysis.cli", "unknown-command"],
+        [sys.executable, "-m", "quant_execution_engine.cli", "unknown-command"],
         capture_output=True,
         text=True,
         cwd=Path.cwd(),
+        env=_cli_env(),
     )
 
     assert result.returncode != 0
-    assert "unknown" in result.stderr.lower() or "未知" in result.stderr
+    assert "unknown-command" in result.stderr
 
 
 @pytest.mark.e2e
-def test_cli_lb_quote_without_longport_dependency():
-    """Tests the behavior of lb-quote without LongPort credentials or SDK."""
-    env = os.environ.copy()
+def test_cli_quote_without_credentials() -> None:
+    env = _cli_env()
+    for var in [
+        "LONGPORT_APP_KEY",
+        "LONGPORT_APP_SECRET",
+        "LONGPORT_ACCESS_TOKEN",
+        "LONGPORT_ACCESS_TOKEN_REAL",
+    ]:
+        env.pop(var, None)
 
     result = subprocess.run(
-        [sys.executable, "-m", "stock_analysis.cli", "lb-quote", "AAPL"],
+        [sys.executable, "-m", "quant_execution_engine.cli", "quote", "AAPL"],
         capture_output=True,
         text=True,
         cwd=Path.cwd(),
         env=env,
     )
 
-    if "longport" in result.stderr.lower() and "import" in result.stderr.lower():
-        assert result.returncode != 0
-        assert "pip install longport" in result.stderr or "安装" in result.stderr
+    assert result.returncode != 0
+    assert result.stderr.strip()
 
 
 @pytest.mark.e2e
-def test_cli_lb_rebalance_file_not_found():
-    """Tests how the lb-rebalance command handles a non-existent file."""
+def test_cli_rebalance_file_not_found() -> None:
     result = subprocess.run(
-        [sys.executable, "-m", "stock_analysis.cli", "lb-rebalance", "missing.json"],
+        [sys.executable, "-m", "quant_execution_engine.cli", "rebalance", "missing.json"],
         capture_output=True,
         text=True,
         cwd=Path.cwd(),
+        env=_cli_env(),
     )
 
     assert result.returncode != 0
-    assert (
-        "not found" in result.stderr.lower()
-        or "不存在" in result.stderr
-        or "找不到" in result.stderr
-    )
+    assert "not found" in result.stderr.lower()
 
 
 @pytest.mark.e2e
-def test_cli_lb_rebalance_rejects_legacy_workbook(tmp_path: Path):
-    """Tests that rebalance execution requires canonical target JSON."""
+def test_cli_rebalance_rejects_legacy_workbook(tmp_path: Path) -> None:
     legacy_file = tmp_path / "legacy.xlsx"
     legacy_file.write_text("legacy workbook placeholder", encoding="utf-8")
 
     result = subprocess.run(
-        [sys.executable, "-m", "stock_analysis.cli", "lb-rebalance", str(legacy_file)],
+        [sys.executable, "-m", "quant_execution_engine.cli", "rebalance", str(legacy_file)],
         capture_output=True,
         text=True,
         cwd=Path.cwd(),
+        env=_cli_env(),
     )
 
     assert result.returncode != 0
@@ -147,19 +158,18 @@ def test_cli_lb_rebalance_rejects_legacy_workbook(tmp_path: Path):
     ),
     reason="Skipping live API test because LongPort API credentials are not configured.",
 )
-def test_cli_lb_quote_with_credentials():
-    """Tests the lb-quote command when API credentials are provided."""
+def test_cli_quote_with_credentials() -> None:
     result = subprocess.run(
-        [sys.executable, "-m", "stock_analysis.cli", "lb-quote", "AAPL"],
+        [sys.executable, "-m", "quant_execution_engine.cli", "quote", "AAPL"],
         capture_output=True,
         text=True,
         cwd=Path.cwd(),
+        env=_cli_env(),
         timeout=30,
     )
 
     if result.returncode == 0:
         assert "AAPL" in result.stdout
-        assert "价格" in result.stdout or "price" in result.stdout.lower()
     else:
         error_msg = result.stderr.lower()
         acceptable_errors = [
@@ -168,60 +178,50 @@ def test_cli_lb_quote_with_credentials():
             "rate limit",
             "quota",
             "market closed",
-            "网络",
-            "超时",
-            "限制",
         ]
-
         if any(err in error_msg for err in acceptable_errors):
-            pytest.skip(f"API call failed for an expected reason, skipping test: {result.stderr}")
-        else:
-            pytest.fail(f"lb-quote command failed unexpectedly: {result.stderr}")
+            pytest.skip(f"Live quote skipped due to runtime constraint: {result.stderr}")
+        pytest.fail(f"quote command failed unexpectedly: {result.stderr}")
 
 
 @pytest.mark.e2e
-def test_cli_module_can_be_imported():
-    """Tests that the CLI module can be imported correctly."""
+def test_cli_module_can_be_imported() -> None:
     result = subprocess.run(
-        [sys.executable, "-c", "import stock_analysis.cli; print('Import successful')"],
+        [sys.executable, "-c", "import quant_execution_engine.cli; print('Import successful')"],
         capture_output=True,
         text=True,
         cwd=Path.cwd(),
+        env=_cli_env(),
     )
 
-    assert result.returncode == 0, f"CLI module import failed: {result.stderr}"
+    assert result.returncode == 0, result.stderr
     assert "Import successful" in result.stdout
 
 
 @pytest.mark.e2e
-def test_cli_app_entry_point_function():
-    """Tests the app() entry point function."""
+def test_cli_app_entry_point_function() -> None:
     result = subprocess.run(
         [
             sys.executable,
             "-c",
-            "from stock_analysis.cli import app; import sys; sys.argv=['test', '--help']; app()",
+            "from quant_execution_engine.cli import app; import sys; sys.argv=['test', '--help']; app()",
         ],
         capture_output=True,
         text=True,
         cwd=Path.cwd(),
+        env=_cli_env(),
     )
 
-    assert (
-        "usage" in result.stdout.lower()
-        or "用法" in result.stdout
-        or "help" in result.stdout.lower()
-    )
+    assert "usage" in result.stdout.lower()
 
 
 @pytest.mark.e2e
-def test_cli_with_python_warnings():
-    """Tests the CLI's behavior when Python warnings are enabled."""
-    env = os.environ.copy()
+def test_cli_with_python_warnings() -> None:
+    env = _cli_env()
     env["PYTHONWARNINGS"] = "default"
 
     result = subprocess.run(
-        [sys.executable, "-m", "stock_analysis.cli", "--help"],
+        [sys.executable, "-m", "quant_execution_engine.cli", "--help"],
         capture_output=True,
         text=True,
         cwd=Path.cwd(),
@@ -229,4 +229,4 @@ def test_cli_with_python_warnings():
     )
 
     assert result.returncode == 0
-    assert "usage" in result.stdout.lower() or "用法" in result.stdout
+    assert "usage" in result.stdout.lower()

@@ -1,57 +1,68 @@
-<!-- START doctoc generated TOC please keep comment here to allow auto update -->
-<!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
+# Quant Execution Engine
 
-- [Execution Engine](#execution-engine)
-  - [安装](#%E5%AE%89%E8%A3%85)
-  - [CLI](#cli)
-  - [Targets JSON](#targets-json)
-  - [配置文件](#%E9%85%8D%E7%BD%AE%E6%96%87%E4%BB%B6)
-  - [测试](#%E6%B5%8B%E8%AF%95)
+面向 LongPort 的轻量交易执行仓库。
 
-<!-- END doctoc generated TOC please keep comment here to allow auto update -->
+这个 repo 只保留 execution 侧能力：
 
-# Execution Engine
-
-这个仓库现在只承载交易执行侧能力，不再包含 research、AI 选股、数据导入或回测流程。
-
-上游 `research-core` 负责生成 canonical `targets.json`，本仓库负责：
-
-- 查看 LongPort 配置
-- 查看账户资金和持仓
+- 查看有效 broker 配置
+- 查询账户资金与持仓
 - 拉取实时行情
-- 基于 schema-v2 `targets.json` 生成调仓计划并执行
+- 基于 canonical `targets.json` 生成调仓计划并执行
 
-## 安装
+research、AI、回测、数据导入相关内容已经从这个仓库移除。
+
+## 快速开始
+
+安装依赖：
 
 ```bash
-uv sync
+uv sync --group dev --extra cli
 ```
 
-需要配置 LongPort 环境变量：
+运行 CLI：
+
+```bash
+qexec --help
+qexec config
+qexec account --format json
+qexec quote AAPL 700.HK
+qexec rebalance outputs/targets/2026-04-09.json
+qexec rebalance outputs/targets/2026-04-09.json --execute
+```
+
+也可以直接用模块入口：
+
+```bash
+PYTHONPATH=src python -m quant_execution_engine --help
+```
+
+`stockq` 仍保留为兼容别名，但后续文档统一使用 `qexec`。
+
+## 配置
+
+需要设置 LongPort 环境变量：
 
 - `LONGPORT_APP_KEY`
 - `LONGPORT_APP_SECRET`
 - `LONGPORT_ACCESS_TOKEN`
-- `LONGPORT_REGION`，可选，默认 `hk`
-- `LONGPORT_ENABLE_OVERNIGHT`，可选
-- `LONGPORT_MAX_NOTIONAL_PER_ORDER`，可选
-- `LONGPORT_MAX_QTY_PER_ORDER`，可选
-- `LONGPORT_TRADING_WINDOW_START`，可选
-- `LONGPORT_TRADING_WINDOW_END`，可选
 
-## CLI
+可选环境变量和本地 YAML 配置见：
 
-```bash
-stockq lb-config
-stockq lb-account --format json
-stockq lb-quote AAPL 700.HK
-stockq lb-rebalance outputs/targets/2025-09-05.json
-stockq lb-rebalance outputs/targets/2025-09-05.json --execute
-```
+- [docs/configuration.md](docs/configuration.md)
 
-`lb-rebalance` 只接受 canonical schema-v2 `targets.json`，不再接受旧的 Excel 或 ticker-list 输入。
+## 文档
 
-## Targets JSON
+- [docs/architecture.md](docs/architecture.md)
+- [docs/cli.md](docs/cli.md)
+- [docs/configuration.md](docs/configuration.md)
+- [docs/targets.md](docs/targets.md)
+
+## 输入约定
+
+执行引擎只接受 canonical schema-v2 `targets.json`。
+
+- 不再接受 Excel
+- 不再接受 legacy ticker-list 作为 live execution 输入
 
 最小示例：
 
@@ -74,25 +85,4 @@ stockq lb-rebalance outputs/targets/2025-09-05.json --execute
     }
   ]
 }
-```
-
-每个 target 必须二选一：
-
-- `target_weight`
-- `target_quantity`
-
-## 配置文件
-
-复制 [config/template.yaml](/home/richard/code/quant-execution-engine/config/template.yaml) 到 `config/config.yaml` 后按需修改。
-
-当前模板只保留 execution 侧会读取的配置：
-
-- `fees`
-- `fractional_preview`
-- `fx`
-
-## 测试
-
-```bash
-pytest
 ```

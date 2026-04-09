@@ -1,11 +1,9 @@
 [project]
-name = "stock-analysis"
-version = "0.1.0"
+name = "quant-execution-engine"
+version = "0.2.0"
 requires-python = ">=3.10, <3.13"
 
 dependencies = [
-  "pandas",
-  "requests",
   "longport>=0.2.77",
   "pyyaml",
 ]
@@ -16,21 +14,21 @@ dev = [
   "pytest-cov",
   "ruff>=0.5",
   "mypy>=1.10",
-  "pre-commit",
 ]
 
 [project.optional-dependencies]
 cli = ["rich>=13"]
 
 [project.scripts]
-stockq = "stock_analysis.app.cli:app"
+stockq = "quant_execution_engine.cli:app"
+qexec = "quant_execution_engine.cli:app"
 
 [tool.setuptools]
 package-dir = {"" = "src"}
 
 [tool.setuptools.packages.find]
 where = ["src"]
-include = ["stock_analysis*"]
+include = ["quant_execution_engine*"]
 
 [build-system]
 requires = ["setuptools>=77.0.3"]
@@ -60,12 +58,14 @@ warn_return_any = true
 warn_unused_configs = true
 
 [tool.coverage.run]
-source = ["src/stock_analysis"]
+source = ["src/quant_execution_engine"]
 
 [tool.coverage.report]
 show_missing = true
 
 [tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "--cov=quant_execution_engine --cov-report=term-missing --cov-fail-under=75 -m 'not integration and not e2e and not slow'"
 markers = [
   "unit: fast, isolated tests",
   "integration: tests that touch external APIs or DB",
@@ -73,4 +73,8 @@ markers = [
   "slow: long-running tests",
   "requires_api: needs external API access",
   "requires_db: needs database access",
+]
+filterwarnings = [
+  "error::DeprecationWarning",
+  "ignore:.*distutils.*:DeprecationWarning",
 ]
