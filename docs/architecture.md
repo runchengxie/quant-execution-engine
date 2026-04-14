@@ -2,7 +2,7 @@
 
 ## 定位
 
-`quant_execution_engine` 是一个 execution-only 包。
+`quant_execution_engine` 是一个交易执行框架。
 
 它负责：
 
@@ -13,13 +13,6 @@
 - order intent / broker order / fill event / reconcile 生命周期
 - execution risk gate 与 kill switch
 - 审计输出、状态持久化与终端渲染
-
-它不再负责：
-
-- research 产出生成
-- AI 选股
-- 回测
-- 数据导入
 
 ## 包结构
 
@@ -81,10 +74,8 @@ project_tools/
 
 ## 设计取向
 
-- 不保留 monolith 时代的 `shared/`、`app/commands/`、`contracts/` 套娃层级。
 - 尽量让模块名直接表达职责。
-- live execution 的输入边界严格收敛到 schema-v2 JSON。
-- 不把回测、数据中心、dashboard 或部署编排并回核心包。
+- live execution 的输入边界严格收敛到交易指令 JSON。
 
 ## 当前限制
 

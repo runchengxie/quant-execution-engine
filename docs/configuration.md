@@ -10,6 +10,12 @@
 - `LONGPORT_APP_SECRET`
 - `LONGPORT_ACCESS_TOKEN`
 
+提交保护：
+
+- `qexec rebalance --execute` 在 real broker 路径下要求 `QEXEC_ENABLE_LIVE=1`
+- repo 根目录下的 `.env*` / `.envrc*` 如果包含 LongPort live 凭证，CLI 会拒绝执行
+- 这条保护的目的是防止把 real secret 留在仓库本地文件里；paper 凭证不受这个限制
+
 可选：
 
 - `LONGPORT_REGION`
@@ -115,6 +121,8 @@ fx:
 - `LONGPORT_TRADING_WINDOW_START/END` 只是 session API 不可用时的本地降级判断。
 - `LONGPORT_MAX_QTY_PER_ORDER` 只在非 dry-run 路径强制拦截。
 - `LONGPORT_MAX_NOTIONAL_PER_ORDER` 当前只做告警提示，不会在本地直接拦截；最终仍以 broker 风控为准。
+- LongPort real `--execute` 需要显式设置 `QEXEC_ENABLE_LIVE=1` 作为二次确认。
+- LongPort real `--execute` 会拒绝使用 repo 根目录 `.env*` / `.envrc*` 中的 live 凭证，避免本地 secret 文件随仓库传播。
 - execution risk gate 的主要本地阈值改为读 `execution.risk.*`。
 - `execution.kill_switch.env_var` 和可选 `execution.kill_switch.path` 可以手动停掉新的 broker submit。
 - `broker.default_account` 是 CLI 没显式传 `--account` 时的默认 label；如果 adapter 不支持该 label，会直接报错。

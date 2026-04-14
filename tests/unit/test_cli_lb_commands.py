@@ -156,6 +156,106 @@ def test_run_rebalance_rejects_legacy_workbook(tmp_path: Path) -> None:
     assert "schema-v2" in result.stderr.lower()
 
 
+def test_run_rebalance_live_requires_explicit_enable(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    target_file = tmp_path / "targets.json"
+    target_file.write_text("{}", encoding="utf-8")
+    monkeypatch.delenv("QEXEC_ENABLE_LIVE", raising=False)
+
+    with patch.object(cli, "read_targets_json") as mock_read_targets:
+        result = cli.run_rebalance(str(target_file), dry_run=False)
+
+    assert result.exit_code == 1
+    assert result.stderr is not None
+    assert "QEXEC_ENABLE_LIVE=1" in result.stderr
+    mock_read_targets.assert_not_called()
+
+
+def test_run_rebalance_live_rejects_repo_local_longport_secrets(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    target_file = tmp_path / "targets.json"
+    target_file.write_text("{}", encoding="utf-8")
+    (tmp_path / ".env").write_text(
+        'LONGPORT_ACCESS_TOKEN="real_token_value"\n'
+        'LONGPORT_APP_SECRET="real_secret_value"\n',
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("QEXEC_ENABLE_LIVE", "1")
+    monkeypatch.setattr(cli, "PROJECT_ROOT", tmp_path)
+
+    with patch.object(cli, "read_targets_json") as mock_read_targets:
+        result = cli.run_rebalance(str(target_file), dry_run=False)
+
+    assert result.exit_code == 1
+    assert result.stderr is not None
+    assert ".env" in result.stderr
+    assert "LONGPORT_ACCESS_TOKEN" in result.stderr
+    assert "LONGPORT_APP_SECRET" in result.stderr
+    mock_read_targets.assert_not_called()
+
+
+def test_run_rebalance_live_ignores_placeholder_repo_env_values(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    target_file = tmp_path / "targets.json"
+    target_file.write_text("{}", encoding="utf-8")
+    (tmp_path / ".env").write_text(
+        'LONGPORT_APP_KEY="your_app_key_here"\n'
+        'LONGPORT_APP_SECRET="your_app_secret_here"\n'
+        'LONGPORT_ACCESS_TOKEN="your_real_access_token_here"\n',
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("QEXEC_ENABLE_LIVE", "1")
+    monkeypatch.setattr(cli, "PROJECT_ROOT", tmp_path)
+
+    with patch.object(cli, "read_targets_json", side_effect=RuntimeError("after-guard")):
+        result = cli.run_rebalance(str(target_file), dry_run=False)
+
+    assert result.exit_code == 1
+    assert result.stderr == "after-guard"
+
+
+def test_run_rebalance_live_ignores_repo_envrc_secret_references(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    target_file = tmp_path / "targets.json"
+    target_file.write_text("{}", encoding="utf-8")
+    (tmp_path / ".envrc").write_text(
+        "export LONGPORT_APP_KEY=$LONGPORT_APP_KEY\n"
+        "export LONGPORT_APP_SECRET=${LONGPORT_APP_SECRET}\n"
+        "export LONGPORT_ACCESS_TOKEN=$(op read secret://longport/token)\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("QEXEC_ENABLE_LIVE", "1")
+    monkeypatch.setattr(cli, "PROJECT_ROOT", tmp_path)
+
+    with patch.object(cli, "read_targets_json", side_effect=RuntimeError("after-guard")):
+        result = cli.run_rebalance(str(target_file), dry_run=False)
+
+    assert result.exit_code == 1
+    assert result.stderr == "after-guard"
+
+
+def test_run_rebalance_paper_execute_does_not_require_live_enable(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    target_file = tmp_path / "targets.json"
+    target_file.write_text("{}", encoding="utf-8")
+    monkeypatch.delenv("QEXEC_ENABLE_LIVE", raising=False)
+
+    with patch.object(cli, "read_targets_json", side_effect=RuntimeError("after-guard")):
+        result = cli.run_rebalance(
+            str(target_file),
+            dry_run=False,
+            broker="alpaca-paper",
+        )
+
+    assert result.exit_code == 1
+    assert result.stderr == "after-guard"
+
+
 def test_app_function() -> None:
     with patch.object(cli, "main", return_value=0) as mock_main:
         with patch.object(sys, "exit") as mock_exit:

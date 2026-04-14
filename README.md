@@ -44,7 +44,7 @@ qexec config
 qexec account --format json
 qexec quote AAPL 700.HK
 qexec rebalance outputs/targets/2026-04-09.json
-qexec rebalance outputs/targets/2026-04-09.json --execute
+QEXEC_ENABLE_LIVE=1 qexec rebalance outputs/targets/2026-04-09.json --execute
 qexec rebalance outputs/targets/2026-04-09.json --broker alpaca-paper --execute
 ```
 
@@ -63,6 +63,11 @@ LongPort live 至少需要：
 - `LONGPORT_APP_KEY`
 - `LONGPORT_APP_SECRET`
 - `LONGPORT_ACCESS_TOKEN`
+
+LongPort real broker 的 `--execute` 额外要求：
+
+- `QEXEC_ENABLE_LIVE=1`
+- repo 根目录下的 `.env*` / `.envrc*` 不得包含 LongPort live 凭证；否则 CLI 会拒绝执行，避免把 real secret 留在仓库本地文件里
 
 Alpaca paper 至少需要：
 
@@ -105,7 +110,7 @@ uv run pytest --cov=src/quant_execution_engine --cov-report=term-missing -m 'not
 - [docs/testing.md](docs/testing.md)
 - [docs/targets.md](docs/targets.md)
 
-## Smoke Harness
+## 测试运行
 
 这些工装都放在 core package 外：
 
@@ -115,7 +120,7 @@ PYTHONPATH=src python project_tools/smoke_target_harness.py --scenario carry-ove
 PYTHONPATH=src python project_tools/smoke_signal_harness.py --broker alpaca-paper --execute
 ```
 
-它们的目标是驱动 paper / dry-run 行为验证，而不是提供正式策略层。
+它们的目标是驱动模拟盘交易 / dry-run 行为验证，而不是提供正式策略层。
 
 ## 输入约定
 

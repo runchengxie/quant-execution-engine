@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import importlib.util
 import os
+import re
 import sys
 import uuid
 from dataclasses import dataclass
@@ -14,6 +15,7 @@ from typing import TYPE_CHECKING
 from .account import get_account_snapshot, get_quotes
 from .broker import get_broker_capabilities, resolve_broker_name, resolve_default_account_label
 from .logging import get_logger, set_run_id
+from .paths import PROJECT_ROOT
 from .rebalance import RebalanceService
 from .risk import get_kill_switch_config, get_risk_config
 from .renderers.diff import render_rebalance_diff
@@ -46,6 +48,139 @@ if _RICH_AVAILABLE:
     install_rich_traceback(show_locals=False)
 
 
+_LIVE_ENABLE_ENV_VAR = "QEXEC_ENABLE_LIVE"
+_LIVE_SECRET_ENV_NAMES = frozenset(
+    {
+        "LONGPORT_APP_KEY",
+        "LONGPORT_APP_SECRET",
+        "LONGPORT_ACCESS_TOKEN",
+        "LONGPORT_ACCESS_TOKEN_REAL",
+        "LONGBRIDGE_APP_KEY",
+        "LONGBRIDGE_APP_SECRET",
+        "LONGBRIDGE_ACCESS_TOKEN",
+        "LONGBRIDGE_ACCESS_TOKEN_REAL",
+    }
+)
+_ENV_ASSIGNMENT_RE = re.compile(
+    r"^\s*(?:export\s+)?(?P<name>[A-Za-z_][A-Za-z0-9_]*)\s*=\s*(?P<value>.+?)\s*$"
+)
+
+
+def _is_truthy(value: str | None) -> bool:
+    return str(value or "").strip().lower() in {"1", "true", "yes", "y", "on"}
+
+
+def _normalize_env_assignment_value(raw: str) -> str:
+    value = raw.strip()
+    if not value:
+        return ""
+    if value[0] in {"'", '"'}:
+        quote = value[0]
+        end = value.find(quote, 1)
+        if end != -1:
+            return value[1:end].strip()
+        return value[1:].strip()
+    return value.split("#", 1)[0].strip().strip("'").strip('"').strip()
+
+
+def _looks_like_placeholder_secret(value: str) -> bool:
+    normalized = value.strip()
+    lowered = normalized.lower()
+    if not lowered:
+        return True
+    if normalized.startswith(("$", "${", "$(", "`")):
+        return True
+    if lowered.startswith("your_") and lowered.endswith("_here"):
+        return True
+    return lowered in {
+        "changeme",
+        "example",
+        "placeholder",
+        "replace_me",
+        "replace-this",
+        "replace_this",
+    }
+
+
+def _iter_repo_local_env_files(project_root: Path) -> list[Path]:
+    candidates: set[Path] = set()
+    for pattern in (".env", ".env.*", ".envrc", ".envrc.*"):
+        candidates.update(project_root.glob(pattern))
+
+    files: list[Path] = []
+    for path in sorted(candidates):
+        if not path.is_file():
+            continue
+        if path.name.endswith((".example", ".sample", ".template")):
+            continue
+        files.append(path)
+    return files
+
+
+def _find_repo_local_live_secret_sources(project_root: Path) -> list[tuple[Path, str]]:
+    findings: list[tuple[Path, str]] = []
+    for path in _iter_repo_local_env_files(project_root):
+        try:
+            text = path.read_text(encoding="utf-8")
+        except OSError:
+            continue
+        for raw_line in text.splitlines():
+            line = raw_line.strip()
+            if not line or line.startswith("#"):
+                continue
+            match = _ENV_ASSIGNMENT_RE.match(raw_line)
+            if match is None:
+                continue
+            name = match.group("name")
+            if name not in _LIVE_SECRET_ENV_NAMES:
+                continue
+            value = _normalize_env_assignment_value(match.group("value"))
+            if _looks_like_placeholder_secret(value):
+                continue
+            findings.append((path, name))
+    return findings
+
+
+def _format_live_secret_findings(
+    findings: list[tuple[Path, str]], project_root: Path
+) -> str:
+    grouped: dict[Path, set[str]] = {}
+    for path, env_name in findings:
+        grouped.setdefault(path, set()).add(env_name)
+    parts = []
+    for path in sorted(grouped):
+        label = str(path.relative_to(project_root))
+        names = ", ".join(sorted(grouped[path]))
+        parts.append(f"{label} ({names})")
+    return ", ".join(parts)
+
+
+def _validate_live_execution_guard(
+    *,
+    env_name: str,
+    dry_run: bool,
+    project_root: Path | None = None,
+) -> str | None:
+    if dry_run or env_name == "paper":
+        return None
+    if not _is_truthy(os.getenv(_LIVE_ENABLE_ENV_VAR)):
+        return (
+            f"real broker live execution requires {_LIVE_ENABLE_ENV_VAR}=1. "
+            "Paper execution paths are unaffected."
+        )
+
+    root = project_root or PROJECT_ROOT
+    findings = _find_repo_local_live_secret_sources(root)
+    if not findings:
+        return None
+    locations = _format_live_secret_findings(findings, root)
+    return (
+        "refusing live execution because repo-local env files contain LongPort live "
+        f"credentials: {locations}. Move live secrets to system environment variables "
+        "or an external secret manager, then retry."
+    )
+
+
 def create_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="qexec",
@@ -57,7 +192,7 @@ Examples:
   qexec account --format json
   qexec quote AAPL 700.HK
   qexec rebalance outputs/targets/2026-04-09.json
-  qexec rebalance outputs/targets/2026-04-09.json --execute
+  QEXEC_ENABLE_LIVE=1 qexec rebalance outputs/targets/2026-04-09.json --execute
         """,
     )
     parser.add_argument("--version", action="version", version="%(prog)s 0.2.0")
@@ -93,7 +228,7 @@ Examples:
     rebalance_parser.add_argument(
         "--execute",
         action="store_true",
-        help="Run the live-mode path (broker submission is currently simulated)",
+        help="Run the live-mode path. Real brokers additionally require QEXEC_ENABLE_LIVE=1.",
     )
     rebalance_parser.add_argument(
         "--target-gross-exposure",
@@ -335,6 +470,9 @@ def run_rebalance(
     try:
         selected_broker = resolve_broker_name(broker)
         env_name = "paper" if selected_broker in {"alpaca", "alpaca-paper"} else "real"
+        guard_error = _validate_live_execution_guard(env_name=env_name, dry_run=dry_run)
+        if guard_error:
+            return CommandResult(exit_code=1, stderr=guard_error)
         logger.info("Mode: %s", "dry-run" if dry_run else "live")
         logger.info("Reading targets file: %s", input_file)
         logger.info("Broker: %s", selected_broker)

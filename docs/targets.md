@@ -1,4 +1,4 @@
-# Targets Schema
+# 持仓指令清单格式
 
 ## 约束
 
