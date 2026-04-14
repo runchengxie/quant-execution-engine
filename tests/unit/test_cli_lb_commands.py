@@ -96,6 +96,95 @@ def test_main_routes_config() -> None:
     mock_run.assert_called_once_with(True, broker=None)
 
 
+def test_main_routes_orders() -> None:
+    with patch.object(
+        cli,
+        "run_orders",
+        return_value=cli.CommandResult(exit_code=0),
+    ) as mock_run:
+        with patch.object(sys, "argv", ["qexec", "orders", "--account", "main"]):
+            result = cli.main()
+
+    assert result == 0
+    mock_run.assert_called_once_with(account="main", broker=None)
+
+
+def test_main_routes_reconcile() -> None:
+    with patch.object(
+        cli,
+        "run_reconcile",
+        return_value=cli.CommandResult(exit_code=0),
+    ) as mock_run:
+        with patch.object(sys, "argv", ["qexec", "reconcile", "--broker", "alpaca-paper"]):
+            result = cli.main()
+
+    assert result == 0
+    mock_run.assert_called_once_with(account="main", broker="alpaca-paper")
+
+
+def test_main_routes_cancel() -> None:
+    with patch.object(
+        cli,
+        "run_cancel",
+        return_value=cli.CommandResult(exit_code=0),
+    ) as mock_run:
+        with patch.object(
+            sys,
+            "argv",
+            ["qexec", "cancel", "fake-order-1", "--account", "main"],
+        ):
+            result = cli.main()
+
+    assert result == 0
+    mock_run.assert_called_once_with(
+        order_ref="fake-order-1",
+        account="main",
+        broker=None,
+    )
+
+
+def test_main_routes_order() -> None:
+    with patch.object(
+        cli,
+        "run_order",
+        return_value=cli.CommandResult(exit_code=0),
+    ) as mock_run:
+        with patch.object(
+            sys,
+            "argv",
+            ["qexec", "order", "fake-order-1", "--broker", "alpaca-paper"],
+        ):
+            result = cli.main()
+
+    assert result == 0
+    mock_run.assert_called_once_with(
+        order_ref="fake-order-1",
+        account="main",
+        broker="alpaca-paper",
+    )
+
+
+def test_main_routes_retry() -> None:
+    with patch.object(
+        cli,
+        "run_retry",
+        return_value=cli.CommandResult(exit_code=0),
+    ) as mock_run:
+        with patch.object(
+            sys,
+            "argv",
+            ["qexec", "retry", "fake-order-1", "--account", "main"],
+        ):
+            result = cli.main()
+
+    assert result == 0
+    mock_run.assert_called_once_with(
+        order_ref="fake-order-1",
+        account="main",
+        broker=None,
+    )
+
+
 def test_main_no_command() -> None:
     args = SimpleNamespace(command=None)
 

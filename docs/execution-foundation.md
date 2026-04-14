@@ -49,7 +49,7 @@ qexec rebalance outputs/targets/demo.json --broker alpaca-paper --execute
 - 在 submit 之前先持久化交易意图
 - 利用稳定的 intent id 保证幂等性
 - 在系统重启后恢复未完成的母单 (parent order)
-- 通过 reconcile 修正本地状态与 broker 状态间的差异
+- 通过 reconcile 修正本地状态与 broker 状态间的差异，并补录 tracked closed orders 的 fills
 
 状态文件默认落盘至：
 
@@ -127,3 +127,21 @@ PYTHONPATH=src python project_tools/smoke_target_harness.py --scenario carry-ove
 - 生成确定性的目标
 - 驱动模拟盘 (paper) / 试运行 (dry-run) 的验证流程
 - 仅测试执行层面的行为，不测试策略逻辑
+
+## 运维入口
+
+除了 `rebalance` 之外，CLI 现在还提供：
+
+```bash
+qexec orders
+qexec order <order-ref>
+qexec reconcile
+qexec cancel <order-ref>
+qexec retry <order-ref>
+```
+
+- `orders` 用于查看本地 execution state 中跟踪的 broker orders
+- `order` 用于查看单笔 tracked order 的完整本地生命周期信息
+- `reconcile` 用于主动刷新 broker open/closed order 状态，并把补录的 fills 写回状态文件
+- `cancel` 用于按 tracked `broker_order_id` / `client_order_id` / `child_order_id` 发起撤单，并同步更新本地状态
+- `retry` 用于重试零成交的失败/撤销 tracked order，并创建新的 child attempt

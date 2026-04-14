@@ -3,6 +3,8 @@
 Provides table format data rendering functionality.
 """
 
+from ..broker.base import BrokerOrderRecord, BrokerReconcileReport
+from ..execution import ExecutionTrackedOrder
 from ..models import AccountSnapshot, Order, Quote, RebalanceResult
 
 
@@ -200,4 +202,166 @@ def render_orders(orders: list[Order]) -> str:
         if order.error_message:
             lines.append(f"  -> Error: {order.error_message}")
 
+    return "\n".join(lines)
+
+
+def render_broker_orders(records: list[BrokerOrderRecord]) -> str:
+    """Render tracked broker order records."""
+
+    if not records:
+        return "No tracked broker orders"
+
+    lines = []
+    lines.append("Tracked broker orders:")
+    lines.append(
+        "Broker ID           | Symbol      | Side | Qty      | Filled   | Status           | Client ID"
+    )
+    lines.append("-" * 108)
+
+    for record in records:
+        client_order_id = record.client_order_id or "-"
+        lines.append(
+            f"{record.broker_order_id[:18]:18s} | "
+            f"{record.symbol[:10]:10s} | "
+            f"{record.side[:4]:4s} | "
+            f"{record.quantity:8.2f} | "
+            f"{float(record.filled_quantity or 0.0):8.2f} | "
+            f"{record.status[:16]:16s} | "
+            f"{client_order_id[:18]}"
+        )
+
+    return "\n".join(lines)
+
+
+def render_reconcile_summary(
+    *,
+    report: BrokerReconcileReport,
+    state_path: str,
+    tracked_orders: int,
+    fill_events: int,
+    new_fill_events: int,
+    refreshed_orders: int,
+) -> str:
+    """Render manual reconcile summary."""
+
+    lines = [
+        "Reconcile summary:",
+        f"- Broker / Account: {report.broker_name} / {report.account_label}",
+        f"- Open orders from broker: {len(report.open_orders)}",
+        f"- Tracked broker orders: {tracked_orders}",
+        f"- Total fill events in state: {fill_events}",
+        f"- New fill events recorded: {new_fill_events}",
+        f"- Closed tracked orders refreshed: {refreshed_orders}",
+        f"- State file: {state_path}",
+    ]
+    if report.warnings:
+        lines.append("- Warnings:")
+        for warning in report.warnings:
+            lines.append(f"  * {warning}")
+    return "\n".join(lines)
+
+
+def render_cancel_summary(
+    *,
+    broker_name: str,
+    account_label: str,
+    order_ref: str,
+    broker_order_id: str,
+    client_order_id: str | None,
+    status: str,
+    state_path: str,
+    warnings: list[str],
+) -> str:
+    """Render tracked-order cancel summary."""
+
+    lines = [
+        "Cancel summary:",
+        f"- Broker / Account: {broker_name} / {account_label}",
+        f"- Requested Ref: {order_ref}",
+        f"- Broker Order ID: {broker_order_id}",
+        f"- Client Order ID: {client_order_id or '-'}",
+        f"- Current Status: {status}",
+        f"- State file: {state_path}",
+    ]
+    if warnings:
+        lines.append("- Warnings:")
+        for warning in warnings:
+            lines.append(f"  * {warning}")
+    return "\n".join(lines)
+
+
+def render_tracked_order_detail(tracked: ExecutionTrackedOrder) -> str:
+    """Render tracked order details from local execution state."""
+
+    lines = [
+        "Tracked order detail:",
+        f"- Broker / Account: {tracked.broker_name} / {tracked.account_label}",
+        f"- Requested Ref: {tracked.order_ref}",
+        f"- State file: {tracked.state_path}",
+    ]
+    if tracked.intent is not None:
+        lines.extend(
+            [
+                f"- Intent: {tracked.intent.intent_id} {tracked.intent.side} {tracked.intent.quantity:g} {tracked.intent.symbol}",
+                f"- Intent Order Type: {tracked.intent.order_type}",
+            ]
+        )
+    if tracked.parent is not None:
+        lines.extend(
+            [
+                f"- Parent: {tracked.parent.parent_order_id}",
+                f"- Parent Status: {tracked.parent.status}",
+                f"- Parent Filled / Remaining: {tracked.parent.filled_quantity:g} / {tracked.parent.remaining_quantity:g}",
+            ]
+        )
+    if tracked.child is not None:
+        lines.extend(
+            [
+                f"- Child: {tracked.child.child_order_id} (attempt {tracked.child.attempt})",
+                f"- Child Status: {tracked.child.status}",
+            ]
+        )
+    if tracked.broker_order is not None:
+        lines.extend(
+            [
+                f"- Broker Order ID: {tracked.broker_order.broker_order_id}",
+                f"- Broker Status: {tracked.broker_order.status}",
+                f"- Client Order ID: {tracked.broker_order.client_order_id or '-'}",
+                f"- Broker Filled / Remaining: {float(tracked.broker_order.filled_quantity or 0.0):g} / {float(tracked.broker_order.remaining_quantity or 0.0):g}",
+            ]
+        )
+    lines.append(f"- Fill Events: {len(tracked.fill_events)}")
+    for fill in tracked.fill_events:
+        lines.append(
+            f"  * {fill.fill_id}: {fill.quantity:g} @ {fill.price:g} on {fill.filled_at}"
+        )
+    return "\n".join(lines)
+
+
+def render_retry_summary(
+    *,
+    broker_name: str,
+    account_label: str,
+    order_ref: str,
+    new_child_order_id: str,
+    broker_order_id: str | None,
+    broker_status: str | None,
+    state_path: str,
+    warnings: list[str],
+) -> str:
+    """Render tracked-order retry summary."""
+
+    lines = [
+        "Retry summary:",
+        f"- Broker / Account: {broker_name} / {account_label}",
+        f"- Requested Ref: {order_ref}",
+        f"- New Child Order ID: {new_child_order_id}",
+        f"- Broker Order ID: {broker_order_id or '-'}",
+        f"- Broker Status: {broker_status or '-'}",
+        f"- State file: {state_path}",
+    ]
+    if warnings:
+        lines.append("- Warnings:")
+        for warning in warnings:
+            lines.append(f"  * {warning}")
     return "\n".join(lines)

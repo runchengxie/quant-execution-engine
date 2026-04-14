@@ -13,14 +13,28 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from .account import get_account_snapshot, get_quotes
-from .broker import get_broker_capabilities, resolve_broker_name, resolve_default_account_label
+from .broker import (
+    get_broker_adapter,
+    get_broker_capabilities,
+    resolve_broker_name,
+    resolve_default_account_label,
+)
+from .execution import ExecutionStateStore, OrderLifecycleService
 from .logging import get_logger, set_run_id
 from .paths import PROJECT_ROOT
 from .rebalance import RebalanceService
 from .risk import get_kill_switch_config, get_risk_config
 from .renderers.diff import render_rebalance_diff
 from .renderers.jsonout import render_multiple_account_snapshots_json
-from .renderers.table import render_multiple_account_snapshots, render_quotes
+from .renderers.table import (
+    render_broker_orders,
+    render_cancel_summary,
+    render_multiple_account_snapshots,
+    render_quotes,
+    render_reconcile_summary,
+    render_retry_summary,
+    render_tracked_order_detail,
+)
 from .targets import read_targets_json
 
 if TYPE_CHECKING:
@@ -268,6 +282,106 @@ Examples:
         help="Broker backend override, e.g. longport or alpaca-paper",
     )
 
+    orders_parser = subparsers.add_parser(
+        "orders",
+        help="Show tracked broker orders from local execution state",
+    )
+    orders_parser.add_argument(
+        "--broker",
+        type=str,
+        default=None,
+        help="Broker backend override, e.g. longport or alpaca-paper",
+    )
+    orders_parser.add_argument(
+        "--account",
+        type=str,
+        default="main",
+        help="Broker account/profile label. Unsupported labels fail fast.",
+    )
+
+    reconcile_parser = subparsers.add_parser(
+        "reconcile",
+        help="Run a manual broker reconcile pass and persist refreshed state",
+    )
+    reconcile_parser.add_argument(
+        "--broker",
+        type=str,
+        default=None,
+        help="Broker backend override, e.g. longport or alpaca-paper",
+    )
+    reconcile_parser.add_argument(
+        "--account",
+        type=str,
+        default="main",
+        help="Broker account/profile label. Unsupported labels fail fast.",
+    )
+
+    cancel_parser = subparsers.add_parser(
+        "cancel",
+        help="Cancel a tracked order by broker_order_id, client_order_id, or child_order_id",
+    )
+    cancel_parser.add_argument(
+        "order_ref",
+        type=str,
+        help="Tracked order reference: broker_order_id, client_order_id, or child_order_id",
+    )
+    cancel_parser.add_argument(
+        "--broker",
+        type=str,
+        default=None,
+        help="Broker backend override, e.g. longport or alpaca-paper",
+    )
+    cancel_parser.add_argument(
+        "--account",
+        type=str,
+        default="main",
+        help="Broker account/profile label. Unsupported labels fail fast.",
+    )
+
+    order_parser = subparsers.add_parser(
+        "order",
+        help="Show tracked order detail by broker_order_id, client_order_id, or child_order_id",
+    )
+    order_parser.add_argument(
+        "order_ref",
+        type=str,
+        help="Tracked order reference: broker_order_id, client_order_id, or child_order_id",
+    )
+    order_parser.add_argument(
+        "--broker",
+        type=str,
+        default=None,
+        help="Broker backend override, e.g. longport or alpaca-paper",
+    )
+    order_parser.add_argument(
+        "--account",
+        type=str,
+        default="main",
+        help="Broker account/profile label. Unsupported labels fail fast.",
+    )
+
+    retry_parser = subparsers.add_parser(
+        "retry",
+        help="Retry a zero-fill failed or canceled tracked order",
+    )
+    retry_parser.add_argument(
+        "order_ref",
+        type=str,
+        help="Tracked order reference: broker_order_id, client_order_id, or child_order_id",
+    )
+    retry_parser.add_argument(
+        "--broker",
+        type=str,
+        default=None,
+        help="Broker backend override, e.g. longport or alpaca-paper",
+    )
+    retry_parser.add_argument(
+        "--account",
+        type=str,
+        default="main",
+        help="Broker account/profile label. Unsupported labels fail fast.",
+    )
+
     return parser
 
 
@@ -444,6 +558,153 @@ def run_config(show: bool = True, broker: str | None = None) -> CommandResult:
     return CommandResult(exit_code=0, stdout="\n".join(lines))
 
 
+def run_orders(
+    *,
+    account: str = "main",
+    broker: str | None = None,
+) -> CommandResult:
+    adapter = None
+    try:
+        adapter = get_broker_adapter(broker_name=broker)
+        resolved = adapter.resolve_account(account)
+        state = ExecutionStateStore().load(adapter.backend_name, resolved.label)
+        records = sorted(
+            state.broker_orders,
+            key=lambda record: (record.updated_at, record.submitted_at, record.broker_order_id),
+            reverse=True,
+        )
+        return CommandResult(exit_code=0, stdout=render_broker_orders(records))
+    except Exception as exc:
+        msg = f"Failed to load tracked orders: {exc}"
+        get_logger(__name__).error(msg)
+        return CommandResult(exit_code=1, stderr=msg)
+    finally:
+        close_fn = getattr(adapter, "close", None)
+        if callable(close_fn):
+            close_fn()
+
+
+def run_reconcile(
+    *,
+    account: str = "main",
+    broker: str | None = None,
+) -> CommandResult:
+    adapter = None
+    try:
+        adapter = get_broker_adapter(broker_name=broker)
+        service = OrderLifecycleService(adapter)
+        outcome = service.reconcile(account_label=account)
+        return CommandResult(
+            exit_code=0,
+            stdout=render_reconcile_summary(
+                report=outcome.report,
+                state_path=str(outcome.state_path),
+                tracked_orders=len(outcome.state.broker_orders),
+                fill_events=len(outcome.state.fill_events),
+                new_fill_events=outcome.new_fill_events,
+                refreshed_orders=outcome.refreshed_orders,
+            ),
+        )
+    except Exception as exc:
+        msg = f"Manual reconcile failed: {exc}"
+        get_logger(__name__).error(msg)
+        return CommandResult(exit_code=1, stderr=msg)
+    finally:
+        close_fn = getattr(adapter, "close", None)
+        if callable(close_fn):
+            close_fn()
+
+
+def run_cancel(
+    *,
+    order_ref: str,
+    account: str = "main",
+    broker: str | None = None,
+) -> CommandResult:
+    adapter = None
+    try:
+        adapter = get_broker_adapter(broker_name=broker)
+        service = OrderLifecycleService(adapter)
+        outcome = service.cancel_order(account_label=account, order_ref=order_ref)
+        return CommandResult(
+            exit_code=0,
+            stdout=render_cancel_summary(
+                broker_name=outcome.broker_name,
+                account_label=outcome.account_label,
+                order_ref=outcome.order_ref,
+                broker_order_id=outcome.broker_order_id,
+                client_order_id=outcome.client_order_id,
+                status=outcome.status,
+                state_path=str(outcome.state_path),
+                warnings=outcome.warnings,
+            ),
+        )
+    except Exception as exc:
+        msg = f"Cancel failed: {exc}"
+        get_logger(__name__).error(msg)
+        return CommandResult(exit_code=1, stderr=msg)
+    finally:
+        close_fn = getattr(adapter, "close", None)
+        if callable(close_fn):
+            close_fn()
+
+
+def run_order(
+    *,
+    order_ref: str,
+    account: str = "main",
+    broker: str | None = None,
+) -> CommandResult:
+    adapter = None
+    try:
+        adapter = get_broker_adapter(broker_name=broker)
+        service = OrderLifecycleService(adapter)
+        tracked = service.get_tracked_order(account_label=account, order_ref=order_ref)
+        return CommandResult(exit_code=0, stdout=render_tracked_order_detail(tracked))
+    except Exception as exc:
+        msg = f"Order lookup failed: {exc}"
+        get_logger(__name__).error(msg)
+        return CommandResult(exit_code=1, stderr=msg)
+    finally:
+        close_fn = getattr(adapter, "close", None)
+        if callable(close_fn):
+            close_fn()
+
+
+def run_retry(
+    *,
+    order_ref: str,
+    account: str = "main",
+    broker: str | None = None,
+) -> CommandResult:
+    adapter = None
+    try:
+        adapter = get_broker_adapter(broker_name=broker)
+        service = OrderLifecycleService(adapter)
+        outcome = service.retry_order(account_label=account, order_ref=order_ref)
+        return CommandResult(
+            exit_code=0,
+            stdout=render_retry_summary(
+                broker_name=outcome.broker_name,
+                account_label=outcome.account_label,
+                order_ref=outcome.order_ref,
+                new_child_order_id=outcome.new_child_order_id,
+                broker_order_id=outcome.broker_order_id,
+                broker_status=outcome.broker_status,
+                state_path=str(outcome.state_path),
+                warnings=outcome.warnings,
+            ),
+        )
+    except Exception as exc:
+        msg = f"Retry failed: {exc}"
+        get_logger(__name__).error(msg)
+        return CommandResult(exit_code=1, stderr=msg)
+    finally:
+        close_fn = getattr(adapter, "close", None)
+        if callable(close_fn):
+            close_fn()
+
+
 def run_rebalance(
     input_file: str,
     account: str = "main",
@@ -608,6 +869,44 @@ def main() -> int:
     if args.command == "config":
         return _handle_command_result(
             run_config(getattr(args, "show", True), broker=getattr(args, "broker", None))
+        )
+    if args.command == "orders":
+        return _handle_command_result(
+            run_orders(
+                account=getattr(args, "account", "main"),
+                broker=getattr(args, "broker", None),
+            )
+        )
+    if args.command == "reconcile":
+        return _handle_command_result(
+            run_reconcile(
+                account=getattr(args, "account", "main"),
+                broker=getattr(args, "broker", None),
+            )
+        )
+    if args.command == "cancel":
+        return _handle_command_result(
+            run_cancel(
+                order_ref=getattr(args, "order_ref"),
+                account=getattr(args, "account", "main"),
+                broker=getattr(args, "broker", None),
+            )
+        )
+    if args.command == "order":
+        return _handle_command_result(
+            run_order(
+                order_ref=getattr(args, "order_ref"),
+                account=getattr(args, "account", "main"),
+                broker=getattr(args, "broker", None),
+            )
+        )
+    if args.command == "retry":
+        return _handle_command_result(
+            run_retry(
+                order_ref=getattr(args, "order_ref"),
+                account=getattr(args, "account", "main"),
+                broker=getattr(args, "broker", None),
+            )
         )
 
     logger.error("Unknown command: %s", args.command)

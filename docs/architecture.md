@@ -52,7 +52,7 @@ project_tools/
 ## 分层说明
 
 - `cli.py`
-  负责参数解析、broker/backend 选择、命令分发和错误码收口。
+  负责参数解析、broker/backend 选择、命令分发和错误码收口，包括 `orders` / `order` / `reconcile` / `cancel` / `retry` 这类运维入口。
 - `broker/base.py` / `broker/factory.py`
   定义 broker lifecycle 契约、capability matrix 和 backend 选择逻辑。
 - `broker/longport.py` / `broker/alpaca.py`
@@ -62,7 +62,7 @@ project_tools/
 - `rebalance.py`
   负责目标仓位计算、订单规划、执行入口和审计日志。
 - `execution.py`
-  负责 order intent、parent/child order、状态持久化、幂等提交和 reconcile 协调。
+  负责 order intent、parent/child order、状态持久化、幂等提交和 reconcile 协调，也负责把 tracked closed orders 的状态刷新和 fill recovery 合并回本地状态。
 - `risk.py`
   负责 execution risk gate 和 kill switch 逻辑。
 - `targets.py`

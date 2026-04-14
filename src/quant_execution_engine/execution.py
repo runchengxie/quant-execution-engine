@@ -38,6 +38,7 @@ OPEN_BROKER_STATUSES = {
 }
 SUCCESS_BROKER_STATUSES = {"FILLED"}
 FAILURE_BROKER_STATUSES = {"CANCELED", "REJECTED", "EXPIRED", "FAILED"}
+TERMINAL_BROKER_STATUSES = SUCCESS_BROKER_STATUSES | FAILURE_BROKER_STATUSES
 
 
 @dataclass(slots=True)
@@ -126,6 +127,60 @@ class ExecutionState:
     child_orders: list[ChildOrder] = field(default_factory=list)
     broker_orders: list[BrokerOrderRecord] = field(default_factory=list)
     fill_events: list[ExecutionFillEvent] = field(default_factory=list)
+
+
+@dataclass(slots=True)
+class ExecutionReconcileResult:
+    """Result of a manual reconcile pass."""
+
+    report: BrokerReconcileReport
+    state: ExecutionState
+    state_path: Path
+    new_fill_events: int = 0
+    refreshed_orders: int = 0
+
+
+@dataclass(slots=True)
+class ExecutionCancelResult:
+    """Result of a tracked-order cancel request."""
+
+    broker_name: str
+    account_label: str
+    order_ref: str
+    broker_order_id: str
+    client_order_id: str | None
+    status: str
+    state_path: Path
+    warnings: list[str] = field(default_factory=list)
+
+
+@dataclass(slots=True)
+class ExecutionTrackedOrder:
+    """Tracked order details resolved from local execution state."""
+
+    broker_name: str
+    account_label: str
+    order_ref: str
+    state_path: Path
+    intent: OrderIntent | None
+    parent: ParentOrder | None
+    child: ChildOrder | None
+    broker_order: BrokerOrderRecord | None
+    fill_events: list[ExecutionFillEvent] = field(default_factory=list)
+
+
+@dataclass(slots=True)
+class ExecutionRetryResult:
+    """Result of a tracked-order retry request."""
+
+    broker_name: str
+    account_label: str
+    order_ref: str
+    new_child_order_id: str
+    broker_order_id: str | None
+    broker_status: str | None
+    state_path: Path
+    warnings: list[str] = field(default_factory=list)
 
 
 def _state_dir_from_config() -> Path:
@@ -290,7 +345,15 @@ class OrderLifecycleService:
                 child.status = broker_order.status
                 child.updated_at = utc_now_iso()
                 self._upsert_broker_order(state, broker_order)
-                self._record_fill_events(state, intent, parent, broker_order, account)
+                try:
+                    self._record_fill_events(state, intent, parent, broker_order, account)
+                except Exception as exc:
+                    logger.warning(
+                        "Fill lookup failed after submit for %s (%s): %s",
+                        order.symbol,
+                        broker_order.broker_order_id,
+                        exc,
+                    )
                 self._apply_broker_record(order, broker_order, child=child)
                 state.consecutive_failures = 0
                 state.kill_switch_active = False
@@ -308,6 +371,170 @@ class OrderLifecycleService:
 
         self.state_store.save(state)
         return executed_orders
+
+    def reconcile(
+        self,
+        *,
+        account_label: str,
+    ) -> ExecutionReconcileResult:
+        """Run a manual reconcile pass and persist the merged state."""
+
+        account = self.adapter.resolve_account(account_label)
+        state = self.state_store.load(self.adapter.backend_name, account.label)
+        state.broker_name = self.adapter.backend_name
+        state.account_label = account.label
+        state = self._apply_manual_kill_switch(state)
+        before_fills = len(state.fill_events)
+        report, refreshed_orders = self._fetch_and_merge_reconcile_report(state, account)
+        state_path = self.state_store.save(state)
+        return ExecutionReconcileResult(
+            report=report,
+            state=state,
+            state_path=state_path,
+            new_fill_events=max(0, len(state.fill_events) - before_fills),
+            refreshed_orders=refreshed_orders,
+        )
+
+    def cancel_order(
+        self,
+        *,
+        account_label: str,
+        order_ref: str,
+    ) -> ExecutionCancelResult:
+        """Cancel a tracked order by broker_order_id, client_order_id, or child_order_id."""
+
+        account = self.adapter.resolve_account(account_label)
+        state = self.state_store.load(self.adapter.backend_name, account.label)
+        state.broker_name = self.adapter.backend_name
+        state.account_label = account.label
+        target = self._find_tracked_broker_order(state, order_ref)
+        if target is None:
+            raise ValueError(
+                f"tracked order not found for ref '{order_ref}' in {self.adapter.backend_name}/{account.label}"
+            )
+
+        warnings: list[str] = []
+        refreshed = target
+        if target.status not in TERMINAL_BROKER_STATUSES:
+            self.adapter.cancel_order(target.broker_order_id, account)
+            try:
+                refreshed = self.adapter.get_order(target.broker_order_id, account)
+            except Exception as exc:
+                warnings.append(
+                    f"cancel submitted but post-cancel refresh failed: {exc}"
+                )
+                refreshed = self._updated_broker_order_record(target, status="PENDING_CANCEL")
+        else:
+            warnings.append(f"order already in terminal state: {target.status}")
+
+        self._upsert_broker_order(state, refreshed)
+        self._sync_child_from_broker_order(state, refreshed)
+        state_path = self.state_store.save(state)
+        return ExecutionCancelResult(
+            broker_name=self.adapter.backend_name,
+            account_label=account.label,
+            order_ref=order_ref,
+            broker_order_id=refreshed.broker_order_id,
+            client_order_id=refreshed.client_order_id,
+            status=refreshed.status,
+            state_path=state_path,
+            warnings=warnings,
+        )
+
+    def get_tracked_order(
+        self,
+        *,
+        account_label: str,
+        order_ref: str,
+    ) -> ExecutionTrackedOrder:
+        """Return tracked order details from local execution state."""
+
+        account = self.adapter.resolve_account(account_label)
+        state = self.state_store.load(self.adapter.backend_name, account.label)
+        resolved = self._resolve_tracked_order(state, order_ref)
+        if resolved is None:
+            raise ValueError(
+                f"tracked order not found for ref '{order_ref}' in {self.adapter.backend_name}/{account.label}"
+            )
+        child, parent, intent, broker_order = resolved
+        fills: list[ExecutionFillEvent] = []
+        if broker_order is not None:
+            fills.extend(
+                fill
+                for fill in state.fill_events
+                if fill.broker_order_id == broker_order.broker_order_id
+            )
+        elif parent is not None:
+            fills.extend(
+                fill
+                for fill in state.fill_events
+                if fill.parent_order_id == parent.parent_order_id
+            )
+        state_path = self.state_store.path_for(self.adapter.backend_name, account.label)
+        return ExecutionTrackedOrder(
+            broker_name=self.adapter.backend_name,
+            account_label=account.label,
+            order_ref=order_ref,
+            state_path=state_path,
+            intent=intent,
+            parent=parent,
+            child=child,
+            broker_order=broker_order,
+            fill_events=fills,
+        )
+
+    def retry_order(
+        self,
+        *,
+        account_label: str,
+        order_ref: str,
+    ) -> ExecutionRetryResult:
+        """Retry a zero-fill failed or canceled tracked order."""
+
+        tracked = self.get_tracked_order(account_label=account_label, order_ref=order_ref)
+        if tracked.child is None or tracked.parent is None or tracked.intent is None:
+            raise ValueError("tracked order is incomplete and cannot be retried")
+
+        broker_status = tracked.broker_order.status if tracked.broker_order is not None else tracked.child.status
+        if broker_status in OPEN_BROKER_STATUSES:
+            raise ValueError(f"tracked order is still open: {broker_status}")
+        if tracked.parent.filled_quantity > 0:
+            raise ValueError("retry for partially filled orders is not supported yet")
+        if broker_status not in FAILURE_BROKER_STATUSES and tracked.child.status != "FAILED":
+            raise ValueError(
+                f"retry only supports failed/canceled/rejected/expired orders, got: {broker_status}"
+            )
+
+        quantity = float(tracked.intent.quantity)
+        if not quantity.is_integer():
+            raise ValueError("retry currently only supports integer-share tracked orders")
+
+        order = Order(
+            symbol=tracked.intent.symbol,
+            quantity=int(quantity),
+            side=tracked.intent.side,
+            price=tracked.intent.limit_price,
+            order_type=tracked.intent.order_type,
+        )
+        retried = self.execute_orders(
+            [order],
+            account_label=account_label,
+            dry_run=False,
+            target_source=tracked.intent.target_source,
+            target_asof=tracked.intent.target_asof,
+            target_input_path=tracked.intent.target_input_path,
+        )[0]
+        state_path = self.state_store.path_for(self.adapter.backend_name, tracked.account_label)
+        return ExecutionRetryResult(
+            broker_name=self.adapter.backend_name,
+            account_label=tracked.account_label,
+            order_ref=order_ref,
+            new_child_order_id=str(retried.child_order_id),
+            broker_order_id=retried.broker_order_id,
+            broker_status=retried.broker_status,
+            state_path=state_path,
+            warnings=[],
+        )
 
     def _build_intent(
         self,
@@ -391,6 +618,8 @@ class OrderLifecycleService:
         )
         state.child_orders.append(child)
         parent.child_order_ids.append(child.child_order_id)
+        if attempt > 1 and parent.remaining_quantity > 0 and parent.filled_quantity <= 0:
+            parent.status = "PENDING"
         parent.updated_at = utc_now_iso()
         return child
 
@@ -451,46 +680,89 @@ class OrderLifecycleService:
         account: ResolvedBrokerAccount,
     ) -> ExecutionState:
         try:
-            report = self.adapter.reconcile(account)
+            self._fetch_and_merge_reconcile_report(state, account)
         except Exception as exc:
             state.consecutive_failures += 1
             self._apply_auto_kill_switch(state)
             logger.warning("Reconcile failed: %s", exc)
             return state
+        return state
+
+    def _fetch_and_merge_reconcile_report(
+        self,
+        state: ExecutionState,
+        account: ResolvedBrokerAccount,
+    ) -> tuple[BrokerReconcileReport, int]:
+        report = self.adapter.reconcile(account)
+        refreshed_orders = self._merge_reconcile_report(state, account, report)
+        return report, refreshed_orders
+
+    def _merge_reconcile_report(
+        self,
+        state: ExecutionState,
+        account: ResolvedBrokerAccount,
+        report: BrokerReconcileReport,
+    ) -> int:
+        refreshed_orders = 0
 
         self.last_reconcile_report = report
         state.last_reconcile_at = report.fetched_at
         for broker_order in report.open_orders:
             self._upsert_broker_order(state, broker_order)
+            self._sync_child_from_broker_order(state, broker_order)
+
+        tracked_broker_order_ids = sorted(
+            {
+                child.broker_order_id
+                for child in state.child_orders
+                if child.broker_order_id
+            }
+        )
+        open_order_ids = {order.broker_order_id for order in report.open_orders}
+        broker_orders_by_id = {
+            order.broker_order_id: order
+            for order in state.broker_orders
+            if order.broker_order_id
+        }
+        for broker_order_id in tracked_broker_order_ids:
+            if broker_order_id in open_order_ids:
+                continue
+            known = broker_orders_by_id.get(broker_order_id)
+            if known is not None and known.status in TERMINAL_BROKER_STATUSES:
+                continue
+            try:
+                broker_order = self.adapter.get_order(broker_order_id, account)
+            except Exception as exc:
+                report.warnings.append(
+                    f"failed to refresh tracked order {broker_order_id}: {exc}"
+                )
+                continue
+            self._upsert_broker_order(state, broker_order)
+            self._sync_child_from_broker_order(state, broker_order)
+            refreshed_orders += 1
+
+        fill_query_ids = sorted(
+            {
+                broker_order_id
+                for broker_order_id in tracked_broker_order_ids
+                if broker_order_id
+            }
+        )
+        for broker_order_id in fill_query_ids:
+            try:
+                fills = self.adapter.list_fills(account, broker_order_id=broker_order_id)
+            except Exception as exc:
+                report.warnings.append(
+                    f"failed to load fills for tracked order {broker_order_id}: {exc}"
+                )
+                continue
+            for fill in fills:
+                self._append_fill_event(state, fill)
+
         for fill in report.fills:
-            if any(existing.fill_id == fill.fill_id for existing in state.fill_events):
-                continue
-            matching_parent = next(
-                (
-                    parent
-                    for parent in state.parent_orders
-                    if parent.symbol == fill.symbol and parent.status not in {"FILLED", "CANCELED"}
-                ),
-                None,
-            )
-            if matching_parent is None:
-                continue
-            event = ExecutionFillEvent(
-                fill_id=fill.fill_id,
-                intent_id=matching_parent.intent_id,
-                parent_order_id=matching_parent.parent_order_id,
-                broker_order_id=fill.broker_order_id,
-                symbol=fill.symbol,
-                quantity=fill.quantity,
-                price=fill.price,
-                broker_name=fill.broker_name,
-                account_label=fill.account_label,
-                filled_at=fill.filled_at,
-            )
-            state.fill_events.append(event)
-            self._update_parent_from_fill(matching_parent, event)
+            self._append_fill_event(state, fill)
         state.consecutive_failures = 0
-        return state
+        return refreshed_orders
 
     def _record_fill_events(
         self,
@@ -519,6 +791,160 @@ class OrderLifecycleService:
             state.fill_events.append(event)
             self._update_parent_from_fill(parent, event)
 
+    def _append_fill_event(self, state: ExecutionState, fill: Any) -> None:
+        if any(existing.fill_id == fill.fill_id for existing in state.fill_events):
+            return
+        parent = self._find_parent_for_fill(state, fill)
+        if parent is None:
+            return
+        event = ExecutionFillEvent(
+            fill_id=fill.fill_id,
+            intent_id=parent.intent_id,
+            parent_order_id=parent.parent_order_id,
+            broker_order_id=fill.broker_order_id,
+            symbol=fill.symbol,
+            quantity=fill.quantity,
+            price=fill.price,
+            broker_name=fill.broker_name,
+            account_label=fill.account_label,
+            filled_at=fill.filled_at,
+        )
+        state.fill_events.append(event)
+        self._update_parent_from_fill(parent, event)
+
+    def _find_tracked_broker_order(
+        self,
+        state: ExecutionState,
+        order_ref: str,
+    ) -> BrokerOrderRecord | None:
+        resolved = self._resolve_tracked_order(state, order_ref)
+        if resolved is None:
+            return None
+        return resolved[3]
+
+    def _resolve_tracked_order(
+        self,
+        state: ExecutionState,
+        order_ref: str,
+    ) -> tuple[ChildOrder | None, ParentOrder | None, OrderIntent | None, BrokerOrderRecord | None] | None:
+        normalized = str(order_ref).strip()
+        if not normalized:
+            return None
+
+        child = next(
+            (
+                candidate
+                for candidate in state.child_orders
+                if candidate.child_order_id == normalized
+            ),
+            None,
+        )
+        for broker_order in state.broker_orders:
+            if broker_order.broker_order_id == normalized:
+                child = child or next(
+                    (
+                        candidate
+                        for candidate in state.child_orders
+                        if candidate.broker_order_id == broker_order.broker_order_id
+                    ),
+                    None,
+                )
+                parent = self._find_parent_for_child(state, child)
+                intent = self._find_intent_for_parent(state, parent)
+                return child, parent, intent, broker_order
+            if broker_order.client_order_id == normalized:
+                child = child or next(
+                    (
+                        candidate
+                        for candidate in state.child_orders
+                        if candidate.broker_order_id == broker_order.broker_order_id
+                        or candidate.child_order_id == broker_order.client_order_id
+                    ),
+                    None,
+                )
+                parent = self._find_parent_for_child(state, child)
+                intent = self._find_intent_for_parent(state, parent)
+                return child, parent, intent, broker_order
+
+        if child is None:
+            return None
+        parent = self._find_parent_for_child(state, child)
+        intent = self._find_intent_for_parent(state, parent)
+        broker_order = None
+        if child.broker_order_id:
+            broker_order = next(
+                (
+                    existing
+                    for existing in state.broker_orders
+                    if existing.broker_order_id == child.broker_order_id
+                ),
+                None,
+            )
+        return child, parent, intent, broker_order
+
+    def _find_parent_for_child(
+        self,
+        state: ExecutionState,
+        child: ChildOrder | None,
+    ) -> ParentOrder | None:
+        if child is None:
+            return None
+        return next(
+            (
+                parent
+                for parent in state.parent_orders
+                if parent.parent_order_id == child.parent_order_id
+            ),
+            None,
+        )
+
+    def _find_intent_for_parent(
+        self,
+        state: ExecutionState,
+        parent: ParentOrder | None,
+    ) -> OrderIntent | None:
+        if parent is None:
+            return None
+        return next(
+            (
+                intent
+                for intent in state.intents
+                if intent.intent_id == parent.intent_id
+            ),
+            None,
+        )
+
+    def _find_parent_for_fill(
+        self,
+        state: ExecutionState,
+        fill: Any,
+    ) -> ParentOrder | None:
+        matching_child = next(
+            (
+                child
+                for child in state.child_orders
+                if child.broker_order_id == fill.broker_order_id
+            ),
+            None,
+        )
+        if matching_child is not None:
+            return next(
+                (
+                    parent
+                    for parent in state.parent_orders
+                    if parent.parent_order_id == matching_child.parent_order_id
+                ),
+                None,
+            )
+        return next(
+            (
+                parent
+                for parent in state.parent_orders
+                if parent.symbol == fill.symbol and parent.status not in {"FILLED", "CANCELED"}
+            ),
+            None,
+        )
+
     def _update_parent_from_fill(self, parent: ParentOrder, event: ExecutionFillEvent) -> None:
         parent.filled_quantity += float(event.quantity)
         parent.remaining_quantity = max(
@@ -537,6 +963,69 @@ class OrderLifecycleService:
                 state.broker_orders[index] = broker_order
                 return
         state.broker_orders.append(broker_order)
+
+    def _updated_broker_order_record(
+        self,
+        broker_order: BrokerOrderRecord,
+        *,
+        status: str,
+        message: str | None = None,
+    ) -> BrokerOrderRecord:
+        return BrokerOrderRecord(
+            broker_order_id=broker_order.broker_order_id,
+            symbol=broker_order.symbol,
+            side=broker_order.side,
+            quantity=broker_order.quantity,
+            broker_name=broker_order.broker_name,
+            account_label=broker_order.account_label,
+            filled_quantity=broker_order.filled_quantity,
+            remaining_quantity=broker_order.remaining_quantity,
+            status=status,
+            client_order_id=broker_order.client_order_id,
+            avg_fill_price=broker_order.avg_fill_price,
+            submitted_at=broker_order.submitted_at,
+            updated_at=utc_now_iso(),
+            message=message or broker_order.message,
+            raw=dict(broker_order.raw),
+        )
+
+    def _sync_child_from_broker_order(
+        self,
+        state: ExecutionState,
+        broker_order: BrokerOrderRecord,
+    ) -> None:
+        matching_child = next(
+            (
+                child
+                for child in state.child_orders
+                if child.broker_order_id == broker_order.broker_order_id
+                or (
+                    broker_order.client_order_id
+                    and child.child_order_id == broker_order.client_order_id
+                )
+            ),
+            None,
+        )
+        if matching_child is None:
+            return
+        matching_child.broker_order_id = broker_order.broker_order_id
+        matching_child.client_order_id = broker_order.client_order_id or matching_child.client_order_id
+        matching_child.status = broker_order.status
+        matching_child.updated_at = utc_now_iso()
+
+        parent = next(
+            (
+                candidate
+                for candidate in state.parent_orders
+                if candidate.parent_order_id == matching_child.parent_order_id
+            ),
+            None,
+        )
+        if parent is None:
+            return
+        if broker_order.status in FAILURE_BROKER_STATUSES and parent.filled_quantity <= 0:
+            parent.status = broker_order.status
+            parent.updated_at = utc_now_iso()
 
     def _apply_broker_record(
         self,

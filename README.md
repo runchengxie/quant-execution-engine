@@ -7,6 +7,7 @@
 - 查看有效 broker / risk / kill-switch 配置
 - 查询账户资金与持仓
 - 拉取实时行情
+- 查看本地跟踪的 broker orders
 - 基于 canonical `targets.json` 生成调仓计划与 diff 预览
 - 通过 broker adapter 执行 `submit / query / cancel / reconcile`
 - 在 live / paper 路径上做轻量 execution risk gate
@@ -43,6 +44,11 @@ qexec --help
 qexec config
 qexec account --format json
 qexec quote AAPL 700.HK
+qexec orders
+qexec order broker-order-id
+qexec reconcile
+qexec cancel broker-order-id
+qexec retry broker-order-id
 qexec rebalance outputs/targets/2026-04-09.json
 QEXEC_ENABLE_LIVE=1 qexec rebalance outputs/targets/2026-04-09.json --execute
 qexec rebalance outputs/targets/2026-04-09.json --broker alpaca-paper --execute
