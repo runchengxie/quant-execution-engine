@@ -5,6 +5,12 @@
 dotenv_if_exists .env
 dotenv_if_exists .env.local
 
+# Default sync profile:
+#   --group dev --extra cli
+# Optional local override examples:
+#   UV_SYNC_ARGS="--group dev --extra cli --extra alpaca"
+#   NO_DEV=1
+
 # Re-run this script when dependency manifests change
 watch_file pyproject.toml
 watch_file uv.lock
@@ -12,32 +18,6 @@ watch_file requirements.txt
 watch_file requirements-dev.txt
 
 has_cmd() { command -v "$1" >/dev/null 2>&1; }
-
-# Check if the 'dev' optional dependency group exists in pyproject.toml
-has_dev_extra() {
-  [ -f pyproject.toml ] || { echo 0; return; }
-  python3 - <<'PY' 2>/dev/null
-try:
-    import pathlib
-    p = pathlib.Path("pyproject.toml")
-    text = p.read_text(encoding="utf-8")
-    try:
-        import tomllib as tomli
-    except Exception:
-        import tomli as tomli  # This will raise an exception on Python < 3.11 if tomli is not installed
-    data = tomli.loads(text)
-    od = data.get("project", {}).get("optional-dependencies", {})
-    print(1 if "dev" in od else 0)
-except Exception:
-    print(0)
-PY
-}
-
-DEV_EXTRA="$(has_dev_extra)"
-USE_DEV=""
-[ "$DEV_EXTRA" = "1" ] && USE_DEV="--extra dev"
-# Allow disabling dev dependencies by setting NO_DEV=1
-[ -n "$NO_DEV" ] && USE_DEV=""
 
 # Ensure the virtual environment exists
 ensure_venv_uv() {
@@ -58,12 +38,16 @@ ensure_venv_py() {
 }
 
 if has_cmd uv; then
+  # Default to the repo's standard dev environment; override locally via UV_SYNC_ARGS.
+  UV_SYNC_ARGS="${UV_SYNC_ARGS:---group dev --extra cli}"
+  [ -n "$NO_DEV" ] && UV_SYNC_ARGS="${UV_SYNC_ARGS/--group dev/}"
+
   # Prefer using uv if available
   if ensure_venv_uv; then
     if [ -f uv.lock ]; then
-      uv sync --frozen $USE_DEV || echo "warning: uv sync failed, the environment might be incomplete" >&2
+      uv sync --frozen $UV_SYNC_ARGS || echo "warning: uv sync failed, the environment might be incomplete" >&2
     else
-      uv sync $USE_DEV || echo "warning: uv sync failed, the environment might be incomplete" >&2
+      uv sync $UV_SYNC_ARGS || echo "warning: uv sync failed, the environment might be incomplete" >&2
     fi
   else
     echo "notice: uv venv failed, falling back to python venv + pip" >&2
@@ -78,8 +62,8 @@ else
   elif [ -f requirements.txt ]; then
     pip install -r requirements.txt || echo "warning: failed to install requirements.txt" >&2
   elif [ -f pyproject.toml ]; then
-    if [ -z "$NO_DEV" ] && [ "$DEV_EXTRA" = "1" ]; then
-      pip install -e ".[dev]" || echo 'warning: failed to install ".[dev]" with pip' >&2
+    if [ -z "$NO_DEV" ]; then
+      pip install -e . || echo 'warning: failed to install "." with pip' >&2
     else
       pip install -e . || echo 'warning: failed to install "." with pip' >&2
     fi
