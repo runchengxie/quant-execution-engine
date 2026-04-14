@@ -54,6 +54,41 @@ def _as_float(value: Any) -> float:
     return float(value)
 
 
+def _alpaca_enum_text(value: Any) -> str:
+    if value is None:
+        return ""
+    raw = getattr(value, "value", value)
+    text = str(raw).strip()
+    if "." in text:
+        text = text.split(".")[-1]
+    return text
+
+
+def _normalize_side(value: Any) -> str:
+    return _alpaca_enum_text(value).replace("-", "_").upper()
+
+
+def _normalize_status(value: Any) -> str:
+    normalized = _alpaca_enum_text(value).replace("-", "_").upper()
+    mapping = {
+        "NEW": "NEW",
+        "ACCEPTED": "ACCEPTED",
+        "PENDING_NEW": "PENDING_NEW",
+        "PENDING_CANCEL": "PENDING_CANCEL",
+        "PENDING_REPLACE": "PENDING_REPLACE",
+        "PARTIALLY_FILLED": "PARTIALLY_FILLED",
+        "FILLED": "FILLED",
+        "CANCELED": "CANCELED",
+        "CANCELLED": "CANCELED",
+        "REJECTED": "REJECTED",
+        "EXPIRED": "EXPIRED",
+        "DONE_FOR_DAY": "EXPIRED",
+        "REPLACED": "NEW",
+        "HELD": "ACCEPTED",
+    }
+    return mapping.get(normalized, normalized)
+
+
 def _alpaca_side(side: str):
     OrderSide = _alpaca_import("alpaca.trading.enums.OrderSide")
     return OrderSide.BUY if side.upper() == "BUY" else OrderSide.SELL
@@ -259,13 +294,13 @@ class AlpacaPaperBrokerAdapter(BrokerAdapter):
     ) -> BrokerOrderRecord:
         resolved = account or self.resolve_account()
         order = self._get_trading_client().get_order_by_id(broker_order_id)
-        status = str(getattr(order, "status", "new")).upper()
+        status = _normalize_status(getattr(order, "status", "new"))
         qty = _as_float(getattr(order, "qty", None))
         filled_qty = _as_float(getattr(order, "filled_qty", None))
         return BrokerOrderRecord(
             broker_order_id=str(getattr(order, "id", broker_order_id)),
             symbol=f"{_strip_market(getattr(order, 'symbol', ''))}.US",
-            side=str(getattr(order, "side", "")).upper(),
+            side=_normalize_side(getattr(order, "side", "")),
             quantity=qty,
             filled_quantity=filled_qty,
             remaining_quantity=max(0.0, qty - filled_qty),
@@ -327,7 +362,7 @@ class AlpacaPaperBrokerAdapter(BrokerAdapter):
                 broker_name=self.backend_name,
                 account_label=resolved.label,
                 filled_at=str(getattr(order, "updated_at", "")),
-                raw={"status": str(getattr(order, "status", "")).upper()},
+                raw={"status": _normalize_status(getattr(order, "status", ""))},
             )
         ]
 

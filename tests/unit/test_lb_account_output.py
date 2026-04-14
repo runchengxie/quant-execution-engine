@@ -134,3 +134,15 @@ class TestAccountParameterValidation:
         assert result.stdout is not None
         assert "Cash (USD)" in result.stdout
         assert "AAPL.US" not in result.stdout
+
+
+@pytest.mark.unit
+def test_run_account_uses_paper_env_for_alpaca() -> None:
+    snapshot = make_snapshot(1000.0, [])
+
+    with patch("quant_execution_engine.cli.get_account_snapshot", return_value=snapshot) as mock_get:
+        result = cli.run_account(broker="alpaca-paper")
+
+    assert result.exit_code == 0
+    mock_get.assert_called_once()
+    assert mock_get.call_args.kwargs["env"] == "paper"

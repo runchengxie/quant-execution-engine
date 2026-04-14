@@ -558,8 +558,9 @@ def run_account(
     try:
         if only_funds and only_positions:
             only_positions = False
+        selected_broker = resolve_broker_name(broker)
         snapshot = get_account_snapshot(
-            env="real",
+            env="paper" if selected_broker in {"alpaca", "alpaca-paper"} else "real",
             broker_name=broker,
             account_label=account,
         )

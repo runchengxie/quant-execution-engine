@@ -281,6 +281,12 @@ def _jsonable(obj: Any) -> Any:
     return obj
 
 
+def _intent_limit_price(order: Order) -> float | None:
+    if str(order.order_type).upper() != "LIMIT":
+        return None
+    return float(order.price) if order.price is not None else None
+
+
 class ExecutionStateStore:
     """File-backed execution state store."""
 
@@ -952,7 +958,7 @@ class OrderLifecycleService:
             "side": order.side,
             "quantity": order.quantity,
             "order_type": order.order_type,
-            "price": order.price,
+            "price": _intent_limit_price(order),
             "target_source": target_source,
             "target_asof": target_asof,
             "target_input_path": target_input_path,
@@ -966,7 +972,7 @@ class OrderLifecycleService:
             side=order.side,
             quantity=float(order.quantity),
             order_type=order.order_type,
-            limit_price=order.price,
+            limit_price=_intent_limit_price(order),
             broker_name=self.adapter.backend_name,
             account_label=account.label,
             target_source=target_source,

@@ -186,6 +186,37 @@ def test_idempotent_submission_reuses_existing_open_order(tmp_path: Path) -> Non
     assert adapter.submit_calls == 1
 
 
+def test_market_order_intent_ignores_preview_price_for_idempotency(tmp_path: Path) -> None:
+    adapter = FakeAdapter()
+    store = ExecutionStateStore(root_dir=tmp_path)
+    service = OrderLifecycleService(
+        adapter,
+        state_store=store,
+        risk_chain=RiskGateChain({}),
+    )
+    base_kwargs = {
+        "account_label": "main",
+        "dry_run": False,
+        "target_source": "unit",
+        "target_asof": "2026-04-14",
+        "target_input_path": "tests/targets.json",
+    }
+
+    first = service.execute_orders(
+        [Order(symbol="AAPL.US", quantity=10, side="BUY", price=10.0, order_type="MARKET")],
+        **base_kwargs,
+    )
+    second = service.execute_orders(
+        [Order(symbol="AAPL.US", quantity=10, side="BUY", price=10.5, order_type="MARKET")],
+        **base_kwargs,
+    )
+    state = store.load("fake", "main")
+
+    assert first[0].broker_order_id == second[0].broker_order_id
+    assert adapter.submit_calls == 1
+    assert state.intents[0].limit_price is None
+
+
 def test_broker_capabilities_include_alpaca_paper() -> None:
     caps = get_broker_capabilities("alpaca-paper")
 
@@ -286,6 +317,7 @@ def test_get_tracked_order_returns_lifecycle_details(tmp_path: Path) -> None:
     assert tracked.parent is not None
     assert tracked.child is not None
     assert tracked.broker_order is not None
+    assert tracked.intent.limit_price is None
     assert tracked.child.child_order_id == result.child_order_id
     assert tracked.broker_order.broker_order_id == result.broker_order_id
 

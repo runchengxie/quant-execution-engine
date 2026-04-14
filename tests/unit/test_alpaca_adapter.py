@@ -55,3 +55,30 @@ def test_get_account_snapshot_only_requires_trading_client(
 
     assert snapshot.cash_usd == 1000.0
     assert requested_paths == ["alpaca.trading.client.TradingClient"]
+
+
+def test_get_order_normalizes_alpaca_enum_side_and_status(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class FakeTradingClient:
+        def get_order_by_id(self, broker_order_id: str):
+            return SimpleNamespace(
+                id=broker_order_id,
+                symbol="AAPL",
+                side=SimpleNamespace(value="buy"),
+                qty="1",
+                filled_qty="1",
+                status=SimpleNamespace(value="filled"),
+                client_order_id="child-1",
+                filled_avg_price="257.79",
+                submitted_at="2026-04-14T15:13:06Z",
+                updated_at="2026-04-14T15:13:07Z",
+            )
+
+    adapter = alpaca_mod.AlpacaPaperBrokerAdapter()
+    monkeypatch.setattr(adapter, "_get_trading_client", lambda: FakeTradingClient())
+
+    record = adapter.get_order("broker-1")
+
+    assert record.side == "BUY"
+    assert record.status == "FILLED"

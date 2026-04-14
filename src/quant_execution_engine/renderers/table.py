@@ -373,12 +373,15 @@ def render_tracked_order_detail(tracked: ExecutionTrackedOrder) -> str:
             [
                 f"- Intent: {tracked.intent.intent_id} {tracked.intent.side} {tracked.intent.quantity:g} {tracked.intent.symbol}",
                 f"- Intent Order Type: {tracked.intent.order_type}",
-                f"- Intent Limit Price: {tracked.intent.limit_price if tracked.intent.limit_price is not None else '-'}",
                 f"- Target Source: {tracked.intent.target_source or '-'}",
                 f"- Target Asof: {tracked.intent.target_asof or '-'}",
                 f"- Target Input: {tracked.intent.target_input_path or '-'}",
             ]
         )
+        if str(tracked.intent.order_type).upper() == "LIMIT":
+            lines.append(
+                f"- Intent Limit Price: {tracked.intent.limit_price if tracked.intent.limit_price is not None else '-'}"
+            )
         last_reprice_at = tracked.intent.metadata.get("last_reprice_at")
         if last_reprice_at:
             lines.append(f"- Last Reprice At: {last_reprice_at}")
