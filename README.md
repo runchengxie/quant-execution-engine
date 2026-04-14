@@ -37,6 +37,8 @@ uv sync --group dev --extra cli
 uv sync --group dev --extra cli --extra alpaca
 ```
 
+如果你使用仓库内置的 `.envrc` / `direnv`，并且本地 `.env` 或 `.env.local` 里已经有 `ALPACA_*` / `APCA_*` 凭证，目录加载时会自动把 `--extra alpaca` 加进 `uv sync`，避免可选依赖被卸掉。
+
 运行 CLI：
 
 ```bash

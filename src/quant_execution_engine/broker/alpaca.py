@@ -27,6 +27,12 @@ def _alpaca_import(path: str):
     try:
         module = importlib.import_module(module_name)
     except ImportError as exc:  # pragma: no cover - depends on optional package
+        missing = getattr(exc, "name", None)
+        if missing and missing not in {module_name, module_name.split(".")[0], "alpaca"}:
+            raise BrokerImportError(
+                "alpaca-py import failed because dependency "
+                f"'{missing}' is missing. Install/update it with: uv sync --extra alpaca"
+            ) from exc
         raise BrokerImportError(
             "alpaca-py is not installed. Install it with: uv sync --extra alpaca"
         ) from exc
@@ -65,8 +71,8 @@ def _alpaca_tif(value: str):
 
 @dataclass(slots=True)
 class _AlpacaClients:
-    trading: Any
-    data: Any
+    trading: Any | None = None
+    data: Any | None = None
 
 
 class AlpacaPaperBrokerAdapter(BrokerAdapter):
@@ -92,26 +98,44 @@ class AlpacaPaperBrokerAdapter(BrokerAdapter):
     def __init__(self) -> None:
         self._clients: _AlpacaClients | None = None
 
-    def _get_clients(self) -> _AlpacaClients:
-        if self._clients is not None:
-            return self._clients
-
-        TradingClient = _alpaca_import("alpaca.trading.client.TradingClient")
-        StockHistoricalDataClient = _alpaca_import(
-            "alpaca.data.historical.stock.StockHistoricalDataClient"
-        )
-
+    def _credentials(self) -> tuple[str, str]:
         api_key = os.getenv("ALPACA_API_KEY") or os.getenv("APCA_API_KEY_ID")
         secret_key = os.getenv("ALPACA_SECRET_KEY") or os.getenv("APCA_API_SECRET_KEY")
         if not api_key or not secret_key:
             raise BrokerValidationError(
                 "missing ALPACA_API_KEY / ALPACA_SECRET_KEY for alpaca-paper"
             )
+        return str(api_key), str(secret_key)
 
-        trading = TradingClient(api_key=api_key, secret_key=secret_key, paper=True)
-        data = StockHistoricalDataClient(api_key=api_key, secret_key=secret_key)
-        self._clients = _AlpacaClients(trading=trading, data=data)
+    def _get_clients(self) -> _AlpacaClients:
+        if self._clients is None:
+            self._clients = _AlpacaClients()
         return self._clients
+
+    def _get_trading_client(self) -> Any:
+        clients = self._get_clients()
+        if clients.trading is None:
+            TradingClient = _alpaca_import("alpaca.trading.client.TradingClient")
+            api_key, secret_key = self._credentials()
+            clients.trading = TradingClient(
+                api_key=api_key,
+                secret_key=secret_key,
+                paper=True,
+            )
+        return clients.trading
+
+    def _get_data_client(self) -> Any:
+        clients = self._get_clients()
+        if clients.data is None:
+            StockHistoricalDataClient = _alpaca_import(
+                "alpaca.data.historical.stock.StockHistoricalDataClient"
+            )
+            api_key, secret_key = self._credentials()
+            clients.data = StockHistoricalDataClient(
+                api_key=api_key,
+                secret_key=secret_key,
+            )
+        return clients.data
 
     def resolve_account(self, account_label: str | None = None) -> ResolvedBrokerAccount:
         label = account_label or "main"
@@ -128,10 +152,10 @@ class AlpacaPaperBrokerAdapter(BrokerAdapter):
         include_quotes: bool = True,
     ) -> AccountSnapshot:
         resolved = account or self.resolve_account()
-        clients = self._get_clients()
-        account_obj = clients.trading.get_account()
+        trading = self._get_trading_client()
+        account_obj = trading.get_account()
         positions: list[Position] = []
-        for pos in clients.trading.get_all_positions():
+        for pos in trading.get_all_positions():
             qty = int(float(pos.qty))
             price = _as_float(getattr(pos, "current_price", None))
             market_value = _as_float(getattr(pos, "market_value", None))
@@ -157,7 +181,7 @@ class AlpacaPaperBrokerAdapter(BrokerAdapter):
     def get_quotes(
         self, symbols: list[str], *, include_depth: bool = False
     ) -> dict[str, Quote]:
-        clients = self._get_clients()
+        data_client = self._get_data_client()
         StockLatestTradeRequest = _alpaca_import(
             "alpaca.data.requests.StockLatestTradeRequest"
         )
@@ -166,12 +190,12 @@ class AlpacaPaperBrokerAdapter(BrokerAdapter):
         )
 
         request_symbols = [_strip_market(symbol) for symbol in symbols]
-        trades = clients.data.get_stock_latest_trade(
+        trades = data_client.get_stock_latest_trade(
             StockLatestTradeRequest(symbol_or_symbols=request_symbols)
         )
         quotes_payload: dict[str, Any] = {}
         if include_depth:
-            quotes_payload = clients.data.get_stock_latest_quote(
+            quotes_payload = data_client.get_stock_latest_quote(
                 StockLatestQuoteRequest(symbol_or_symbols=request_symbols)
             )
 
@@ -199,7 +223,7 @@ class AlpacaPaperBrokerAdapter(BrokerAdapter):
 
     def submit_order(self, request: BrokerOrderRequest) -> BrokerOrderRecord:
         resolved = request.account or self.resolve_account()
-        clients = self._get_clients()
+        trading = self._get_trading_client()
         side = _alpaca_side(request.side)
         tif = _alpaca_tif(request.time_in_force)
         if request.order_type == "LIMIT":
@@ -225,7 +249,7 @@ class AlpacaPaperBrokerAdapter(BrokerAdapter):
                 client_order_id=request.client_order_id,
                 extended_hours=request.extended_hours,
             )
-        order = clients.trading.submit_order(order_req)
+        order = trading.submit_order(order_req)
         return self.get_order(str(order.id), resolved)
 
     def get_order(
@@ -234,7 +258,7 @@ class AlpacaPaperBrokerAdapter(BrokerAdapter):
         account: ResolvedBrokerAccount | None = None,
     ) -> BrokerOrderRecord:
         resolved = account or self.resolve_account()
-        order = self._get_clients().trading.get_order_by_id(broker_order_id)
+        order = self._get_trading_client().get_order_by_id(broker_order_id)
         status = str(getattr(order, "status", "new")).upper()
         qty = _as_float(getattr(order, "qty", None))
         filled_qty = _as_float(getattr(order, "filled_qty", None))
@@ -263,7 +287,7 @@ class AlpacaPaperBrokerAdapter(BrokerAdapter):
         account: ResolvedBrokerAccount | None = None,
     ) -> list[BrokerOrderRecord]:
         resolved = account or self.resolve_account()
-        orders = self._get_clients().trading.get_orders()
+        orders = self._get_trading_client().get_orders()
         open_statuses = {"NEW", "ACCEPTED", "PENDING_NEW", "PARTIALLY_FILLED"}
         results: list[BrokerOrderRecord] = []
         for order in orders:
@@ -277,7 +301,7 @@ class AlpacaPaperBrokerAdapter(BrokerAdapter):
         broker_order_id: str,
         account: ResolvedBrokerAccount | None = None,
     ) -> None:
-        self._get_clients().trading.cancel_order_by_id(broker_order_id)
+        self._get_trading_client().cancel_order_by_id(broker_order_id)
 
     def list_fills(
         self,
@@ -288,7 +312,7 @@ class AlpacaPaperBrokerAdapter(BrokerAdapter):
         resolved = account or self.resolve_account()
         if broker_order_id is None:
             return []
-        order = self._get_clients().trading.get_order_by_id(broker_order_id)
+        order = self._get_trading_client().get_order_by_id(broker_order_id)
         filled_qty = _as_float(getattr(order, "filled_qty", None))
         filled_avg = _as_float(getattr(order, "filled_avg_price", None))
         if filled_qty <= 0 or filled_avg <= 0:

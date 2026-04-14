@@ -43,6 +43,7 @@
 说明：
 
 - Alpaca 支持来自可选依赖 `alpaca-py`，安装方式：`uv sync --extra alpaca`
+- 如果你使用仓库自带的 `.envrc` / `.envrc.example`，并且 `.env` 或 `.env.local` 里已经有 `ALPACA_*` / `APCA_*` 凭证，direnv 载入目录时会自动把 `--extra alpaca` 加进 `uv sync`
 - 当前 adapter 以 paper 为默认模式，不提供多账户切换
 
 ## 本地 YAML
