@@ -12,9 +12,10 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from .account import get_account_snapshot, get_quotes
-from .broker.longport import LongPortClient
+from .broker import get_broker_capabilities, resolve_broker_name, resolve_default_account_label
 from .logging import get_logger, set_run_id
 from .rebalance import RebalanceService
+from .risk import get_kill_switch_config, get_risk_config
 from .renderers.diff import render_rebalance_diff
 from .renderers.jsonout import render_multiple_account_snapshots_json
 from .renderers.table import render_multiple_account_snapshots, render_quotes
@@ -65,6 +66,12 @@ Examples:
 
     quote_parser = subparsers.add_parser("quote", help="Fetch real-time quotes")
     quote_parser.add_argument("tickers", nargs="+", help="Tickers such as AAPL or 700.HK")
+    quote_parser.add_argument(
+        "--broker",
+        type=str,
+        default=None,
+        help="Broker backend override, e.g. longport or alpaca-paper",
+    )
 
     rebalance_parser = subparsers.add_parser(
         "rebalance",
@@ -72,10 +79,16 @@ Examples:
     )
     rebalance_parser.add_argument("input_file", type=str, help="targets JSON file")
     rebalance_parser.add_argument(
+        "--broker",
+        type=str,
+        default=None,
+        help="Broker backend override, e.g. longport or alpaca-paper",
+    )
+    rebalance_parser.add_argument(
         "--account",
         type=str,
         default="main",
-        help="Compatibility label used in logs; does not switch broker account yet",
+        help="Broker account/profile label. Unsupported labels fail fast.",
     )
     rebalance_parser.add_argument(
         "--execute",
@@ -93,6 +106,18 @@ Examples:
     account_parser.add_argument("--funds", action="store_true", help="Only show cash/funds")
     account_parser.add_argument("--positions", action="store_true", help="Only show positions")
     account_parser.add_argument(
+        "--broker",
+        type=str,
+        default=None,
+        help="Broker backend override, e.g. longport or alpaca-paper",
+    )
+    account_parser.add_argument(
+        "--account",
+        type=str,
+        default="main",
+        help="Broker account/profile label. Unsupported labels fail fast.",
+    )
+    account_parser.add_argument(
         "--format",
         choices=["table", "json"],
         default="table",
@@ -101,6 +126,12 @@ Examples:
 
     config_parser = subparsers.add_parser("config", help="Show effective LongPort config")
     config_parser.add_argument("--show", action="store_true", default=True)
+    config_parser.add_argument(
+        "--broker",
+        type=str,
+        default=None,
+        help="Broker backend override, e.g. longport or alpaca-paper",
+    )
 
     return parser
 
@@ -122,20 +153,16 @@ def _handle_command_result(result: int | CommandResult) -> int:
     return int(result)
 
 
-def run_quote(tickers: list[str]) -> CommandResult:
+def run_quote(tickers: list[str], broker: str | None = None) -> CommandResult:
     try:
-        __import__("quant_execution_engine.broker.longport")
-        quotes_dict = get_quotes(tickers)
+        quotes_dict = get_quotes(tickers, broker_name=broker)
         return CommandResult(exit_code=0, stdout=render_quotes(list(quotes_dict.values())))
-    except ImportError as exc:
-        err = (
-            "Error importing LongPort module: {msg}\n"
-            "Please ensure the 'longport' package is installed: pip install longport"
-        ).format(msg=exc)
-        get_logger(__name__).error(err)
-        return CommandResult(exit_code=1, stderr=err)
     except Exception as exc:
-        get_logger(__name__).error("Failed to fetch quotes: %s", exc)
+        get_logger(__name__).error(
+            "Failed to fetch quotes via broker %s: %s",
+            resolve_broker_name(broker),
+            exc,
+        )
         return CommandResult(exit_code=1, stderr=str(exc))
 
 
@@ -143,12 +170,17 @@ def run_account(
     only_funds: bool = False,
     only_positions: bool = False,
     fmt: str = "table",
+    account: str = "main",
+    broker: str | None = None,
 ) -> CommandResult:
     try:
-        __import__("quant_execution_engine.broker.longport")
         if only_funds and only_positions:
             only_positions = False
-        snapshot = get_account_snapshot(env="real")
+        snapshot = get_account_snapshot(
+            env="real",
+            broker_name=broker,
+            account_label=account,
+        )
         snapshots = [snapshot]
         if fmt == "json":
             output = render_multiple_account_snapshots_json(snapshots)
@@ -159,20 +191,13 @@ def run_account(
                 only_positions=only_positions,
             )
         return CommandResult(exit_code=0, stdout=output)
-    except ImportError as exc:
-        err = (
-            "Failed to import LongPort module: {msg}\n"
-            "Please ensure the 'longport' package is installed: pip install longport"
-        ).format(msg=exc)
-        get_logger(__name__).error(err)
-        return CommandResult(exit_code=1, stderr=err)
     except Exception as exc:
         msg = f"Failed to get account overview: {exc}"
         get_logger(__name__).error(msg)
         return CommandResult(exit_code=1, stderr=msg)
 
 
-def run_config(show: bool = True) -> CommandResult:
+def run_config(show: bool = True, broker: str | None = None) -> CommandResult:
     if not show:
         return CommandResult(exit_code=0)
 
@@ -204,16 +229,32 @@ def run_config(show: bool = True) -> CommandResult:
             return str(value)
         return f"{value}"
 
+    selected_broker = resolve_broker_name(broker)
+    capabilities = get_broker_capabilities(selected_broker)
+    risk_cfg = get_risk_config()
+    kill_switch_cfg = get_kill_switch_config()
+    default_account = resolve_default_account_label()
+
     region = _getenv_both("LONGPORT_REGION", "LONGBRIDGE_REGION", "hk")
-    overnight = _getenv_both("LONGPORT_ENABLE_OVERNIGHT", "LONGBRIDGE_ENABLE_OVERNIGHT", "false")
-    max_notional = _getenv_both("LONGPORT_MAX_NOTIONAL_PER_ORDER", "LONGBRIDGE_MAX_NOTIONAL_PER_ORDER", "0")
+    overnight = _getenv_both(
+        "LONGPORT_ENABLE_OVERNIGHT", "LONGBRIDGE_ENABLE_OVERNIGHT", "false"
+    )
+    max_notional = _getenv_both(
+        "LONGPORT_MAX_NOTIONAL_PER_ORDER", "LONGBRIDGE_MAX_NOTIONAL_PER_ORDER", "0"
+    )
     max_qty = _getenv_both("LONGPORT_MAX_QTY_PER_ORDER", "LONGBRIDGE_MAX_QTY_PER_ORDER", "0")
-    tw_start = _getenv_both("LONGPORT_TRADING_WINDOW_START", "LONGBRIDGE_TRADING_WINDOW_START", "09:30")
-    tw_end = _getenv_both("LONGPORT_TRADING_WINDOW_END", "LONGBRIDGE_TRADING_WINDOW_END", "16:00")
+    tw_start = _getenv_both(
+        "LONGPORT_TRADING_WINDOW_START", "LONGBRIDGE_TRADING_WINDOW_START", "09:30"
+    )
+    tw_end = _getenv_both(
+        "LONGPORT_TRADING_WINDOW_END", "LONGBRIDGE_TRADING_WINDOW_END", "16:00"
+    )
 
     app_key = os.getenv("LONGPORT_APP_KEY") or os.getenv("LONGBRIDGE_APP_KEY")
     app_secret = os.getenv("LONGPORT_APP_SECRET") or os.getenv("LONGBRIDGE_APP_SECRET")
     token = os.getenv("LONGPORT_ACCESS_TOKEN") or os.getenv("LONGPORT_ACCESS_TOKEN_REAL")
+    alpaca_key = os.getenv("ALPACA_API_KEY") or os.getenv("APCA_API_KEY_ID")
+    alpaca_secret = os.getenv("ALPACA_SECRET_KEY") or os.getenv("APCA_API_SECRET_KEY")
 
     def _mask(value: str | None) -> str:
         if not value:
@@ -223,16 +264,48 @@ def run_config(show: bool = True) -> CommandResult:
         return value[:3] + "***" + value[-3:]
 
     lines = [
-        "LongPort Effective Configuration:",
-        "- Region:        " + region,
-        "- Overnight:     " + ("enabled" if _to_bool(overnight) else "disabled"),
-        "- Max Notional:  " + _fmt_unlimited(_to_float(max_notional, 0.0)),
-        "- Max Quantity:  " + _fmt_unlimited(_to_int(max_qty, 0)),
-        "- Trade Window:  " + f"{tw_start} - {tw_end}",
-        "- App Key:       " + _mask(app_key),
-        "- App Secret:    " + _mask(app_secret),
-        "- Access Token:  " + _mask(token),
+        "Execution Engine Effective Configuration:",
+        "- Broker:                " + selected_broker,
+        "- Default Account:       " + default_account,
+        "- Account Selection:     "
+        + ("supported" if capabilities.supports_account_selection else "single-account only"),
+        "- Live Submit:           "
+        + ("supported" if capabilities.supports_live_submit else "unsupported"),
+        "- Cancel / Query:        "
+        + ("enabled" if capabilities.supports_cancel and capabilities.supports_order_query else "partial"),
+        "- Supported Order Types: " + ", ".join(capabilities.supported_order_types),
+        "- Supported TIF:         " + ", ".join(capabilities.supported_time_in_force),
+        "- Risk Max Notional:     "
+        + _fmt_unlimited(float(risk_cfg.get("max_notional_per_order", 0.0) or 0.0)),
+        "- Risk Max Quantity:     "
+        + _fmt_unlimited(int(float(risk_cfg.get("max_qty_per_order", 0) or 0))),
+        "- Risk Max Spread (bps): " + str(risk_cfg.get("max_spread_bps", 0) or 0),
+        "- Risk Participation:    "
+        + str(risk_cfg.get("max_participation_rate", 0) or 0),
+        "- Kill Switch Env:       "
+        + str(kill_switch_cfg.get("env_var") or "QEXEC_KILL_SWITCH"),
     ]
+    if selected_broker == "longport":
+        lines.extend(
+            [
+                "- Region:                " + region,
+                "- Overnight:             "
+                + ("enabled" if _to_bool(overnight) else "disabled"),
+                "- Local Max Notional:    " + _fmt_unlimited(_to_float(max_notional, 0.0)),
+                "- Local Max Quantity:    " + _fmt_unlimited(_to_int(max_qty, 0)),
+                "- Trade Window:          " + f"{tw_start} - {tw_end}",
+                "- App Key:               " + _mask(app_key),
+                "- App Secret:            " + _mask(app_secret),
+                "- Access Token:          " + _mask(token),
+            ]
+        )
+    elif selected_broker in {"alpaca", "alpaca-paper"}:
+        lines.extend(
+            [
+                "- Alpaca API Key:        " + _mask(alpaca_key),
+                "- Alpaca Secret:         " + _mask(alpaca_secret),
+            ]
+        )
     return CommandResult(exit_code=0, stdout="\n".join(lines))
 
 
@@ -241,6 +314,7 @@ def run_rebalance(
     account: str = "main",
     dry_run: bool = True,
     target_gross_exposure: float = 1.0,
+    broker: str | None = None,
 ) -> CommandResult:
     logger = get_logger(__name__)
     file_path = Path(input_file)
@@ -259,15 +333,28 @@ def run_rebalance(
         )
 
     try:
-        __import__("quant_execution_engine.broker.longport")
+        selected_broker = resolve_broker_name(broker)
+        env_name = "paper" if selected_broker in {"alpaca", "alpaca-paper"} else "real"
         logger.info("Mode: %s", "dry-run" if dry_run else "live")
         logger.info("Reading targets file: %s", input_file)
+        logger.info("Broker: %s", selected_broker)
         logger.info("Account: %s", account)
 
         targets_doc = read_targets_json(file_path, require_schema_v2=True)
 
-        client = LongPortClient(env="real")
-        account_snapshot = get_account_snapshot(env="real", include_quotes=False, client=client)
+        service = RebalanceService(
+            env=env_name,
+            broker_name=selected_broker,
+            account_label=account,
+        )
+        client = service._get_client()
+        account_snapshot = get_account_snapshot(
+            env=env_name,
+            include_quotes=False,
+            client=client,
+            broker_name=selected_broker,
+            account_label=account,
+        )
 
         target_symbols = {
             f"{target.symbol}.{target.market}" for target in targets_doc.targets
@@ -275,7 +362,11 @@ def run_rebalance(
         held_symbols = {position.symbol for position in account_snapshot.positions}
         all_symbols = sorted(target_symbols | held_symbols)
         if all_symbols:
-            quote_objs = get_quotes(all_symbols, client=client)
+            quote_objs = get_quotes(
+                all_symbols,
+                client=client,
+                broker_name=selected_broker,
+            )
             quote_map = {symbol: quote.price for symbol, quote in quote_objs.items()}
         else:
             quote_map = {}
@@ -291,7 +382,6 @@ def run_rebalance(
             if not account_snapshot.total_portfolio_value:
                 account_snapshot.total_portfolio_value = float(account_snapshot.cash_usd) + total_market_value
 
-        service = RebalanceService(env="real", client=client)
         try:
             effective_exposure = targets_doc.target_gross_exposure
             if target_gross_exposure != 1.0 and targets_doc.target_gross_exposure == 1.0:
@@ -308,8 +398,18 @@ def run_rebalance(
             result.target_source = targets_doc.source
             result.target_asof = targets_doc.asof or file_path.stem
             result.target_input_path = str(file_path)
+            result.broker_name = selected_broker
+            result.account_label = account
 
-            result.orders = service.execute_orders(result.orders, dry_run=dry_run)
+            result.orders = service.execute_orders(
+                result.orders,
+                dry_run=dry_run,
+                target_source=result.target_source,
+                target_asof=result.target_asof,
+                target_input_path=result.target_input_path,
+            )
+            if service._last_reconcile_report is not None:
+                result.reconcile_warnings = list(service._last_reconcile_report.warnings)
             service.save_audit_log(result, dry_run=dry_run)
             diff_view = render_rebalance_diff(result, account_snapshot)
             return CommandResult(
@@ -319,13 +419,6 @@ def run_rebalance(
             )
         finally:
             service.close()
-    except ImportError as exc:
-        err = (
-            "Failed to import LongPort module: {msg}\n"
-            "Please ensure the 'longport' package is installed: pip install longport"
-        ).format(msg=exc)
-        logger.error(err)
-        return CommandResult(exit_code=1, stderr=err)
     except Exception as exc:
         logger.error("Rebalance failed: %s", exc)
         return CommandResult(exit_code=1, stderr=str(exc))
@@ -351,7 +444,9 @@ def main() -> int:
         return 0
 
     if args.command == "quote":
-        return _handle_command_result(run_quote(args.tickers))
+        return _handle_command_result(
+            run_quote(args.tickers, broker=getattr(args, "broker", None))
+        )
     if args.command == "rebalance":
         return _handle_command_result(
             run_rebalance(
@@ -359,6 +454,7 @@ def main() -> int:
                 getattr(args, "account", "main"),
                 dry_run=not getattr(args, "execute", False),
                 target_gross_exposure=getattr(args, "target_gross_exposure", 1.0),
+                broker=getattr(args, "broker", None),
             )
         )
     if args.command == "account":
@@ -367,10 +463,14 @@ def main() -> int:
                 only_funds=getattr(args, "funds", False),
                 only_positions=getattr(args, "positions", False),
                 fmt=getattr(args, "format", "table"),
+                account=getattr(args, "account", "main"),
+                broker=getattr(args, "broker", None),
             )
         )
     if args.command == "config":
-        return _handle_command_result(run_config(getattr(args, "show", True)))
+        return _handle_command_result(
+            run_config(getattr(args, "show", True), broker=getattr(args, "broker", None))
+        )
 
     logger.error("Unknown command: %s", args.command)
     return 1

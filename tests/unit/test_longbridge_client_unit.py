@@ -221,10 +221,17 @@ def test_place_order_live_mode_is_currently_simulated() -> None:
         patch.object(client, "_check_window"),
         patch.object(client, "_check_lot"),
         patch.object(client, "quote_last", return_value={"AAPL.US": (150.0, "")}),
+        patch.object(
+            client,
+            "submit_market",
+            return_value=SimpleNamespace(order_id="LONGPORT-123"),
+        ) as mock_submit,
     ):
         result = client.place_order("AAPL", 2, "BUY", dry_run=False)
 
     assert result["dry_run"] is False
     assert result["symbol"] == "AAPL.US"
     assert result["qty"] == 2
-    assert result["order_id"] == "SIMULATED_ID"
+    assert result["order_id"] == "LONGPORT-123"
+    assert result["success"] is True
+    mock_submit.assert_called_once()

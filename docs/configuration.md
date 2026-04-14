@@ -2,6 +2,8 @@
 
 ## 环境变量
 
+### LongPort live
+
 必需：
 
 - `LONGPORT_APP_KEY`
@@ -25,6 +27,18 @@
 - `LONGPORT_ACCESS_TOKEN_REAL` 仍会作为 `LONGPORT_ACCESS_TOKEN` 的兼容兜底
 - `LONGPORT_FX_<CCY>_USD` 会作为 `FX_<CCY>_USD` 的兼容兜底
 
+### Alpaca paper
+
+必需：
+
+- `ALPACA_API_KEY` 或 `APCA_API_KEY_ID`
+- `ALPACA_SECRET_KEY` 或 `APCA_API_SECRET_KEY`
+
+说明：
+
+- Alpaca 支持来自可选依赖 `alpaca-py`，安装方式：`uv sync --extra alpaca`
+- 当前 adapter 以 paper 为默认模式，不提供多账户切换
+
 ## 本地 YAML
 
 复制模板：
@@ -33,8 +47,10 @@
 cp config/template.yaml config/config.yaml
 ```
 
-当前 execution-engine 只读取这些字段：
+当前 execution-engine 主要读取这些字段：
 
+- `broker`
+- `execution`
 - `fees`
 - `fractional_preview`
 - `fx`
@@ -42,6 +58,24 @@ cp config/template.yaml config/config.yaml
 示例：
 
 ```yaml
+broker:
+  backend: longport
+  default_account: main
+  accounts:
+    main: {}
+
+execution:
+  state_dir: outputs/state
+  risk:
+    max_qty_per_order: 0
+    max_notional_per_order: 0
+    max_spread_bps: 0
+    max_participation_rate: 0
+    max_market_impact_bps: 0
+  kill_switch:
+    env_var: QEXEC_KILL_SWITCH
+    failure_threshold: 3
+
 fees:
   domicile: HK
   commission: 0.0
@@ -81,3 +115,7 @@ fx:
 - `LONGPORT_TRADING_WINDOW_START/END` 只是 session API 不可用时的本地降级判断。
 - `LONGPORT_MAX_QTY_PER_ORDER` 只在非 dry-run 路径强制拦截。
 - `LONGPORT_MAX_NOTIONAL_PER_ORDER` 当前只做告警提示，不会在本地直接拦截；最终仍以 broker 风控为准。
+- execution risk gate 的主要本地阈值改为读 `execution.risk.*`。
+- `execution.kill_switch.env_var` 和可选 `execution.kill_switch.path` 可以手动停掉新的 broker submit。
+- `broker.default_account` 是 CLI 没显式传 `--account` 时的默认 label；如果 adapter 不支持该 label，会直接报错。
+- `execution.state_dir` 控制幂等/恢复状态文件目录，默认是 `outputs/state`。

@@ -19,9 +19,9 @@ uv run pytest
 - `tests/unit/`
   快速、隔离的行为测试，应该是日常改动的默认入口。
 - `tests/integration/`
-  真实 LongPort API 相关测试，需要本地凭证和网络。
+  覆盖 adapter/lifecycle 的跨模块行为，例如 reconcile、kill switch、重启恢复；可以用 fake adapter，也可以扩展到真实 broker backend。
 - `tests/e2e/`
-  通过 subprocess 跑 CLI 的端到端 smoke 测试。
+  通过 subprocess 跑 CLI 和 smoke harness 的端到端 smoke 测试。
 
 当前目录分层本身不算过度；更需要避免的是低价值的静态字符串断言和重复的 CLI smoke 套测。
 
@@ -61,3 +61,4 @@ uv run pytest --cov=src/quant_execution_engine --cov-report=term-missing -m 'not
 
 - `tests/integration/` 依赖 `LONGPORT_APP_KEY`、`LONGPORT_APP_SECRET`、`LONGPORT_ACCESS_TOKEN`。
 - `tests/e2e/` 大多不需要真实凭证，但其中的 live quote 用例在没凭证时会自动跳过。
+- Alpaca 相关路径默认不会在测试里真实联网；需要真实 paper 验证时再单独配 `ALPACA_*` 环境变量并显式跑场景。

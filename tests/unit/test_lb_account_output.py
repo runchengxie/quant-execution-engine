@@ -86,19 +86,15 @@ class TestAccountJsonOutput:
 @pytest.mark.unit
 class TestAccountErrorHandling:
     def test_import_error_handling(self) -> None:
-        original_import = __builtins__["__import__"]
-
-        def mock_import(name: str, *args, **kwargs):
-            if name == "quant_execution_engine.broker.longport":
-                raise ImportError("No module named 'longport'")
-            return original_import(name, *args, **kwargs)
-
-        with patch("builtins.__import__", side_effect=mock_import):
+        with patch(
+            "quant_execution_engine.cli.get_account_snapshot",
+            side_effect=ImportError("No module named 'longport'"),
+        ):
             result = cli.run_account()
 
         assert result.exit_code == 1
         assert result.stderr is not None
-        assert "pip install longport" in result.stderr
+        assert "longport" in result.stderr.lower()
 
     def test_client_connection_error(self) -> None:
         with patch(

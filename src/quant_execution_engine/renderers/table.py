@@ -164,13 +164,9 @@ def render_rebalance_plan(result: RebalanceResult) -> str:
 
     if result.dry_run:
         lines.append("\nNote: this is a dry run, no orders were placed")
-        lines.append(
-            "Use --execute to run the live-mode path (broker submission is currently simulated)"
-        )
+        lines.append("Use --execute to run broker-backed submission with risk gates and reconcile")
     else:
-        lines.append(
-            "\nWarning: live mode was requested, but the current broker submit branch still returns simulated order IDs"
-        )
+        lines.append("\nLive mode used the selected broker adapter; inspect audit logs for lifecycle details")
 
     return "\n".join(lines)
 

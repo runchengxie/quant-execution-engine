@@ -18,6 +18,7 @@ dev = [
 
 [project.optional-dependencies]
 cli = ["rich>=13"]
+alpaca = ["alpaca-py"]
 
 [project.scripts]
 stockq = "quant_execution_engine.cli:app"

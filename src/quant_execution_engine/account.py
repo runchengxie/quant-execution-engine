@@ -9,18 +9,32 @@ try:
     from .broker.longport import LongPortClient
 except ImportError:  # pragma: no cover - allow tests without LongPort dependencies
     LongPortClient = None  # type: ignore
-from .fx import to_usd
+from .broker.base import BrokerAdapter
+from .broker.factory import get_broker_adapter, resolve_default_account_label
 from .logging import get_logger
-from .models import AccountSnapshot, Position, Quote
+from .models import AccountSnapshot, Quote
 
 logger = get_logger(__name__)
+
+
+def _resolve_adapter(
+    *,
+    broker_name: str | None = None,
+    client: LongPortClient | BrokerAdapter | None = None,
+) -> tuple[BrokerAdapter, bool]:
+    created_here = client is None
+    adapter = get_broker_adapter(broker_name=broker_name, client=client)
+    return adapter, created_here
 
 
 def get_account_snapshot(
     env: str = "real",
     include_quotes: bool = True,
     pre_quotes: dict[str, tuple[float, str]] | None = None,
-    client: LongPortClient | None = None,
+    client: LongPortClient | BrokerAdapter | None = None,
+    *,
+    broker_name: str | None = None,
+    account_label: str | None = None,
 ) -> AccountSnapshot:
     """Get account snapshot
 
@@ -34,75 +48,20 @@ def get_account_snapshot(
         Exception: When unable to retrieve account data
     """
     try:
-        created_here = False
-        if client is None:
-            if LongPortClient is None:  # pragma: no cover - guards missing dependency
-                raise ImportError(
-                    "LongPort client library is not installed"
-                )
-            client = LongPortClient(env=env)
-            created_here = True
-        cash_usd, stock_position_map, net_assets, base_ccy = client.portfolio_snapshot()
-
-        # Stock position quotes: can choose not to fetch, or use externally provided cache
-        stock_quotes: dict[str, tuple[float, str]] = {}
-        if include_quotes and not pre_quotes:
-            if stock_position_map:
-                stock_quotes = client.quote_last(list(stock_position_map.keys()))
-        else:
-            stock_quotes = pre_quotes or {}
-
-        positions: list[Position] = []
-
-        # Stock positions -> Position
-        for symbol, quantity in stock_position_map.items():
-            price, _ = stock_quotes.get(symbol, (0.0, ""))
-            positions.append(
-                Position(
-                    symbol=symbol,
-                    quantity=int(quantity),
-                    last_price=float(price),
-                    estimated_value=int(quantity) * float(price),
-                    env=env,
-                )
-            )
-
-        # Fund positions -> Position (using NAV as price)
-        fund_map = client.fund_positions()
-        for fsymbol, (units, nav, _ccy) in fund_map.items():
-            qty_int = int(
-                units
-            )  # Position.quantity is int; can be extended to float for more precision
-            positions.append(
-                Position(
-                    symbol=fsymbol,
-                    quantity=qty_int,
-                    last_price=float(nav),
-                    estimated_value=units * float(nav),
-                    env=env,
-                )
-            )
-
+        adapter, created_here = _resolve_adapter(broker_name=broker_name, client=client)
+        account = adapter.resolve_account(account_label or resolve_default_account_label())
+        snapshot = adapter.get_account_snapshot(account, include_quotes=include_quotes)
+        snapshot.env = env
+        if pre_quotes:
+            for position in snapshot.positions:
+                price, _ = pre_quotes.get(position.symbol, (position.last_price, ""))
+                price_float = float(price or 0.0)
+                if price_float > 0:
+                    position.last_price = price_float
+                    position.estimated_value = float(position.quantity) * price_float
         if created_here:
-            client.close()
-
-        # Pass through total assets:
-        # - If net assets are in USD, use directly
-        # - If not USD, try to convert to USD using FX; return 0 on failure to trigger upper-level recalculation
-        tpv = 0.0
-        if net_assets:
-            if str(base_ccy).upper() == "USD":
-                tpv = float(net_assets)
-            else:
-                converted = to_usd(float(net_assets), str(base_ccy))
-                tpv = float(converted) if converted is not None else 0.0
-        return AccountSnapshot(
-            env=env,
-            cash_usd=cash_usd,
-            positions=positions,
-            total_portfolio_value=tpv,
-            base_currency=str(base_ccy).upper() if base_ccy else None,
-        )
+            adapter.close()
+        return snapshot
 
     except ImportError as e:  # Surface missing dependency clearly
         logger.error(f"Failed to import LongPort module: {e}")
@@ -118,7 +77,10 @@ def get_multiple_account_snapshots(envs: list[str]) -> list[AccountSnapshot]:
 
 
 def get_quotes(
-    symbols: list[str], client: LongPortClient | None = None
+    symbols: list[str],
+    client: LongPortClient | BrokerAdapter | None = None,
+    *,
+    broker_name: str | None = None,
 ) -> dict[str, Quote]:
     """Get stock quotes
 
@@ -133,23 +95,11 @@ def get_quotes(
         Exception: When unable to retrieve quotes
     """
     try:
-        created_here = False
-        if client is None:
-            if LongPortClient is None:  # pragma: no cover
-                raise ImportError("LongPort client library is not installed")
-            client = LongPortClient()
-            created_here = True
-        quote_data = client.quote_last(symbols)
+        adapter, created_here = _resolve_adapter(broker_name=broker_name, client=client)
+        quote_data = adapter.get_quotes(symbols)
         if created_here:
-            client.close()
-
-        quotes = {}
-        for symbol, (price, timestamp) in quote_data.items():
-            quotes[symbol] = Quote(
-                symbol=symbol, price=float(price), timestamp=timestamp
-            )
-
-        return quotes
+            adapter.close()
+        return quote_data
 
     except ImportError as e:  # pragma: no cover - same reason as above
         logger.error(f"Failed to import LongPort module: {e}")

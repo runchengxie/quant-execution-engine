@@ -13,10 +13,13 @@ pytestmark = pytest.mark.unit
 
 
 def test_cli_dispatch_quote(monkeypatch: pytest.MonkeyPatch) -> None:
-    called: dict[str, list[str]] = {}
+    called: dict[str, object] = {}
 
-    def fake_run_quote(tickers: list[str]) -> cli.CommandResult:
+    def fake_run_quote(
+        tickers: list[str], broker: str | None = None
+    ) -> cli.CommandResult:
         called["tickers"] = tickers
+        called["broker"] = broker
         return cli.CommandResult(exit_code=0)
 
     monkeypatch.setattr(cli, "run_quote", fake_run_quote)
@@ -26,6 +29,7 @@ def test_cli_dispatch_quote(monkeypatch: pytest.MonkeyPatch) -> None:
 
     assert result == 0
     assert called["tickers"] == ["AAPL", "MSFT"]
+    assert called["broker"] is None
 
 
 def test_main_routes_rebalance() -> None:
@@ -56,6 +60,7 @@ def test_main_routes_rebalance() -> None:
         "main-2",
         dry_run=False,
         target_gross_exposure=0.9,
+        broker=None,
     )
 
 
@@ -73,6 +78,8 @@ def test_main_routes_account() -> None:
         only_funds=False,
         only_positions=False,
         fmt="json",
+        account="main",
+        broker=None,
     )
 
 
@@ -86,7 +93,7 @@ def test_main_routes_config() -> None:
             result = cli.main()
 
     assert result == 0
-    mock_run.assert_called_once_with(True)
+    mock_run.assert_called_once_with(True, broker=None)
 
 
 def test_main_no_command() -> None:
@@ -119,14 +126,10 @@ def test_main_unknown_command(caplog: pytest.LogCaptureFixture) -> None:
 
 
 def test_run_quote_import_error() -> None:
-    original_import = __builtins__["__import__"]
-
-    def mock_import(name: str, *args, **kwargs):
-        if name == "quant_execution_engine.broker.longport":
-            raise ImportError("No module named 'longport'")
-        return original_import(name, *args, **kwargs)
-
-    with patch("builtins.__import__", side_effect=mock_import):
+    with patch(
+        "quant_execution_engine.cli.get_quotes",
+        side_effect=ImportError("No module named 'longport'"),
+    ):
         result = cli.run_quote(["AAPL"])
 
     assert result.exit_code == 1

@@ -45,6 +45,7 @@ def test_cli_rebalance_help() -> None:
     assert "rebalance" in result.stdout.lower()
     assert "json" in result.stdout.lower()
     assert "target-gross-exposure" in result.stdout
+    assert "--broker" in result.stdout
 
 
 @pytest.mark.e2e

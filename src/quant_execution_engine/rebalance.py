@@ -7,10 +7,14 @@ import json
 from datetime import datetime
 from decimal import ROUND_HALF_UP, Decimal
 from pathlib import Path
+from typing import Any
 
 from .account import get_quotes
+from .broker.base import BrokerAdapter
+from .broker.factory import get_broker_adapter, resolve_broker_name, resolve_default_account_label
 from .broker.longport import LongPortClient, _to_lb_symbol
 from .config import load_cfg
+from .execution import OrderLifecycleService
 from .fees import FeeSchedule, estimate_fees
 from .logging import get_logger, get_run_id
 from .models import AccountSnapshot, Order, Position, RebalanceResult
@@ -22,20 +26,38 @@ logger = get_logger(__name__)
 class RebalanceService:
     """Rebalancing service class"""
 
-    def __init__(self, env: str = "real", client: LongPortClient | None = None):
+    def __init__(
+        self,
+        env: str = "real",
+        client: LongPortClient | BrokerAdapter | None = None,
+        *,
+        broker_name: str | None = None,
+        account_label: str | None = None,
+    ):
         self.env = env
         self.client = client
+        self.broker_name = resolve_broker_name(broker_name)
+        self.account_label = resolve_default_account_label(account_label)
+        self._last_reconcile_report = None
 
-    def _get_client(self) -> LongPortClient:
+    def _get_client(self) -> Any:
         """Get client instance"""
         if not self.client:
-            self.client = LongPortClient(env=self.env)
+            self.client = get_broker_adapter(broker_name=self.broker_name)
         return self.client
+
+    def _get_adapter(self) -> BrokerAdapter:
+        return get_broker_adapter(
+            broker_name=self.broker_name,
+            client=self._get_client(),
+        )
 
     def close(self):
         """Close client connection"""
         if self.client:
-            self.client.close()
+            close_fn = getattr(self.client, "close", None)
+            if callable(close_fn):
+                close_fn()
             self.client = None
 
     @staticmethod
@@ -47,7 +69,11 @@ class RebalanceService:
     def _fetch_quotes(self, targets: list[str] | list[TargetEntry]) -> dict[str, float]:
         """Fetch quotes for given tickers or canonical targets."""
         lb_symbols = [self._coerce_lb_symbol(target) for target in targets]
-        quote_objs = get_quotes(lb_symbols, client=self._get_client())
+        quote_objs = get_quotes(
+            lb_symbols,
+            client=self._get_client(),
+            broker_name=self.broker_name,
+        )
         return {sym: q.price for sym, q in quote_objs.items()}
 
     def _compute_effective_total(
@@ -105,7 +131,7 @@ class RebalanceService:
         current_qty: int,
         target_qty_raw: float,
         allow_fractional: bool,
-        client: LongPortClient,
+        client: Any,
         fs: FeeSchedule,
         frac_enable: bool,
         frac_step: Decimal,
@@ -301,9 +327,19 @@ class RebalanceService:
             total_portfolio_value=effective_total,
             target_value_per_stock=target_value_per_stock,
             env=self.env,
+            broker_name=self.broker_name,
+            account_label=self.account_label,
         )
 
-    def execute_orders(self, orders: list[Order], dry_run: bool = True) -> list[Order]:
+    def execute_orders(
+        self,
+        orders: list[Order],
+        dry_run: bool = True,
+        *,
+        target_source: str | None = None,
+        target_asof: str | None = None,
+        target_input_path: str | None = None,
+    ) -> list[Order]:
         """Execute order list
 
         Args:
@@ -316,44 +352,24 @@ class RebalanceService:
         if not orders:
             return []
 
-        client = self._get_client()
-        executed_orders = []
-
-        for order in orders:
-            try:
-                result = client.place_order(
-                    order.symbol,
-                    order.quantity,
-                    order.side,
-                    dry_run=dry_run,
-                    est_px=order.price if order.price else None,
-                )
-
-                # Update order status
-                if dry_run:
-                    order.status = "DRY_RUN"
-                    order.order_id = (
-                        f"dry_run_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-                    )
-                else:
-                    order.status = (
-                        "SUCCESS" if result.get("success", False) else "FAILED"
-                    )
-                    order.order_id = result.get("order_id")
-                    if not result.get("success", False):
-                        order.error_message = result.get("error", "未知错误")
-
-                executed_orders.append(order)
-
-            except Exception as e:
-                logger.error(
-                    f"执行订单失败 {order.symbol} {order.side} {order.quantity}: {e}"
-                )
+        lifecycle = OrderLifecycleService(self._get_adapter())
+        try:
+            executed_orders = lifecycle.execute_orders(
+                orders,
+                account_label=self.account_label,
+                dry_run=dry_run,
+                target_source=target_source,
+                target_asof=target_asof,
+                target_input_path=target_input_path,
+            )
+            self._last_reconcile_report = lifecycle.last_reconcile_report
+            return executed_orders
+        except Exception as e:
+            logger.error("执行订单失败: %s", e)
+            for order in orders:
                 order.status = "FAILED"
                 order.error_message = str(e)
-                executed_orders.append(order)
-
-        return executed_orders
+            return orders
 
     def save_audit_log(
         self, rebalance_result: RebalanceResult, dry_run: bool = True
@@ -380,11 +396,14 @@ class RebalanceService:
                 "record_type": "rebalance_summary",
                 "env": self.env,
                 "dry_run": dry_run,
+                "broker_name": rebalance_result.broker_name,
+                "account_label": rebalance_result.account_label,
                 "run_id": run_id,
                 "target_source": rebalance_result.target_source,
                 "target_asof": rebalance_result.target_asof,
                 "target_input_path": rebalance_result.target_input_path,
                 "order_count": len(rebalance_result.orders),
+                "reconcile_warnings": list(rebalance_result.reconcile_warnings or []),
             }
             f.write(json.dumps(summary, ensure_ascii=False) + "\n")
             for order in rebalance_result.orders:
@@ -396,18 +415,46 @@ class RebalanceService:
                     "price": order.price,
                     "status": order.status,
                     "order_id": order.order_id,
+                    "broker_order_id": order.broker_order_id,
+                    "client_order_id": order.client_order_id,
+                    "broker_status": order.broker_status,
+                    "intent_id": order.intent_id,
+                    "parent_order_id": order.parent_order_id,
+                    "child_order_id": order.child_order_id,
+                    "filled_quantity": order.filled_quantity,
+                    "remaining_quantity": order.remaining_quantity,
+                    "avg_fill_price": order.avg_fill_price,
+                    "reconcile_status": order.reconcile_status,
+                    "risk_summary": order.risk_summary,
+                    "risk_decisions": list(order.risk_decisions or []),
                     "timestamp": order.timestamp.isoformat()
                     if order.timestamp
                     else None,
                     "error_message": order.error_message,
                     "env": self.env,
                     "dry_run": dry_run,
+                    "broker_name": rebalance_result.broker_name,
+                    "account_label": rebalance_result.account_label,
                     "run_id": run_id,
                     "target_source": rebalance_result.target_source,
                     "target_asof": rebalance_result.target_asof,
                     "target_input_path": rebalance_result.target_input_path,
                 }
                 f.write(json.dumps(order_dict, ensure_ascii=False) + "\n")
+
+            report = self._last_reconcile_report
+            if report is not None:
+                reconcile_dict = {
+                    "record_type": "reconcile",
+                    "broker_name": report.broker_name,
+                    "account_label": report.account_label,
+                    "fetched_at": report.fetched_at,
+                    "open_order_count": len(report.open_orders),
+                    "fill_count": len(report.fills),
+                    "warnings": list(report.warnings),
+                    "run_id": run_id,
+                }
+                f.write(json.dumps(reconcile_dict, ensure_ascii=False) + "\n")
 
         logger.info("审计日志已保存", extra={"log_file": str(log_file)})
         return log_file

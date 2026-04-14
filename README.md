@@ -1,21 +1,26 @@
 # Quant Execution Engine
 
-面向 LongPort 的轻量 execution-only 仓库。
+面向 execution-only 场景的轻量执行引擎仓库，当前默认支持 LongPort，并提供 Alpaca paper 适配层用于低成本验证。
 
 这个 repo 当前保留的能力：
 
-- 查看有效 broker 配置
+- 查看有效 broker / risk / kill-switch 配置
 - 查询账户资金与持仓
 - 拉取实时行情
 - 基于 canonical `targets.json` 生成调仓计划与 diff 预览
+- 通过 broker adapter 执行 `submit / query / cancel / reconcile`
+- 在 live / paper 路径上做轻量 execution risk gate
 - 写出调仓审计日志到 `outputs/orders/*.jsonl`
+- 持久化执行状态到 `outputs/state/*.json`
+- 提供外置 smoke harness 生成 signal-driven / target-driven 测试输入
 
 research、AI、回测、数据导入相关内容已经从这个仓库移除。
 
 当前实现限制：
 
-- `qexec rebalance ... --execute` 会进入 live-mode 路径并写 live-mode 审计日志，但 broker submit 分支目前仍返回模拟 `order_id`，还没有真正调用 LongPort 下单接口。
-- `rebalance --account` 目前只作为兼容参数记录到日志里，还不会切换实际 broker 账户。
+- LongPort 仍按单账户模式使用；`--account` 目前会做显式校验，不支持的 label 会 fail fast，而不会静默切账户。
+- Alpaca paper 适配层依赖可选的 `alpaca-py` 安装和 Alpaca 环境变量。
+- smoke harness 是验证工装，不是策略框架；repo 仍然不承担 research / backtest 职责。
 
 ## 快速开始
 
@@ -23,6 +28,12 @@ research、AI、回测、数据导入相关内容已经从这个仓库移除。
 
 ```bash
 uv sync --group dev --extra cli
+```
+
+如果要启用 Alpaca paper：
+
+```bash
+uv sync --group dev --extra cli --extra alpaca
 ```
 
 运行 CLI：
@@ -34,6 +45,7 @@ qexec account --format json
 qexec quote AAPL 700.HK
 qexec rebalance outputs/targets/2026-04-09.json
 qexec rebalance outputs/targets/2026-04-09.json --execute
+qexec rebalance outputs/targets/2026-04-09.json --broker alpaca-paper --execute
 ```
 
 也可以直接用模块入口：
@@ -46,17 +58,22 @@ PYTHONPATH=src python -m quant_execution_engine --help
 
 ## 配置
 
-需要设置 LongPort 环境变量：
+LongPort live 至少需要：
 
 - `LONGPORT_APP_KEY`
 - `LONGPORT_APP_SECRET`
 - `LONGPORT_ACCESS_TOKEN`
 
+Alpaca paper 至少需要：
+
+- `ALPACA_API_KEY` 或 `APCA_API_KEY_ID`
+- `ALPACA_SECRET_KEY` 或 `APCA_API_SECRET_KEY`
+
 可选环境变量、本地 YAML 配置和 FX 折算见：
 
 - [docs/configuration.md](docs/configuration.md)
 
-`config/template.yaml` 提供了 execution-only 的最小本地配置模板，`.env.example` 提供了最小环境变量示例。
+`config/template.yaml` 提供了 execution-only 的最小本地配置模板，包含 broker backend、risk gate 和 kill switch 样例；`.env.example` 提供了最小环境变量示例。
 
 ## 测试
 
@@ -84,8 +101,21 @@ uv run pytest --cov=src/quant_execution_engine --cov-report=term-missing -m 'not
 - [docs/architecture.md](docs/architecture.md)
 - [docs/cli.md](docs/cli.md)
 - [docs/configuration.md](docs/configuration.md)
+- [docs/execution-foundation.md](docs/execution-foundation.md)
 - [docs/testing.md](docs/testing.md)
 - [docs/targets.md](docs/targets.md)
+
+## Smoke Harness
+
+这些工装都放在 core package 外：
+
+```bash
+PYTHONPATH=src python project_tools/smoke_signal_harness.py --output outputs/targets/smoke-signal.json
+PYTHONPATH=src python project_tools/smoke_target_harness.py --scenario carry-over --print-json
+PYTHONPATH=src python project_tools/smoke_signal_harness.py --broker alpaca-paper --execute
+```
+
+它们的目标是驱动 paper / dry-run 行为验证，而不是提供正式策略层。
 
 ## 输入约定
 
@@ -116,3 +146,8 @@ uv run pytest --cov=src/quant_execution_engine --cov-report=term-missing -m 'not
   ]
 }
 ```
+
+## 输出约定
+
+- 调仓审计日志：`outputs/orders/*.jsonl`
+- 执行状态持久化：`outputs/state/*.json`

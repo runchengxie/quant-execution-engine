@@ -122,6 +122,9 @@ def render_rebalance_diff(
 
     lines.append("=== Rebalance Preview (Diff) ===")
     lines.append(f"As of: {before.env.upper()}  Currency: USD  Mode: {mode}")
+    lines.append(
+        f"Broker: {getattr(result, 'broker_name', 'longport')}  Account: {getattr(result, 'account_label', 'main')}"
+    )
     lines.append("--- Totals (Before → After) ---")
 
     summary_rows: list[tuple[str, float, float, float]] = []
@@ -260,9 +263,18 @@ def render_rebalance_diff(
             price_display = "MKT" if not order.price else _fmt_money(order.price)
             order_line = (
                 f"{order.side:4s} {order.symbol[:8]:8s} {order.quantity:>6} @ "
-                f"{price_display:<8} est{_fmt_money(est_amount)}"
+                f"{price_display:<8} est{_fmt_money(est_amount)} "
+                f"[{order.status}]"
             )
+            if getattr(order, "broker_status", None):
+                order_line += f" broker={order.broker_status}"
+            if getattr(order, "broker_order_id", None):
+                order_line += f" id={order.broker_order_id}"
             lines.append(order_line)
+            if order.error_message or getattr(order, "risk_summary", None):
+                lines.append(
+                    f"  -> {getattr(order, 'risk_summary', None) or order.error_message}"
+                )
             orders_for_rich.append(
                 {
                     "side": order.side,
@@ -270,6 +282,9 @@ def render_rebalance_diff(
                     "quantity": int(order.quantity),
                     "price_display": price_display,
                     "est_amount": est_amount,
+                    "status": order.status,
+                    "detail": getattr(order, "risk_summary", None)
+                    or order.error_message,
                 }
             )
 
@@ -421,8 +436,10 @@ def _build_rich_diff(
     orders_table.add_column("Qty", justify="right")
     orders_table.add_column("Price")
     orders_table.add_column("Est. Notional", justify="right")
+    orders_table.add_column("Status")
+    orders_table.add_column("Detail")
     if not orders:
-        orders_table.add_row("-", "(none)", "-", "-", "-")
+        orders_table.add_row("-", "(none)", "-", "-", "-", "-")
     else:
         for order in orders:
             side = order["side"].upper()
@@ -434,6 +451,8 @@ def _build_rich_diff(
                 str(order["quantity"]),
                 order["price_display"],
                 _style_delta(delta_value, _signed_money(order["est_amount"])),
+                order.get("status", ""),
+                order.get("detail", "") or "-",
             )
 
     return Group(

@@ -4,6 +4,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from decimal import Decimal
 from enum import Enum
+from typing import Any
 
 # Compatibility import: prefer longport, fallback to longbridge and finally local stubs
 try:  # pragma: no cover - depends on external package
@@ -48,8 +49,54 @@ from datetime import date, datetime
 
 from ..fx import to_usd
 from ..logging import get_logger
+from ..models import AccountSnapshot, Position, Quote
+from .base import (
+    BrokerAdapter,
+    BrokerCapabilityMatrix,
+    BrokerFillRecord,
+    BrokerOrderRecord,
+    BrokerOrderRequest,
+    BrokerReconcileReport,
+    BrokerValidationError,
+    ResolvedBrokerAccount,
+)
 
 logger = get_logger(__name__)
+
+
+def _normalize_order_status(status: object) -> str:
+    raw = str(_enum_value(status)).strip()
+    if not raw:
+        return "UNKNOWN"
+    normalized = raw.replace(" ", "").replace("-", "").replace("_", "")
+    mapping = {
+        "NotReported": "PENDING_NEW",
+        "ReplacedNotReported": "PENDING_REPLACE",
+        "ProtectedNotReported": "PENDING_NEW",
+        "VarietiesNotReported": "PENDING_NEW",
+        "WaitToNew": "WAIT_TO_NEW",
+        "New": "NEW",
+        "WaitToReplace": "PENDING_REPLACE",
+        "PendingReplace": "PENDING_REPLACE",
+        "Replaced": "NEW",
+        "PartialFilled": "PARTIALLY_FILLED",
+        "WaitToCancel": "PENDING_CANCEL",
+        "PendingCancel": "PENDING_CANCEL",
+        "Rejected": "REJECTED",
+        "Canceled": "CANCELED",
+        "Expired": "EXPIRED",
+        "PartialWithdrawal": "PARTIALLY_FILLED",
+        "Filled": "FILLED",
+    }
+    return mapping.get(normalized, normalized.upper())
+
+
+def _coerce_iso(value: object) -> str:
+    if value is None:
+        return ""
+    if hasattr(value, "isoformat"):
+        return value.isoformat()
+    return str(value)
 
 
 def get_config():
@@ -359,6 +406,52 @@ class LongPortClient:
             bars[i.symbol] = (px, getattr(i, "timestamp", "") or "")
         return bars
 
+    def quote_snapshot(
+        self, symbols: Iterable[str], *, include_depth: bool = False
+    ) -> dict[str, Quote]:
+        """Return richer quote snapshots with optional bid/ask depth."""
+
+        quote_ctx = getattr(self, "q", None) or getattr(self, "quote", None)
+        if quote_ctx is None:
+            raise AttributeError("Quote context not initialised")
+
+        symbol_list = [_to_lb_symbol(symbol) for symbol in symbols]
+        quotes = quote_ctx.quote(symbol_list)
+        depth_map: dict[str, tuple[float | None, float | None]] = {}
+        if include_depth:
+            for symbol in symbol_list:
+                try:
+                    depth = quote_ctx.depth(symbol)
+                    bid = None
+                    ask = None
+                    if getattr(depth, "bids", None):
+                        bid_raw = getattr(depth.bids[0], "price", None)
+                        bid = float(bid_raw) if bid_raw is not None else None
+                    if getattr(depth, "asks", None):
+                        ask_raw = getattr(depth.asks[0], "price", None)
+                        ask = float(ask_raw) if ask_raw is not None else None
+                    depth_map[symbol] = (bid, ask)
+                except Exception:
+                    depth_map[symbol] = (None, None)
+
+        result: dict[str, Quote] = {}
+        for item in quotes:
+            price = float((getattr(item, "last_done", 0) or 0) or 0)
+            if price <= 0:
+                prev_close = getattr(item, "prev_close", None)
+                if prev_close not in (None, 0):
+                    price = float(prev_close)
+            bid, ask = depth_map.get(item.symbol, (None, None))
+            result[item.symbol] = Quote(
+                symbol=item.symbol,
+                price=price,
+                timestamp=_coerce_iso(getattr(item, "timestamp", "")),
+                bid=bid,
+                ask=ask,
+                daily_volume=float(getattr(item, "volume", 0) or 0),
+            )
+        return result
+
     def candles(
         self,
         symbol: str,
@@ -417,6 +510,82 @@ class LongPortClient:
             time_in_force=_enum_value(tif),
             remark=remark,
         )
+
+    def submit_market(
+        self,
+        symbol: str,
+        quantity: float,
+        tif: TimeInForceType | None = None,
+        remark: str | None = None,
+    ):
+        """Submit a market order."""
+
+        trade_ctx = getattr(self, "t", None) or getattr(self, "trade", None)
+        if trade_ctx is None:
+            raise AttributeError("Trade context not initialised")
+
+        side = OrderSide.Buy if quantity >= 0 else OrderSide.Sell
+        qty = Decimal(str(abs(quantity)))
+        if tif is None:
+            tif = TimeInForceType.Day
+        return trade_ctx.submit_order(
+            symbol=_to_lb_symbol(symbol),
+            order_type=_enum_value(OrderType.MO),
+            side=_enum_value(side),
+            submitted_quantity=qty,
+            time_in_force=_enum_value(tif),
+            remark=remark,
+        )
+
+    def get_order_detail(self, order_id: str):
+        """Return detailed order state."""
+
+        trade_ctx = getattr(self, "t", None) or getattr(self, "trade", None)
+        if trade_ctx is None:
+            raise AttributeError("Trade context not initialised")
+        return trade_ctx.order_detail(order_id)
+
+    def cancel_order_by_id(self, order_id: str) -> None:
+        """Cancel an order by broker order id."""
+
+        trade_ctx = getattr(self, "t", None) or getattr(self, "trade", None)
+        if trade_ctx is None:
+            raise AttributeError("Trade context not initialised")
+        trade_ctx.cancel_order(order_id)
+
+    def list_orders(
+        self,
+        *,
+        symbol: str | None = None,
+        order_id: str | None = None,
+        include_history: bool = False,
+    ) -> list[Any]:
+        """List orders, defaulting to today's open-order surface."""
+
+        trade_ctx = getattr(self, "t", None) or getattr(self, "trade", None)
+        if trade_ctx is None:
+            raise AttributeError("Trade context not initialised")
+        symbol_fmt = _to_lb_symbol(symbol) if symbol else None
+        if include_history:
+            return list(trade_ctx.history_orders(symbol=symbol_fmt))
+        return list(trade_ctx.today_orders(symbol=symbol_fmt, order_id=order_id))
+
+    def list_executions(
+        self,
+        *,
+        symbol: str | None = None,
+        order_id: str | None = None,
+        include_history: bool = False,
+    ) -> list[Any]:
+        """List fill/execution events."""
+
+        trade_ctx = getattr(self, "t", None) or getattr(self, "trade", None)
+        if trade_ctx is None:
+            raise AttributeError("Trade context not initialised")
+        symbol_fmt = _to_lb_symbol(symbol) if symbol else None
+        if include_history:
+            return list(trade_ctx.history_executions(symbol=symbol_fmt))
+        return list(trade_ctx.today_executions(symbol=symbol_fmt, order_id=order_id))
 
     def portfolio_snapshot(
         self,
@@ -961,7 +1130,11 @@ class LongPortClient:
                 self.limits.max_notional_per_order,
             )
 
-        # TODO: Call LongPort real order interface (left blank to avoid accidental triggering)
+        response = self.submit_market(
+            symbol_formatted,
+            qty if side.upper() == "BUY" else -qty,
+            remark=f"qexec:{side.upper()}:{qty}",
+        )
         return {
             "env": self.env.value,
             "dry_run": False,
@@ -971,7 +1144,8 @@ class LongPortClient:
             "est_px": px,
             "est_notional": notional,
             "ts": time.time(),
-            "order_id": "SIMULATED_ID",
+            "success": True,
+            "order_id": getattr(response, "order_id", None),
         }
 
     def close(self):
@@ -994,3 +1168,230 @@ class LongPortClient:
         except Exception:
             # Any restoration failure should not affect the caller
             pass
+
+
+class LongPortBrokerAdapter(BrokerAdapter):
+    """Broker adapter backed by the existing LongPort client wrapper."""
+
+    backend_name = "longport"
+    capabilities = BrokerCapabilityMatrix(
+        name="longport",
+        supports_live_submit=True,
+        supports_cancel=True,
+        supports_order_query=True,
+        supports_open_order_listing=True,
+        supports_reconcile=True,
+        supports_account_selection=False,
+        supports_fractional=False,
+        supports_short=False,
+        supports_extended_hours=True,
+        supported_order_types=("MARKET", "LIMIT"),
+        supported_time_in_force=("DAY", "GTC"),
+        notes={"account_selection": "single account only"},
+    )
+
+    def __init__(self, client: LongPortClient | None = None) -> None:
+        self.client = client or LongPortClient(env="real")
+
+    def resolve_account(self, account_label: str | None = None) -> ResolvedBrokerAccount:
+        label = str(account_label or "main").strip() or "main"
+        if label != "main":
+            raise BrokerValidationError(
+                f"longport does not support switching broker accounts via --account: {label}"
+            )
+        return ResolvedBrokerAccount(label=label)
+
+    def get_account_snapshot(
+        self,
+        account: ResolvedBrokerAccount | None = None,
+        *,
+        include_quotes: bool = True,
+    ) -> AccountSnapshot:
+        resolved = account or self.resolve_account()
+        cash_usd, stock_position_map, net_assets, base_ccy = self.client.portfolio_snapshot()
+        quotes = (
+            self.client.quote_snapshot(list(stock_position_map.keys()))
+            if include_quotes and stock_position_map
+            else {}
+        )
+        positions = [
+            Position(
+                symbol=symbol,
+                quantity=int(quantity),
+                last_price=float(quotes.get(symbol).price if symbol in quotes else 0.0),
+                estimated_value=float(quotes.get(symbol).price if symbol in quotes else 0.0)
+                * int(quantity),
+                env="real",
+            )
+            for symbol, quantity in stock_position_map.items()
+        ]
+        for symbol, (units, nav, _ccy) in self.client.fund_positions().items():
+            positions.append(
+                Position(
+                    symbol=symbol,
+                    quantity=int(units),
+                    last_price=float(nav),
+                    estimated_value=float(units) * float(nav),
+                    env="real",
+                )
+            )
+        tpv = 0.0
+        if net_assets:
+            if str(base_ccy).upper() == "USD":
+                tpv = float(net_assets)
+            else:
+                converted = to_usd(float(net_assets), str(base_ccy))
+                tpv = float(converted) if converted is not None else 0.0
+        return AccountSnapshot(
+            env="real",
+            cash_usd=float(cash_usd),
+            positions=positions,
+            total_portfolio_value=tpv,
+            base_currency=str(base_ccy).upper() if base_ccy else None,
+        )
+
+    def get_quotes(
+        self, symbols: list[str], *, include_depth: bool = False
+    ) -> dict[str, Quote]:
+        return self.client.quote_snapshot(symbols, include_depth=include_depth)
+
+    def lot_size(self, symbol: str) -> int:
+        return self.client.lot_size(symbol)
+
+    def submit_order(self, request: BrokerOrderRequest) -> BrokerOrderRecord:
+        resolved = request.account or self.resolve_account()
+        if request.order_type == "LIMIT":
+            response = self.client.submit_limit(
+                request.symbol,
+                float(request.limit_price or 0.0),
+                request.quantity if request.side == "BUY" else -request.quantity,
+                remark=request.client_order_id,
+            )
+        else:
+            response = self.client.submit_market(
+                request.symbol,
+                request.quantity if request.side == "BUY" else -request.quantity,
+                remark=request.client_order_id,
+            )
+        return self.get_order(str(response.order_id), resolved)
+
+    def get_order(
+        self,
+        broker_order_id: str,
+        account: ResolvedBrokerAccount | None = None,
+    ) -> BrokerOrderRecord:
+        resolved = account or self.resolve_account()
+        detail = self.client.get_order_detail(broker_order_id)
+        quantity = float(getattr(detail, "quantity", 0) or 0)
+        filled_quantity = float(getattr(detail, "executed_quantity", 0) or 0)
+        return BrokerOrderRecord(
+            broker_order_id=str(getattr(detail, "order_id", broker_order_id)),
+            symbol=str(getattr(detail, "symbol", "")),
+            side=str(_enum_value(getattr(detail, "side", ""))).upper(),
+            quantity=quantity,
+            filled_quantity=filled_quantity,
+            remaining_quantity=max(0.0, quantity - filled_quantity),
+            status=_normalize_order_status(getattr(detail, "status", "")),
+            broker_name=self.backend_name,
+            account_label=resolved.label,
+            client_order_id=str(getattr(detail, "remark", "") or "") or None,
+            avg_fill_price=float(getattr(detail, "executed_price", 0) or 0) or None,
+            submitted_at=_coerce_iso(getattr(detail, "submitted_at", "")),
+            updated_at=_coerce_iso(
+                getattr(detail, "updated_at", None) or getattr(detail, "submitted_at", "")
+            ),
+            message=str(getattr(detail, "msg", "") or "") or None,
+            raw={
+                "order_type": str(_enum_value(getattr(detail, "order_type", ""))),
+                "time_in_force": str(
+                    _enum_value(getattr(detail, "time_in_force", ""))
+                ),
+            },
+        )
+
+    def list_open_orders(
+        self,
+        account: ResolvedBrokerAccount | None = None,
+    ) -> list[BrokerOrderRecord]:
+        resolved = account or self.resolve_account()
+        records: list[BrokerOrderRecord] = []
+        for order in self.client.list_orders():
+            status = _normalize_order_status(getattr(order, "status", ""))
+            if status in {"FILLED", "CANCELED", "REJECTED", "EXPIRED"}:
+                continue
+            quantity = float(getattr(order, "quantity", 0) or 0)
+            filled_quantity = float(getattr(order, "executed_quantity", 0) or 0)
+            records.append(
+                BrokerOrderRecord(
+                    broker_order_id=str(getattr(order, "order_id", "")),
+                    symbol=str(getattr(order, "symbol", "")),
+                    side=str(_enum_value(getattr(order, "side", ""))).upper(),
+                    quantity=quantity,
+                    filled_quantity=filled_quantity,
+                    remaining_quantity=max(0.0, quantity - filled_quantity),
+                    status=status,
+                    broker_name=self.backend_name,
+                    account_label=resolved.label,
+                    client_order_id=str(getattr(order, "remark", "") or "") or None,
+                    avg_fill_price=float(getattr(order, "executed_price", 0) or 0)
+                    or None,
+                    submitted_at=_coerce_iso(getattr(order, "submitted_at", "")),
+                    updated_at=_coerce_iso(
+                        getattr(order, "updated_at", None)
+                        or getattr(order, "submitted_at", "")
+                    ),
+                    message=str(getattr(order, "msg", "") or "") or None,
+                )
+            )
+        return records
+
+    def cancel_order(
+        self,
+        broker_order_id: str,
+        account: ResolvedBrokerAccount | None = None,
+    ) -> None:
+        self.client.cancel_order_by_id(broker_order_id)
+
+    def list_fills(
+        self,
+        account: ResolvedBrokerAccount | None = None,
+        *,
+        broker_order_id: str | None = None,
+    ) -> list[BrokerFillRecord]:
+        resolved = account or self.resolve_account()
+        executions = self.client.list_executions(order_id=broker_order_id)
+        fills: list[BrokerFillRecord] = []
+        for execution in executions:
+            fills.append(
+                BrokerFillRecord(
+                    fill_id=str(getattr(execution, "trade_id", "")),
+                    broker_order_id=str(getattr(execution, "order_id", "")),
+                    symbol=str(getattr(execution, "symbol", "")),
+                    quantity=float(getattr(execution, "quantity", 0) or 0),
+                    price=float(getattr(execution, "price", 0) or 0),
+                    broker_name=self.backend_name,
+                    account_label=resolved.label,
+                    filled_at=_coerce_iso(getattr(execution, "trade_done_at", "")),
+                    raw={},
+                )
+            )
+        return fills
+
+    def reconcile(
+        self,
+        account: ResolvedBrokerAccount | None = None,
+    ) -> BrokerReconcileReport:
+        resolved = account or self.resolve_account()
+        open_orders = self.list_open_orders(resolved)
+        fills: list[BrokerFillRecord] = []
+        for order in open_orders:
+            fills.extend(self.list_fills(resolved, broker_order_id=order.broker_order_id))
+        return BrokerReconcileReport(
+            broker_name=self.backend_name,
+            account_label=resolved.label,
+            open_orders=open_orders,
+            fills=fills,
+        )
+
+    def close(self) -> None:
+        self.client.close()

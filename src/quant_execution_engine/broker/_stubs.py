@@ -39,8 +39,10 @@ class OrderSide:
 
 class OrderType:
     LO = "LO"
+    MO = "MO"
 
 
 class TimeInForceType:
     Day = "Day"
     GTC = "GTC"
+    GoodTilCanceled = "GoodTilCanceled"

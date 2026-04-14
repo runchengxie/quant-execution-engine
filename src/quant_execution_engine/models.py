@@ -1,10 +1,8 @@
-"""Data model definitions.
+"""Data model definitions."""
 
-Defines core data structures used in the system.
-"""
-
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
+from typing import Any
 
 
 @dataclass
@@ -14,6 +12,9 @@ class Quote:
     symbol: str
     price: float
     timestamp: str
+    bid: float | None = None
+    ask: float | None = None
+    daily_volume: float | None = None
 
     def __post_init__(self):
         """Data validation."""
@@ -61,6 +62,20 @@ class Order:
     rounding_loss: float | None = None
     est_fees: float | None = None
     est_frac_hint: float | None = None
+    intent_id: str | None = None
+    parent_order_id: str | None = None
+    child_order_id: str | None = None
+    broker_order_id: str | None = None
+    client_order_id: str | None = None
+    broker_name: str | None = None
+    account_label: str | None = None
+    broker_status: str | None = None
+    filled_quantity: float | None = None
+    remaining_quantity: float | None = None
+    avg_fill_price: float | None = None
+    reconcile_status: str | None = None
+    risk_summary: str | None = None
+    risk_decisions: list[dict[str, Any]] = field(default_factory=list)
 
     def __post_init__(self):
         """Data validation"""
@@ -107,6 +122,9 @@ class RebalanceResult:
     target_source: str | None = None
     target_asof: str | None = None
     target_input_path: str | None = None
+    broker_name: str = "longport"
+    account_label: str = "main"
+    reconcile_warnings: list[str] = field(default_factory=list)
 
     @property
     def order_count(self) -> int:
