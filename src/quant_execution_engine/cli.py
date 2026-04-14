@@ -20,6 +20,13 @@ from .broker import (
     resolve_default_account_label,
 )
 from .execution import ExecutionStateStore, OrderLifecycleService
+from .execution import (
+    DEFAULT_EXCEPTION_STATUSES,
+    FAILURE_BROKER_STATUSES,
+    OPEN_BROKER_STATUSES,
+    SUCCESS_BROKER_STATUSES,
+    TERMINAL_BROKER_STATUSES,
+)
 from .logging import get_logger, set_run_id
 from .paths import PROJECT_ROOT
 from .rebalance import RebalanceService
@@ -30,6 +37,7 @@ from .renderers.table import (
     render_bulk_cancel_summary,
     render_broker_orders,
     render_cancel_summary,
+    render_exception_orders,
     render_multiple_account_snapshots,
     render_quotes,
     render_reconcile_summary,
@@ -80,6 +88,19 @@ _LIVE_SECRET_ENV_NAMES = frozenset(
 _ENV_ASSIGNMENT_RE = re.compile(
     r"^\s*(?:export\s+)?(?P<name>[A-Za-z_][A-Za-z0-9_]*)\s*=\s*(?P<value>.+?)\s*$"
 )
+_BROKER_STATUS_GROUPS: dict[str, set[str]] = {
+    "OPEN": set(OPEN_BROKER_STATUSES),
+    "TERMINAL": set(TERMINAL_BROKER_STATUSES),
+    "FAILURE": set(FAILURE_BROKER_STATUSES),
+    "SUCCESS": set(SUCCESS_BROKER_STATUSES),
+    "EXCEPTION": {"PARTIALLY_FILLED", "PENDING_CANCEL", "WAIT_TO_CANCEL", "REJECTED", "EXPIRED", "FAILED"},
+}
+_EXCEPTION_STATUS_GROUPS: dict[str, set[str]] = {
+    "DEFAULT": set(DEFAULT_EXCEPTION_STATUSES),
+    "ALL": set(DEFAULT_EXCEPTION_STATUSES),
+    "OPEN": {"PARTIALLY_FILLED", "PENDING_CANCEL", "WAIT_TO_CANCEL"},
+    "FAILURE": {"BLOCKED", "FAILED", "REJECTED", "EXPIRED"},
+}
 
 
 def _is_truthy(value: str | None) -> bool:
@@ -299,6 +320,35 @@ Examples:
         type=str,
         default="main",
         help="Broker account/profile label. Unsupported labels fail fast.",
+    )
+    orders_parser.add_argument(
+        "--status",
+        type=str,
+        default=None,
+        help="Optional broker-order status filter, e.g. open, failure, terminal, or exact status",
+    )
+
+    exceptions_parser = subparsers.add_parser(
+        "exceptions",
+        help="Show tracked execution exceptions from local execution state",
+    )
+    exceptions_parser.add_argument(
+        "--broker",
+        type=str,
+        default=None,
+        help="Broker backend override, e.g. longport or alpaca-paper",
+    )
+    exceptions_parser.add_argument(
+        "--account",
+        type=str,
+        default="main",
+        help="Broker account/profile label. Unsupported labels fail fast.",
+    )
+    exceptions_parser.add_argument(
+        "--status",
+        type=str,
+        default=None,
+        help="Optional exception status filter, e.g. failure, open, blocked, partially_filled",
     )
 
     reconcile_parser = subparsers.add_parser(
@@ -604,6 +654,7 @@ def run_orders(
     *,
     account: str = "main",
     broker: str | None = None,
+    status_filter: str | None = None,
 ) -> CommandResult:
     adapter = None
     try:
@@ -615,9 +666,48 @@ def run_orders(
             key=lambda record: (record.updated_at, record.submitted_at, record.broker_order_id),
             reverse=True,
         )
+        allowed_statuses = _resolve_broker_status_filter(status_filter)
+        if allowed_statuses is not None:
+            records = [record for record in records if record.status in allowed_statuses]
+        if not records and allowed_statuses is not None:
+            return CommandResult(
+                exit_code=0,
+                stdout=f"No tracked broker orders matching status filter: {status_filter}",
+            )
         return CommandResult(exit_code=0, stdout=render_broker_orders(records))
     except Exception as exc:
         msg = f"Failed to load tracked orders: {exc}"
+        get_logger(__name__).error(msg)
+        return CommandResult(exit_code=1, stderr=msg)
+    finally:
+        close_fn = getattr(adapter, "close", None)
+        if callable(close_fn):
+            close_fn()
+
+
+def run_exceptions(
+    *,
+    account: str = "main",
+    broker: str | None = None,
+    status_filter: str | None = None,
+) -> CommandResult:
+    adapter = None
+    try:
+        adapter = get_broker_adapter(broker_name=broker)
+        service = OrderLifecycleService(adapter)
+        statuses = _resolve_exception_status_filter(status_filter)
+        records = service.list_exception_orders(
+            account_label=account,
+            statuses=statuses,
+        )
+        if not records and status_filter:
+            return CommandResult(
+                exit_code=0,
+                stdout=f"No tracked execution exceptions matching status filter: {status_filter}",
+            )
+        return CommandResult(exit_code=0, stdout=render_exception_orders(records))
+    except Exception as exc:
+        msg = f"Failed to load tracked execution exceptions: {exc}"
         get_logger(__name__).error(msg)
         return CommandResult(exit_code=1, stderr=msg)
     finally:
@@ -911,6 +1001,32 @@ def run_rebalance(
         return CommandResult(exit_code=1, stderr=str(exc))
 
 
+def _resolve_broker_status_filter(raw: str | None) -> set[str] | None:
+    if raw is None:
+        return None
+    normalized = [part.strip().upper().replace("-", "_") for part in raw.split(",") if part.strip()]
+    if not normalized:
+        return None
+    allowed: set[str] = set()
+    for part in normalized:
+        if part in {"ALL", "*"}:
+            return None
+        allowed.update(_BROKER_STATUS_GROUPS.get(part, {part}))
+    return allowed
+
+
+def _resolve_exception_status_filter(raw: str | None) -> set[str]:
+    if raw is None:
+        return set(DEFAULT_EXCEPTION_STATUSES)
+    normalized = [part.strip().upper().replace("-", "_") for part in raw.split(",") if part.strip()]
+    if not normalized:
+        return set(DEFAULT_EXCEPTION_STATUSES)
+    allowed: set[str] = set()
+    for part in normalized:
+        allowed.update(_EXCEPTION_STATUS_GROUPS.get(part, {part}))
+    return allowed
+
+
 def main() -> int:
     run_id = uuid.uuid4().hex[:12]
     set_run_id(run_id)
@@ -963,6 +1079,15 @@ def main() -> int:
             run_orders(
                 account=getattr(args, "account", "main"),
                 broker=getattr(args, "broker", None),
+                status_filter=getattr(args, "status", None),
+            )
+        )
+    if args.command == "exceptions":
+        return _handle_command_result(
+            run_exceptions(
+                account=getattr(args, "account", "main"),
+                broker=getattr(args, "broker", None),
+                status_filter=getattr(args, "status", None),
             )
         )
     if args.command == "reconcile":

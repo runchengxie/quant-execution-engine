@@ -41,6 +41,15 @@ SUCCESS_BROKER_STATUSES = {"FILLED"}
 FAILURE_BROKER_STATUSES = {"CANCELED", "REJECTED", "EXPIRED", "FAILED"}
 TERMINAL_BROKER_STATUSES = SUCCESS_BROKER_STATUSES | FAILURE_BROKER_STATUSES
 STALE_RETRY_EXCLUDED_STATUSES = {"PENDING_CANCEL", "WAIT_TO_CANCEL"}
+DEFAULT_EXCEPTION_STATUSES = {
+    "BLOCKED",
+    "FAILED",
+    "REJECTED",
+    "EXPIRED",
+    "PARTIALLY_FILLED",
+    "PENDING_CANCEL",
+    "WAIT_TO_CANCEL",
+}
 
 
 @dataclass(slots=True)
@@ -92,6 +101,7 @@ class ChildOrder:
     broker_order_id: str | None = None
     client_order_id: str | None = None
     status: str = "PENDING"
+    message: str | None = None
     created_at: str = field(default_factory=utc_now_iso)
     updated_at: str = field(default_factory=utc_now_iso)
 
@@ -181,6 +191,26 @@ class ExecutionTrackedOrder:
     child: ChildOrder | None
     broker_order: BrokerOrderRecord | None
     fill_events: list[ExecutionFillEvent] = field(default_factory=list)
+
+
+@dataclass(slots=True)
+class ExecutionExceptionRecord:
+    """Resolved exception record from local execution state."""
+
+    broker_name: str
+    account_label: str
+    symbol: str
+    side: str
+    status: str
+    parent_order_id: str
+    child_order_id: str | None
+    broker_order_id: str | None
+    client_order_id: str | None
+    source: str
+    message: str | None = None
+    filled_quantity: float = 0.0
+    remaining_quantity: float | None = None
+    updated_at: str | None = None
 
 
 @dataclass(slots=True)
@@ -339,6 +369,11 @@ class OrderLifecycleService:
                 continue
 
             if state.kill_switch_active:
+                self._mark_tracked_order_blocked(
+                    parent,
+                    child,
+                    reason=state.kill_switch_reason or "kill switch active",
+                )
                 self._mark_order_blocked(order, reason=state.kill_switch_reason or "kill switch active")
                 executed_orders.append(order)
                 continue
@@ -347,6 +382,7 @@ class OrderLifecycleService:
             order.risk_decisions = [decision.to_payload() for decision in decisions]
             blocked = next((decision for decision in decisions if decision.outcome == "BLOCK"), None)
             if blocked is not None:
+                self._mark_tracked_order_blocked(parent, child, reason=blocked.reason)
                 self._mark_order_blocked(order, reason=blocked.reason)
                 executed_orders.append(order)
                 continue
@@ -389,8 +425,7 @@ class OrderLifecycleService:
             except Exception as exc:
                 state.consecutive_failures += 1
                 self._apply_auto_kill_switch(state)
-                child.status = "FAILED"
-                child.updated_at = utc_now_iso()
+                self._mark_tracked_order_failed(parent, child, message=str(exc))
                 order.status = "FAILED"
                 order.error_message = str(exc)
                 order.remaining_quantity = float(order.quantity)
@@ -549,6 +584,80 @@ class OrderLifecycleService:
             child=child,
             broker_order=broker_order,
             fill_events=fills,
+        )
+
+    def list_exception_orders(
+        self,
+        *,
+        account_label: str,
+        statuses: set[str] | None = None,
+    ) -> list[ExecutionExceptionRecord]:
+        """Return local exception records for tracked orders."""
+
+        account = self.adapter.resolve_account(account_label)
+        state = self.state_store.load(self.adapter.backend_name, account.label)
+        normalized_statuses = {
+            str(status).strip().upper()
+            for status in (statuses or DEFAULT_EXCEPTION_STATUSES)
+            if str(status).strip()
+        }
+        broker_orders_by_id = {
+            broker_order.broker_order_id: broker_order
+            for broker_order in state.broker_orders
+            if broker_order.broker_order_id
+        }
+        results: list[ExecutionExceptionRecord] = []
+
+        for parent in state.parent_orders:
+            children = [
+                child for child in state.child_orders if child.parent_order_id == parent.parent_order_id
+            ]
+            if not children:
+                continue
+            latest_child = sorted(children, key=lambda child: child.attempt)[-1]
+            broker_order = (
+                broker_orders_by_id.get(latest_child.broker_order_id)
+                if latest_child.broker_order_id
+                else None
+            )
+            status = broker_order.status if broker_order is not None else latest_child.status
+            if status not in normalized_statuses:
+                continue
+            results.append(
+                ExecutionExceptionRecord(
+                    broker_name=self.adapter.backend_name,
+                    account_label=account.label,
+                    symbol=parent.symbol,
+                    side=parent.side,
+                    status=status,
+                    parent_order_id=parent.parent_order_id,
+                    child_order_id=latest_child.child_order_id,
+                    broker_order_id=broker_order.broker_order_id if broker_order is not None else None,
+                    client_order_id=broker_order.client_order_id if broker_order is not None else latest_child.client_order_id,
+                    source="broker" if broker_order is not None else "local",
+                    message=broker_order.message if broker_order is not None else latest_child.message,
+                    filled_quantity=(
+                        float(broker_order.filled_quantity or 0.0)
+                        if broker_order is not None
+                        else float(parent.filled_quantity or 0.0)
+                    ),
+                    remaining_quantity=(
+                        broker_order.remaining_quantity
+                        if broker_order is not None
+                        else float(parent.remaining_quantity or 0.0)
+                    ),
+                    updated_at=(
+                        broker_order.updated_at
+                        if broker_order is not None
+                        else latest_child.updated_at
+                    ),
+                )
+            )
+
+        return sorted(
+            results,
+            key=lambda item: (item.updated_at or "", item.parent_order_id),
+            reverse=True,
         )
 
     def retry_order(
@@ -1215,6 +1324,32 @@ class OrderLifecycleService:
             raw=dict(broker_order.raw),
         )
 
+    def _mark_tracked_order_blocked(
+        self,
+        parent: ParentOrder,
+        child: ChildOrder,
+        *,
+        reason: str,
+    ) -> None:
+        child.status = "BLOCKED"
+        child.message = reason
+        child.updated_at = utc_now_iso()
+        parent.status = "BLOCKED"
+        parent.updated_at = utc_now_iso()
+
+    def _mark_tracked_order_failed(
+        self,
+        parent: ParentOrder,
+        child: ChildOrder,
+        *,
+        message: str,
+    ) -> None:
+        child.status = "FAILED"
+        child.message = message
+        child.updated_at = utc_now_iso()
+        parent.status = "FAILED"
+        parent.updated_at = utc_now_iso()
+
     def _sync_child_from_broker_order(
         self,
         state: ExecutionState,
@@ -1237,6 +1372,7 @@ class OrderLifecycleService:
         matching_child.broker_order_id = broker_order.broker_order_id
         matching_child.client_order_id = broker_order.client_order_id or matching_child.client_order_id
         matching_child.status = broker_order.status
+        matching_child.message = broker_order.message
         matching_child.updated_at = utc_now_iso()
 
         parent = next(
@@ -1263,6 +1399,7 @@ class OrderLifecycleService:
         child.broker_order_id = broker_order.broker_order_id
         child.client_order_id = broker_order.client_order_id or child.client_order_id
         child.status = broker_order.status
+        child.message = broker_order.message
         child.updated_at = utc_now_iso()
 
         order.order_id = broker_order.broker_order_id

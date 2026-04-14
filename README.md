@@ -45,6 +45,8 @@ qexec config
 qexec account --format json
 qexec quote AAPL 700.HK
 qexec orders
+qexec orders --status open
+qexec exceptions
 qexec order broker-order-id
 qexec reconcile
 qexec cancel broker-order-id

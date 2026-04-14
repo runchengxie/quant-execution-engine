@@ -110,6 +110,11 @@ class FakeAdapter(BrokerAdapter):
         )
 
 
+class FailingSubmitAdapter(FakeAdapter):
+    def submit_order(self, request: BrokerOrderRequest) -> BrokerOrderRecord:
+        raise RuntimeError("submit rejected by broker")
+
+
 def test_execution_state_store_round_trip(tmp_path: Path) -> None:
     store = ExecutionStateStore(root_dir=tmp_path)
     state = ExecutionState(broker_name="fake", account_label="main")
@@ -125,9 +130,10 @@ def test_execution_state_store_round_trip(tmp_path: Path) -> None:
 
 def test_risk_gate_blocks_oversized_order(tmp_path: Path) -> None:
     adapter = FakeAdapter()
+    store = ExecutionStateStore(root_dir=tmp_path)
     service = OrderLifecycleService(
         adapter,
-        state_store=ExecutionStateStore(root_dir=tmp_path),
+        state_store=store,
         risk_chain=RiskGateChain({"max_qty_per_order": 5}),
     )
     order = Order(symbol="AAPL.US", quantity=10, side="BUY", price=10.0)
@@ -144,6 +150,10 @@ def test_risk_gate_blocks_oversized_order(tmp_path: Path) -> None:
     assert results[0].status == "BLOCKED"
     assert "max_qty_per_order" in str(results[0].risk_decisions)
     assert adapter.submit_calls == 0
+    state = store.load("fake", "main")
+    assert state.child_orders[0].status == "BLOCKED"
+    assert state.child_orders[0].message is not None
+    assert state.parent_orders[0].status == "BLOCKED"
 
 
 def test_idempotent_submission_reuses_existing_open_order(tmp_path: Path) -> None:
@@ -440,6 +450,47 @@ def test_retry_rejects_partially_filled_order(tmp_path: Path) -> None:
             account_label="main",
             order_ref=str(result.broker_order_id),
         )
+
+
+def test_list_exception_orders_includes_local_blocked_and_failed(tmp_path: Path) -> None:
+    store = ExecutionStateStore(root_dir=tmp_path)
+    blocked_service = OrderLifecycleService(
+        FakeAdapter(),
+        state_store=store,
+        risk_chain=RiskGateChain({"max_qty_per_order": 5}),
+    )
+    failed_service = OrderLifecycleService(
+        FailingSubmitAdapter(),
+        state_store=store,
+        risk_chain=RiskGateChain({}),
+    )
+
+    blocked_service.execute_orders(
+        [Order(symbol="AAPL.US", quantity=10, side="BUY", price=10.0)],
+        account_label="main",
+        dry_run=False,
+        target_source="unit",
+        target_asof="2026-04-14",
+        target_input_path="tests/targets.json",
+    )
+    failed_service.execute_orders(
+        [Order(symbol="MSFT.US", quantity=5, side="BUY", price=10.0)],
+        account_label="main",
+        dry_run=False,
+        target_source="unit-submit-failure",
+        target_asof="2026-04-14",
+        target_input_path="tests/targets-submit-failure.json",
+    )
+
+    records = failed_service.list_exception_orders(account_label="main")
+
+    assert {record.status for record in records} >= {"BLOCKED", "FAILED"}
+    blocked = next(record for record in records if record.status == "BLOCKED")
+    failed = next(record for record in records if record.status == "FAILED")
+    assert blocked.source == "local"
+    assert blocked.message is not None
+    assert failed.source == "local"
+    assert failed.message == "submit rejected by broker"
 
 
 class ClosedFillAdapter(FakeAdapter):

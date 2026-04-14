@@ -134,6 +134,7 @@ PYTHONPATH=src python project_tools/smoke_target_harness.py --scenario carry-ove
 
 ```bash
 qexec orders
+qexec exceptions
 qexec order <order-ref>
 qexec reconcile
 qexec cancel <order-ref>
@@ -143,6 +144,7 @@ qexec retry-stale --older-than-minutes 15
 ```
 
 - `orders` 用于查看本地 execution state 中跟踪的 broker orders
+- `exceptions` 用于查看需要人工关注的本地异常队列，包括 `BLOCKED` / `FAILED` 和 broker 侧的 `PARTIALLY_FILLED` / `PENDING_CANCEL` 等状态
 - `order` 用于查看单笔 tracked order 的完整本地生命周期信息
 - `reconcile` 用于主动刷新 broker open/closed order 状态，并把补录的 fills 写回状态文件
 - `cancel` 用于按 tracked `broker_order_id` / `client_order_id` / `child_order_id` 发起撤单，并同步更新本地状态

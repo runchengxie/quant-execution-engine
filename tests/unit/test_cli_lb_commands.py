@@ -102,11 +102,24 @@ def test_main_routes_orders() -> None:
         "run_orders",
         return_value=cli.CommandResult(exit_code=0),
     ) as mock_run:
-        with patch.object(sys, "argv", ["qexec", "orders", "--account", "main"]):
+        with patch.object(sys, "argv", ["qexec", "orders", "--account", "main", "--status", "open"]):
             result = cli.main()
 
     assert result == 0
-    mock_run.assert_called_once_with(account="main", broker=None)
+    mock_run.assert_called_once_with(account="main", broker=None, status_filter="open")
+
+
+def test_main_routes_exceptions() -> None:
+    with patch.object(
+        cli,
+        "run_exceptions",
+        return_value=cli.CommandResult(exit_code=0),
+    ) as mock_run:
+        with patch.object(sys, "argv", ["qexec", "exceptions", "--status", "failure"]):
+            result = cli.main()
+
+    assert result == 0
+    mock_run.assert_called_once_with(account="main", broker=None, status_filter="failure")
 
 
 def test_main_routes_reconcile() -> None:

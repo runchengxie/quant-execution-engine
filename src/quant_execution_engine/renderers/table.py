@@ -6,6 +6,7 @@ Provides table format data rendering functionality.
 from ..broker.base import BrokerOrderRecord, BrokerReconcileReport
 from ..execution import (
     ExecutionBulkCancelResult,
+    ExecutionExceptionRecord,
     ExecutionStaleRetryResult,
     ExecutionTrackedOrder,
 )
@@ -237,6 +238,35 @@ def render_broker_orders(records: list[BrokerOrderRecord]) -> str:
     return "\n".join(lines)
 
 
+def render_exception_orders(records: list[ExecutionExceptionRecord]) -> str:
+    """Render local exception queue records."""
+
+    if not records:
+        return "No tracked execution exceptions"
+
+    lines = []
+    lines.append("Tracked execution exceptions:")
+    lines.append(
+        "Status           | Symbol      | Side | Source | Parent                | Child                 | Broker ID           "
+    )
+    lines.append("-" * 120)
+
+    for record in records:
+        lines.append(
+            f"{record.status[:16]:16s} | "
+            f"{record.symbol[:10]:10s} | "
+            f"{record.side[:4]:4s} | "
+            f"{record.source[:6]:6s} | "
+            f"{record.parent_order_id[:20]:20s} | "
+            f"{(record.child_order_id or '-')[:21]:21s} | "
+            f"{(record.broker_order_id or '-')[:18]:18s}"
+        )
+        if record.message:
+            lines.append(f"  -> {record.message}")
+
+    return "\n".join(lines)
+
+
 def render_reconcile_summary(
     *,
     report: BrokerReconcileReport,
@@ -359,6 +389,8 @@ def render_tracked_order_detail(tracked: ExecutionTrackedOrder) -> str:
                 f"- Child Status: {tracked.child.status}",
             ]
         )
+        if tracked.child.message:
+            lines.append(f"- Child Message: {tracked.child.message}")
     if tracked.broker_order is not None:
         lines.extend(
             [

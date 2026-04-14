@@ -59,8 +59,21 @@ qexec quote AAPL --broker alpaca-paper
 
 ```bash
 qexec orders
+qexec orders --status open
+qexec orders --status failure
 qexec orders --broker alpaca-paper
 qexec orders --account main
+```
+
+### `exceptions`
+
+查看本地 execution state 中的异常队列，包含本地 `BLOCKED/FAILED` 和需要人工关注的 broker 状态。
+
+```bash
+qexec exceptions
+qexec exceptions --status failure
+qexec exceptions --status partially_filled,pending_cancel
+qexec exceptions --broker alpaca-paper
 ```
 
 ### `order`
@@ -144,7 +157,8 @@ qexec rebalance outputs/targets/2026-04-09.json --target-gross-exposure 0.9
 - real broker 的 `--execute` 额外要求 `QEXEC_ENABLE_LIVE=1`。
 - `--broker` 默认读取本地配置里的 backend，没有配置时默认 `longport`。
 - `--account` 会先走 adapter account/profile 校验；不支持的 label 会 fail fast。
-- `orders` 读取的是本地 execution state 中已跟踪的 broker order 记录，不会主动联网。
+- `orders` 读取的是本地 execution state 中已跟踪的 broker order 记录，不会主动联网；`--status` 支持 `open` / `terminal` / `failure` / `success` / `exception` 或精确状态。
+- `exceptions` 读取的是本地 execution state 中需要人工关注的 tracked order 记录，默认会包含 `BLOCKED` / `FAILED` / `REJECTED` / `EXPIRED` / `PARTIALLY_FILLED` / `PENDING_CANCEL` / `WAIT_TO_CANCEL`。
 - `order` 会把 intent / parent / child / broker / fill 这些本地生命周期信息合并展示出来。
 - `reconcile` 会主动访问 broker，刷新 tracked open/closed orders，并尝试补录缺失的 fills。
 - `cancel` 支持 `broker_order_id`、`client_order_id` 或 `child_order_id`，撤单后会把本地 state 同步刷新。
