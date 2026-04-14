@@ -46,12 +46,15 @@ qexec account --format json
 qexec quote AAPL 700.HK
 qexec orders
 qexec orders --status open
+qexec orders --symbol AAPL
 qexec exceptions
+qexec exceptions --symbol MSFT
 qexec order broker-order-id
 qexec reconcile
 qexec cancel broker-order-id
 qexec cancel-all
 qexec retry broker-order-id
+qexec reprice broker-order-id --limit-price 9.50
 qexec retry-stale --older-than-minutes 15
 qexec rebalance outputs/targets/2026-04-09.json
 QEXEC_ENABLE_LIVE=1 qexec rebalance outputs/targets/2026-04-09.json --execute
@@ -129,6 +132,7 @@ uv run pytest --cov=src/quant_execution_engine --cov-report=term-missing -m 'not
 PYTHONPATH=src python project_tools/smoke_signal_harness.py --output outputs/targets/smoke-signal.json
 PYTHONPATH=src python project_tools/smoke_target_harness.py --scenario carry-over --print-json
 PYTHONPATH=src python project_tools/smoke_signal_harness.py --broker alpaca-paper --execute
+PYTHONPATH=src python project_tools/smoke_operator_harness.py --broker alpaca-paper --execute
 ```
 
 它们的目标是驱动模拟盘交易 / dry-run 行为验证，而不是提供正式策略层。

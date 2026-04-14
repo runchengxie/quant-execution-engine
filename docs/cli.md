@@ -61,6 +61,8 @@ qexec quote AAPL --broker alpaca-paper
 qexec orders
 qexec orders --status open
 qexec orders --status failure
+qexec orders --symbol AAPL
+qexec orders --status open --symbol AAPL.US
 qexec orders --broker alpaca-paper
 qexec orders --account main
 ```
@@ -73,6 +75,8 @@ qexec orders --account main
 qexec exceptions
 qexec exceptions --status failure
 qexec exceptions --status partially_filled,pending_cancel
+qexec exceptions --symbol MSFT
+qexec exceptions --status failure --symbol MSFT.US
 qexec exceptions --broker alpaca-paper
 ```
 
@@ -126,6 +130,16 @@ qexec retry child_abcd1234_1
 qexec retry client-order-id --broker alpaca-paper
 ```
 
+### `reprice`
+
+对一笔 tracked open `LIMIT` order 执行“先撤、再按新价格重提”的保守重定价。
+
+```bash
+qexec reprice 1234567890 --limit-price 9.50
+qexec reprice child_abcd1234_1 --limit-price 9.45
+qexec reprice client-order-id --limit-price 9.40 --broker alpaca-paper
+```
+
 ### `retry-stale`
 
 批量处理“过旧但仍未成交”的 tracked open orders：先撤单，再只对明确进入 `CANCELED` 的零成交订单发起重试。
@@ -157,13 +171,14 @@ qexec rebalance outputs/targets/2026-04-09.json --target-gross-exposure 0.9
 - real broker 的 `--execute` 额外要求 `QEXEC_ENABLE_LIVE=1`。
 - `--broker` 默认读取本地配置里的 backend，没有配置时默认 `longport`。
 - `--account` 会先走 adapter account/profile 校验；不支持的 label 会 fail fast。
-- `orders` 读取的是本地 execution state 中已跟踪的 broker order 记录，不会主动联网；`--status` 支持 `open` / `terminal` / `failure` / `success` / `exception` 或精确状态。
-- `exceptions` 读取的是本地 execution state 中需要人工关注的 tracked order 记录，默认会包含 `BLOCKED` / `FAILED` / `REJECTED` / `EXPIRED` / `PARTIALLY_FILLED` / `PENDING_CANCEL` / `WAIT_TO_CANCEL`。
-- `order` 会把 intent / parent / child / broker / fill 这些本地生命周期信息合并展示出来。
+- `orders` 读取的是本地 execution state 中已跟踪的 broker order 记录，不会主动联网；`--status` 支持 `open` / `terminal` / `failure` / `success` / `exception` 或精确状态，`--symbol` 支持 bare ticker 或 canonical symbol。
+- `exceptions` 读取的是本地 execution state 中需要人工关注的 tracked order 记录，默认会包含 `BLOCKED` / `FAILED` / `REJECTED` / `EXPIRED` / `PARTIALLY_FILLED` / `PENDING_CANCEL` / `WAIT_TO_CANCEL`；`--symbol` 同样支持 bare ticker 或 canonical symbol。
+- `order` 会把 intent / parent / child / broker / fill 这些本地生命周期信息合并展示出来，也会带出 target source/asof/input 和最近一次 reprice 元数据。
 - `reconcile` 会主动访问 broker，刷新 tracked open/closed orders，并尝试补录缺失的 fills。
 - `cancel` 支持 `broker_order_id`、`client_order_id` 或 `child_order_id`，撤单后会把本地 state 同步刷新。
 - `cancel-all` 只处理本地 execution state 中仍然 open 的 tracked order，不会扫描 broker 全量订单。
 - `retry` 当前只支持零成交的 `FAILED` / `CANCELED` / `REJECTED` / `EXPIRED` tracked order；部分成交续单还没有实现。
+- `reprice` 当前只支持零成交、仍然 open 的 tracked `LIMIT` order；实现方式是先撤后重提，不依赖 broker 原生 replace。
 - `retry-stale` 只处理零成交、仍然 open、且超过阈值的 tracked order；如果撤单后状态不是明确 `CANCELED`，不会继续自动重提。
 - `--execute` 会进入 broker-backed submit/query/reconcile 路径，并写出 richer audit/state 输出。
 - real broker 的 `--execute` 会扫描 repo 根目录 `.env*` / `.envrc*`；如果发现 LongPort live 凭证，CLI 会直接拒绝执行。

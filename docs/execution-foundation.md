@@ -140,14 +140,17 @@ qexec reconcile
 qexec cancel <order-ref>
 qexec cancel-all
 qexec retry <order-ref>
+qexec reprice <order-ref> --limit-price 9.50
 qexec retry-stale --older-than-minutes 15
 ```
 
 - `orders` 用于查看本地 execution state 中跟踪的 broker orders
 - `exceptions` 用于查看需要人工关注的本地异常队列，包括 `BLOCKED` / `FAILED` 和 broker 侧的 `PARTIALLY_FILLED` / `PENDING_CANCEL` 等状态
+- `orders` / `exceptions` 都支持按状态和 symbol 过滤，方便 operator 快速收敛到单一标的
 - `order` 用于查看单笔 tracked order 的完整本地生命周期信息
 - `reconcile` 用于主动刷新 broker open/closed order 状态，并把补录的 fills 写回状态文件
 - `cancel` 用于按 tracked `broker_order_id` / `client_order_id` / `child_order_id` 发起撤单，并同步更新本地状态
 - `cancel-all` 用于批量撤销本地 execution state 中仍然 open 的 tracked broker orders
 - `retry` 用于重试零成交的失败/撤销 tracked order，并创建新的 child attempt
+- `reprice` 用于对 tracked open `LIMIT` order 做“撤单后按新价格重提”的保守重定价
 - `retry-stale` 用于批量处理超时未成交的 tracked open orders：先撤，再只对明确变成 `CANCELED` 的零成交订单重提

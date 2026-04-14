@@ -41,6 +41,7 @@ from .renderers.table import (
     render_multiple_account_snapshots,
     render_quotes,
     render_reconcile_summary,
+    render_reprice_summary,
     render_retry_summary,
     render_stale_retry_summary,
     render_tracked_order_detail,
@@ -327,6 +328,12 @@ Examples:
         default=None,
         help="Optional broker-order status filter, e.g. open, failure, terminal, or exact status",
     )
+    orders_parser.add_argument(
+        "--symbol",
+        type=str,
+        default=None,
+        help="Optional symbol filter, e.g. AAPL or AAPL.US",
+    )
 
     exceptions_parser = subparsers.add_parser(
         "exceptions",
@@ -349,6 +356,12 @@ Examples:
         type=str,
         default=None,
         help="Optional exception status filter, e.g. failure, open, blocked, partially_filled",
+    )
+    exceptions_parser.add_argument(
+        "--symbol",
+        type=str,
+        default=None,
+        help="Optional symbol filter, e.g. AAPL or AAPL.US",
     )
 
     reconcile_parser = subparsers.add_parser(
@@ -445,6 +458,34 @@ Examples:
         help="Broker backend override, e.g. longport or alpaca-paper",
     )
     retry_parser.add_argument(
+        "--account",
+        type=str,
+        default="main",
+        help="Broker account/profile label. Unsupported labels fail fast.",
+    )
+
+    reprice_parser = subparsers.add_parser(
+        "reprice",
+        help="Cancel and resubmit a tracked open LIMIT order at a new limit price",
+    )
+    reprice_parser.add_argument(
+        "order_ref",
+        type=str,
+        help="Tracked order reference: broker_order_id, client_order_id, or child_order_id",
+    )
+    reprice_parser.add_argument(
+        "--limit-price",
+        type=float,
+        required=True,
+        help="Replacement limit price for the new child order attempt",
+    )
+    reprice_parser.add_argument(
+        "--broker",
+        type=str,
+        default=None,
+        help="Broker backend override, e.g. longport or alpaca-paper",
+    )
+    reprice_parser.add_argument(
         "--account",
         type=str,
         default="main",
@@ -655,6 +696,7 @@ def run_orders(
     account: str = "main",
     broker: str | None = None,
     status_filter: str | None = None,
+    symbol_filter: str | None = None,
 ) -> CommandResult:
     adapter = None
     try:
@@ -667,12 +709,15 @@ def run_orders(
             reverse=True,
         )
         allowed_statuses = _resolve_broker_status_filter(status_filter)
+        allowed_symbols = _resolve_symbol_filter(symbol_filter)
         if allowed_statuses is not None:
             records = [record for record in records if record.status in allowed_statuses]
-        if not records and allowed_statuses is not None:
+        if allowed_symbols is not None:
+            records = [record for record in records if _symbol_matches_filter(record.symbol, allowed_symbols)]
+        if not records and (allowed_statuses is not None or allowed_symbols is not None):
             return CommandResult(
                 exit_code=0,
-                stdout=f"No tracked broker orders matching status filter: {status_filter}",
+                stdout=f"No tracked broker orders matching filters: {_format_filter_summary(status_filter=status_filter, symbol_filter=symbol_filter)}",
             )
         return CommandResult(exit_code=0, stdout=render_broker_orders(records))
     except Exception as exc:
@@ -690,20 +735,24 @@ def run_exceptions(
     account: str = "main",
     broker: str | None = None,
     status_filter: str | None = None,
+    symbol_filter: str | None = None,
 ) -> CommandResult:
     adapter = None
     try:
         adapter = get_broker_adapter(broker_name=broker)
         service = OrderLifecycleService(adapter)
         statuses = _resolve_exception_status_filter(status_filter)
+        allowed_symbols = _resolve_symbol_filter(symbol_filter)
         records = service.list_exception_orders(
             account_label=account,
             statuses=statuses,
         )
-        if not records and status_filter:
+        if allowed_symbols is not None:
+            records = [record for record in records if _symbol_matches_filter(record.symbol, allowed_symbols)]
+        if not records and (status_filter or symbol_filter):
             return CommandResult(
                 exit_code=0,
-                stdout=f"No tracked execution exceptions matching status filter: {status_filter}",
+                stdout=f"No tracked execution exceptions matching filters: {_format_filter_summary(status_filter=status_filter, symbol_filter=symbol_filter)}",
             )
         return CommandResult(exit_code=0, stdout=render_exception_orders(records))
     except Exception as exc:
@@ -850,6 +899,33 @@ def run_retry(
         )
     except Exception as exc:
         msg = f"Retry failed: {exc}"
+        get_logger(__name__).error(msg)
+        return CommandResult(exit_code=1, stderr=msg)
+    finally:
+        close_fn = getattr(adapter, "close", None)
+        if callable(close_fn):
+            close_fn()
+
+
+def run_reprice(
+    *,
+    order_ref: str,
+    limit_price: float,
+    account: str = "main",
+    broker: str | None = None,
+) -> CommandResult:
+    adapter = None
+    try:
+        adapter = get_broker_adapter(broker_name=broker)
+        service = OrderLifecycleService(adapter)
+        outcome = service.reprice_order(
+            account_label=account,
+            order_ref=order_ref,
+            limit_price=limit_price,
+        )
+        return CommandResult(exit_code=0, stdout=render_reprice_summary(outcome))
+    except Exception as exc:
+        msg = f"Reprice failed: {exc}"
         get_logger(__name__).error(msg)
         return CommandResult(exit_code=1, stderr=msg)
     finally:
@@ -1027,6 +1103,34 @@ def _resolve_exception_status_filter(raw: str | None) -> set[str]:
     return allowed
 
 
+def _resolve_symbol_filter(raw: str | None) -> set[str] | None:
+    if raw is None:
+        return None
+    normalized = {part.strip().upper() for part in raw.split(",") if part.strip()}
+    return normalized or None
+
+
+def _symbol_matches_filter(symbol: str, allowed: set[str] | None) -> bool:
+    if allowed is None:
+        return True
+    normalized = str(symbol).strip().upper()
+    base = normalized.rsplit(".", 1)[0] if "." in normalized else normalized
+    return normalized in allowed or base in allowed
+
+
+def _format_filter_summary(
+    *,
+    status_filter: str | None,
+    symbol_filter: str | None,
+) -> str:
+    parts: list[str] = []
+    if status_filter:
+        parts.append(f"status={status_filter}")
+    if symbol_filter:
+        parts.append(f"symbol={symbol_filter}")
+    return ", ".join(parts) if parts else "none"
+
+
 def main() -> int:
     run_id = uuid.uuid4().hex[:12]
     set_run_id(run_id)
@@ -1080,6 +1184,7 @@ def main() -> int:
                 account=getattr(args, "account", "main"),
                 broker=getattr(args, "broker", None),
                 status_filter=getattr(args, "status", None),
+                symbol_filter=getattr(args, "symbol", None),
             )
         )
     if args.command == "exceptions":
@@ -1088,6 +1193,7 @@ def main() -> int:
                 account=getattr(args, "account", "main"),
                 broker=getattr(args, "broker", None),
                 status_filter=getattr(args, "status", None),
+                symbol_filter=getattr(args, "symbol", None),
             )
         )
     if args.command == "reconcile":
@@ -1124,6 +1230,15 @@ def main() -> int:
         return _handle_command_result(
             run_retry(
                 order_ref=getattr(args, "order_ref"),
+                account=getattr(args, "account", "main"),
+                broker=getattr(args, "broker", None),
+            )
+        )
+    if args.command == "reprice":
+        return _handle_command_result(
+            run_reprice(
+                order_ref=getattr(args, "order_ref"),
+                limit_price=getattr(args, "limit_price"),
                 account=getattr(args, "account", "main"),
                 broker=getattr(args, "broker", None),
             )

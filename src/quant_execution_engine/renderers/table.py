@@ -7,6 +7,7 @@ from ..broker.base import BrokerOrderRecord, BrokerReconcileReport
 from ..execution import (
     ExecutionBulkCancelResult,
     ExecutionExceptionRecord,
+    ExecutionRepriceResult,
     ExecutionStaleRetryResult,
     ExecutionTrackedOrder,
 )
@@ -372,8 +373,20 @@ def render_tracked_order_detail(tracked: ExecutionTrackedOrder) -> str:
             [
                 f"- Intent: {tracked.intent.intent_id} {tracked.intent.side} {tracked.intent.quantity:g} {tracked.intent.symbol}",
                 f"- Intent Order Type: {tracked.intent.order_type}",
+                f"- Intent Limit Price: {tracked.intent.limit_price if tracked.intent.limit_price is not None else '-'}",
+                f"- Target Source: {tracked.intent.target_source or '-'}",
+                f"- Target Asof: {tracked.intent.target_asof or '-'}",
+                f"- Target Input: {tracked.intent.target_input_path or '-'}",
             ]
         )
+        last_reprice_at = tracked.intent.metadata.get("last_reprice_at")
+        if last_reprice_at:
+            lines.append(f"- Last Reprice At: {last_reprice_at}")
+        if "last_reprice_from_limit_price" in tracked.intent.metadata:
+            lines.append(
+                "- Last Reprice From Limit: "
+                f"{tracked.intent.metadata.get('last_reprice_from_limit_price')}"
+            )
     if tracked.parent is not None:
         lines.extend(
             [
@@ -433,6 +446,29 @@ def render_retry_summary(
     if warnings:
         lines.append("- Warnings:")
         for warning in warnings:
+            lines.append(f"  * {warning}")
+    return "\n".join(lines)
+
+
+def render_reprice_summary(outcome: ExecutionRepriceResult) -> str:
+    """Render tracked-order reprice summary."""
+
+    lines = [
+        "Reprice summary:",
+        f"- Broker / Account: {outcome.broker_name} / {outcome.account_label}",
+        f"- Requested Ref: {outcome.order_ref}",
+        f"- Old Broker Order ID: {outcome.old_broker_order_id}",
+        f"- Cancel Status: {outcome.cancel_status}",
+        f"- Old Limit Price: {outcome.old_limit_price if outcome.old_limit_price is not None else '-'}",
+        f"- New Limit Price: {outcome.new_limit_price}",
+        f"- New Child Order ID: {outcome.new_child_order_id or '-'}",
+        f"- New Broker Order ID: {outcome.broker_order_id or '-'}",
+        f"- New Broker Status: {outcome.broker_status or '-'}",
+        f"- State file: {outcome.state_path}",
+    ]
+    if outcome.warnings:
+        lines.append("- Warnings:")
+        for warning in outcome.warnings:
             lines.append(f"  * {warning}")
     return "\n".join(lines)
 

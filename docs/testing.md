@@ -61,3 +61,31 @@ uv run pytest --cov=src/quant_execution_engine --cov-report=term-missing -m 'not
 - `tests/integration/` 依赖 `LONGPORT_APP_KEY`、`LONGPORT_APP_SECRET`、`LONGPORT_ACCESS_TOKEN`。
 - `tests/e2e/` 大多不需要真实凭证，但其中的 live quote 用例在没凭证时会自动跳过。
 - Alpaca 相关路径默认不会在测试里真实联网；需要真实 paper 验证时再单独配 `ALPACA_*` 环境变量并显式跑场景。
+
+## Alpaca Paper Smoke 回归
+
+如果你想重复验证 paper account 的执行主路径和 operator 命令，可以直接跑外置工装：
+
+```bash
+PYTHONPATH=src python project_tools/smoke_operator_harness.py --broker alpaca-paper --execute
+```
+
+默认 workflow 会串起这些步骤：
+
+1. `config`
+2. `account`
+3. `quote`
+4. 写出一个最小 `targets.json`
+5. `rebalance --execute`
+6. `orders`
+7. `order`（如果本地 state 里找到了最新 tracked order）
+8. `reconcile`
+9. `exceptions`
+
+如果你想在 paper 环境末尾顺手清掉仍然 open 的 tracked orders，可以加：
+
+```bash
+PYTHONPATH=src python project_tools/smoke_operator_harness.py --broker alpaca-paper --execute --cleanup-open-orders
+```
+
+这个工装默认拒绝 non-paper broker；如果你明确知道自己要这么做，需要额外传 `--allow-non-paper`。

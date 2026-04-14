@@ -20,6 +20,7 @@ from quant_execution_engine.execution import (
     OrderLifecycleService,
 )
 from quant_execution_engine.models import Order, Quote
+from quant_execution_engine.renderers.table import render_tracked_order_detail
 from quant_execution_engine.risk import RiskGateChain
 
 
@@ -368,6 +369,117 @@ def test_retry_canceled_zero_fill_order_creates_new_attempt(tmp_path: Path) -> N
     assert state.child_orders[-1].attempt == 2
     assert state.parent_orders[0].status == "PENDING"
     assert adapter.submit_calls == 2
+
+
+def test_reprice_open_limit_order_creates_new_attempt(tmp_path: Path) -> None:
+    adapter = FakeAdapter()
+    store = ExecutionStateStore(root_dir=tmp_path)
+    service = OrderLifecycleService(
+        adapter,
+        state_store=store,
+        risk_chain=RiskGateChain({}),
+    )
+    base_kwargs = {
+        "account_label": "main",
+        "dry_run": False,
+        "target_source": "unit",
+        "target_asof": "2026-04-14",
+        "target_input_path": "tests/targets.json",
+    }
+
+    original = service.execute_orders(
+        [Order(symbol="AAPL.US", quantity=10, side="BUY", price=10.0, order_type="LIMIT")],
+        **base_kwargs,
+    )[0]
+
+    outcome = service.reprice_order(
+        account_label="main",
+        order_ref=str(original.broker_order_id),
+        limit_price=9.5,
+    )
+    state = store.load("fake", "main")
+
+    assert outcome.cancel_status == "CANCELED"
+    assert outcome.new_child_order_id is not None
+    assert outcome.new_child_order_id.endswith("_2")
+    assert outcome.broker_order_id is not None
+    assert outcome.broker_status == "NEW"
+    assert adapter.cancel_calls.count(str(original.broker_order_id)) == 1
+    assert adapter.submit_calls == 2
+    assert len(state.child_orders) == 2
+    assert state.parent_orders[0].status == "PENDING"
+    assert state.intents[0].limit_price == 9.5
+
+
+def test_reprice_rejects_non_limit_order(tmp_path: Path) -> None:
+    adapter = FakeAdapter()
+    store = ExecutionStateStore(root_dir=tmp_path)
+    service = OrderLifecycleService(
+        adapter,
+        state_store=store,
+        risk_chain=RiskGateChain({}),
+    )
+    base_kwargs = {
+        "account_label": "main",
+        "dry_run": False,
+        "target_source": "unit",
+        "target_asof": "2026-04-14",
+        "target_input_path": "tests/targets.json",
+    }
+
+    original = service.execute_orders(
+        [Order(symbol="AAPL.US", quantity=10, side="BUY", price=10.0)],
+        **base_kwargs,
+    )[0]
+
+    with pytest.raises(ValueError, match="LIMIT"):
+        service.reprice_order(
+            account_label="main",
+            order_ref=str(original.broker_order_id),
+            limit_price=9.5,
+        )
+
+
+def test_render_tracked_order_detail_includes_target_context_and_reprice_metadata(
+    tmp_path: Path,
+) -> None:
+    adapter = FakeAdapter()
+    store = ExecutionStateStore(root_dir=tmp_path)
+    service = OrderLifecycleService(
+        adapter,
+        state_store=store,
+        risk_chain=RiskGateChain({}),
+    )
+    base_kwargs = {
+        "account_label": "main",
+        "dry_run": False,
+        "target_source": "smoke-signal",
+        "target_asof": "2026-04-14",
+        "target_input_path": "outputs/targets/smoke.json",
+    }
+
+    original = service.execute_orders(
+        [Order(symbol="AAPL.US", quantity=10, side="BUY", price=10.0, order_type="LIMIT")],
+        **base_kwargs,
+    )[0]
+    repriced = service.reprice_order(
+        account_label="main",
+        order_ref=str(original.broker_order_id),
+        limit_price=9.5,
+    )
+    tracked = service.get_tracked_order(
+        account_label="main",
+        order_ref=str(repriced.broker_order_id),
+    )
+
+    rendered = render_tracked_order_detail(tracked)
+
+    assert "Target Source: smoke-signal" in rendered
+    assert "Target Asof: 2026-04-14" in rendered
+    assert "Target Input: outputs/targets/smoke.json" in rendered
+    assert "Intent Limit Price: 9.5" in rendered
+    assert "Last Reprice At:" in rendered
+    assert "Last Reprice From Limit: 10.0" in rendered
 
 
 def test_retry_stale_orders_only_retries_eligible_open_orders(tmp_path: Path) -> None:

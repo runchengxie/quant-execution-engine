@@ -7,9 +7,18 @@ from unittest.mock import Mock, patch
 import pytest
 
 import quant_execution_engine.cli as cli
+from quant_execution_engine.broker.base import BrokerAdapter, BrokerOrderRecord, ResolvedBrokerAccount
+from quant_execution_engine.execution import ExecutionExceptionRecord, ExecutionState, ExecutionStateStore
 
 
 pytestmark = pytest.mark.unit
+
+
+class CliAdapter(BrokerAdapter):
+    backend_name = "fake"
+
+    def resolve_account(self, account_label: str | None = None) -> ResolvedBrokerAccount:
+        return ResolvedBrokerAccount(label=account_label or "main")
 
 
 def test_cli_dispatch_quote(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -102,11 +111,20 @@ def test_main_routes_orders() -> None:
         "run_orders",
         return_value=cli.CommandResult(exit_code=0),
     ) as mock_run:
-        with patch.object(sys, "argv", ["qexec", "orders", "--account", "main", "--status", "open"]):
+        with patch.object(
+            sys,
+            "argv",
+            ["qexec", "orders", "--account", "main", "--status", "open", "--symbol", "AAPL"],
+        ):
             result = cli.main()
 
     assert result == 0
-    mock_run.assert_called_once_with(account="main", broker=None, status_filter="open")
+    mock_run.assert_called_once_with(
+        account="main",
+        broker=None,
+        status_filter="open",
+        symbol_filter="AAPL",
+    )
 
 
 def test_main_routes_exceptions() -> None:
@@ -115,11 +133,20 @@ def test_main_routes_exceptions() -> None:
         "run_exceptions",
         return_value=cli.CommandResult(exit_code=0),
     ) as mock_run:
-        with patch.object(sys, "argv", ["qexec", "exceptions", "--status", "failure"]):
+        with patch.object(
+            sys,
+            "argv",
+            ["qexec", "exceptions", "--status", "failure", "--symbol", "MSFT"],
+        ):
             result = cli.main()
 
     assert result == 0
-    mock_run.assert_called_once_with(account="main", broker=None, status_filter="failure")
+    mock_run.assert_called_once_with(
+        account="main",
+        broker=None,
+        status_filter="failure",
+        symbol_filter="MSFT",
+    )
 
 
 def test_main_routes_reconcile() -> None:
@@ -215,6 +242,28 @@ def test_main_routes_retry() -> None:
         order_ref="fake-order-1",
         account="main",
         broker=None,
+    )
+
+
+def test_main_routes_reprice() -> None:
+    with patch.object(
+        cli,
+        "run_reprice",
+        return_value=cli.CommandResult(exit_code=0),
+    ) as mock_run:
+        with patch.object(
+            sys,
+            "argv",
+            ["qexec", "reprice", "fake-order-1", "--limit-price", "9.5", "--broker", "alpaca-paper"],
+        ):
+            result = cli.main()
+
+    assert result == 0
+    mock_run.assert_called_once_with(
+        order_ref="fake-order-1",
+        limit_price=9.5,
+        account="main",
+        broker="alpaca-paper",
     )
 
 
@@ -397,6 +446,92 @@ def test_run_rebalance_paper_execute_does_not_require_live_enable(
 
     assert result.exit_code == 1
     assert result.stderr == "after-guard"
+
+
+def test_run_orders_filters_by_symbol(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    store = ExecutionStateStore(root_dir=tmp_path)
+    state = ExecutionState(broker_name="fake", account_label="main")
+    state.broker_orders = [
+        BrokerOrderRecord(
+            broker_order_id="broker-aapl",
+            symbol="AAPL.US",
+            side="BUY",
+            quantity=10,
+            status="NEW",
+            broker_name="fake",
+            account_label="main",
+        ),
+        BrokerOrderRecord(
+            broker_order_id="broker-msft",
+            symbol="MSFT.US",
+            side="BUY",
+            quantity=5,
+            status="NEW",
+            broker_name="fake",
+            account_label="main",
+        ),
+    ]
+    store.save(state)
+    monkeypatch.setattr(cli, "get_broker_adapter", lambda broker_name=None: CliAdapter())
+    monkeypatch.setattr(cli, "ExecutionStateStore", lambda: store)
+
+    result = cli.run_orders(account="main", broker=None, symbol_filter="AAPL")
+
+    assert result.exit_code == 0
+    assert result.stdout is not None
+    assert "AAPL.US" in result.stdout
+    assert "MSFT.US" not in result.stdout
+
+
+def test_run_exceptions_filters_by_symbol(monkeypatch: pytest.MonkeyPatch) -> None:
+    class FakeExceptionService:
+        def __init__(self, adapter: object) -> None:
+            self.adapter = adapter
+
+        def list_exception_orders(
+            self,
+            *,
+            account_label: str,
+            statuses: set[str] | None = None,
+        ) -> list[ExecutionExceptionRecord]:
+            return [
+                ExecutionExceptionRecord(
+                    broker_name="fake",
+                    account_label=account_label,
+                    symbol="AAPL.US",
+                    side="BUY",
+                    status="BLOCKED",
+                    parent_order_id="parent-aapl",
+                    child_order_id="child-aapl-1",
+                    broker_order_id=None,
+                    client_order_id=None,
+                    source="local",
+                    message="blocked",
+                ),
+                ExecutionExceptionRecord(
+                    broker_name="fake",
+                    account_label=account_label,
+                    symbol="MSFT.US",
+                    side="SELL",
+                    status="FAILED",
+                    parent_order_id="parent-msft",
+                    child_order_id="child-msft-1",
+                    broker_order_id=None,
+                    client_order_id=None,
+                    source="local",
+                    message="failed",
+                ),
+            ]
+
+    monkeypatch.setattr(cli, "get_broker_adapter", lambda broker_name=None: CliAdapter())
+    monkeypatch.setattr(cli, "OrderLifecycleService", FakeExceptionService)
+
+    result = cli.run_exceptions(account="main", broker=None, symbol_filter="MSFT")
+
+    assert result.exit_code == 0
+    assert result.stdout is not None
+    assert "MSFT.US" in result.stdout
+    assert "AAPL.US" not in result.stdout
 
 
 def test_app_function() -> None:

@@ -78,14 +78,14 @@
 下面这些都还在合理边界内，做了不算过度工程化：
 
 - `[~]` LongPort live submit/query/cancel/reconcile 的端到端证据还不够扎实
-- `[ ]` stale limit order 的 replace / reprice，而不只是 cancel + retry
+- `[x]` stale limit order 的 replace / reprice，而不只是 cancel + retry
 - `[x]` 更明确的 exception queue 视图
   当前已经可以快速列出 `FAILED` / `BLOCKED` / `PARTIALLY_FILLED` / `PENDING_CANCEL` 等 tracked orders
 - `[x]` 按状态筛选的 operator 命令
   当前 `orders` 和 `exceptions` 已支持按状态过滤查看
 - `[ ]` 更明确的 broker rejection / warning 归一化输出
-- `[ ]` Alpaca paper 的重复 smoke 验证说明
-  重点不是新功能，而是把 paper 验证路径固定成一套标准回归流程
+- `[x]` Alpaca paper 的重复 smoke 验证说明
+  当前已经有固定 smoke workflow 工装和配套文档
 
 ### 5. 有骨架，但还没到“完成”的项目
 
