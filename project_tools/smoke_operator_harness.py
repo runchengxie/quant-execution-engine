@@ -129,6 +129,10 @@ def run_operator_smoke_workflow(args: argparse.Namespace) -> int:
     run_step("account", run_account(account=account_label, broker=broker))
     run_step("quote", run_quote([canonical], broker=broker))
 
+    if args.preflight_only:
+        print("\n== preflight ==\nPreflight checks passed; skipping targets and broker mutation steps.")
+        return 0
+
     snapshot = get_account_snapshot(
         env="paper" if broker == "alpaca-paper" else "real",
         include_quotes=False,
@@ -256,10 +260,16 @@ def main() -> int:
         default="outputs/targets/smoke-operator.json",
         help="Where to write the generated targets JSON",
     )
-    parser.add_argument(
+    execution_mode = parser.add_mutually_exclusive_group()
+    execution_mode.add_argument(
         "--execute",
         action="store_true",
         help="Run broker-backed rebalance and operator steps after writing the target file",
+    )
+    execution_mode.add_argument(
+        "--preflight-only",
+        action="store_true",
+        help="Only run config/account/quote checks without writing targets or submitting orders",
     )
     parser.add_argument(
         "--cleanup-open-orders",

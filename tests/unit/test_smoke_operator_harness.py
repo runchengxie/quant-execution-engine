@@ -149,6 +149,7 @@ def test_run_operator_smoke_workflow_executes_fixed_sequence(
         market="US",
         output=str(tmp_path / "smoke-operator.json"),
         execute=True,
+        preflight_only=False,
         cleanup_open_orders=True,
         allow_non_paper=False,
     )
@@ -181,8 +182,55 @@ def test_run_operator_smoke_workflow_refuses_non_paper_by_default() -> None:
         market="US",
         output="outputs/targets/smoke-operator.json",
         execute=False,
+        preflight_only=False,
         cleanup_open_orders=False,
         allow_non_paper=False,
     )
 
     assert module.run_operator_smoke_workflow(args) == 2
+
+
+def test_run_operator_smoke_workflow_preflight_only_skips_mutating_steps(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    module = load_smoke_operator_module()
+    called: list[str] = []
+
+    def ok(name: str):
+        def _inner(*args, **kwargs):
+            called.append(name)
+            return SimpleNamespace(exit_code=0, stdout=f"{name} ok", stderr=None)
+
+        return _inner
+
+    def should_not_run(*args, **kwargs):
+        raise AssertionError("mutating step should not run in preflight mode")
+
+    monkeypatch.setattr(module, "run_config", ok("config"))
+    monkeypatch.setattr(module, "run_account", ok("account"))
+    monkeypatch.setattr(module, "run_quote", ok("quote"))
+    monkeypatch.setattr(module, "run_rebalance", should_not_run)
+    monkeypatch.setattr(module, "get_broker_adapter", lambda broker_name=None: DummyAdapter())
+    monkeypatch.setattr(module, "get_account_snapshot", should_not_run)
+
+    args = argparse.Namespace(
+        broker="alpaca-paper",
+        account="main",
+        symbol="AAPL",
+        market="US",
+        output=str(tmp_path / "smoke-operator.json"),
+        execute=False,
+        preflight_only=True,
+        cleanup_open_orders=False,
+        allow_non_paper=False,
+    )
+
+    result = module.run_operator_smoke_workflow(args)
+    output = capsys.readouterr().out
+
+    assert result == 0
+    assert called == ["config", "account", "quote"]
+    assert not (tmp_path / "smoke-operator.json").exists()
+    assert "Preflight checks passed" in output

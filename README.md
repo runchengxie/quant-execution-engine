@@ -134,6 +134,7 @@ uv run pytest --cov=src/quant_execution_engine --cov-report=term-missing -m 'not
 PYTHONPATH=src python project_tools/smoke_signal_harness.py --output outputs/targets/smoke-signal.json
 PYTHONPATH=src python project_tools/smoke_target_harness.py --scenario carry-over --print-json
 PYTHONPATH=src python project_tools/smoke_signal_harness.py --broker alpaca-paper --execute
+PYTHONPATH=src python project_tools/smoke_operator_harness.py --broker alpaca-paper --preflight-only
 PYTHONPATH=src python project_tools/smoke_operator_harness.py --broker alpaca-paper --execute
 ```
 

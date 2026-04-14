@@ -70,6 +70,12 @@ uv run pytest --cov=src/quant_execution_engine --cov-report=term-missing -m 'not
 PYTHONPATH=src python project_tools/smoke_operator_harness.py --broker alpaca-paper --execute
 ```
 
+如果你只想先确认依赖、凭证、账户和行情都正常，不想写 targets 或发单，可以先跑：
+
+```bash
+PYTHONPATH=src python project_tools/smoke_operator_harness.py --broker alpaca-paper --preflight-only
+```
+
 默认 workflow 会串起这些步骤：
 
 1. `config`
