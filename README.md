@@ -1,6 +1,6 @@
 # Quant Execution Engine
 
-面向 execution-only 场景的轻量执行引擎仓库，当前默认支持 LongPort，并提供 Alpaca paper 适配层用于低成本验证。
+轻量执行引擎仓库，当前默认支持 LongPort，并提供 Alpaca paper 适配层用于低成本验证。
 
 这个 repo 当前保留的能力：
 
@@ -8,14 +8,12 @@
 - 查询账户资金与持仓
 - 拉取实时行情
 - 查看本地跟踪的 broker orders
-- 基于 canonical `targets.json` 生成调仓计划与 diff 预览
-- 通过 broker adapter 执行 `submit / query / cancel / reconcile`
-- 在 live / paper 路径上做轻量 execution risk gate
+- 基于持仓清单`targets.json` 生成调仓计划与 diff 预览
+- 通过券商适应层执行 `submit / query / cancel / reconcile`
+- 在 live / paper 路径上做轻量执行风控管理
 - 写出调仓审计日志到 `outputs/orders/*.jsonl`
 - 持久化执行状态到 `outputs/state/*.json`
-- 提供外置 smoke harness 生成 signal-driven / target-driven 测试输入
-
-research、AI、回测、数据导入相关内容已经从这个仓库移除。
+- 提供外置测试工装生成信号驱动型 / 目标驱动型测试输入
 
 当前实现限制：
 
@@ -89,7 +87,7 @@ Alpaca paper 至少需要：
 - `ALPACA_API_KEY` 或 `APCA_API_KEY_ID`
 - `ALPACA_SECRET_KEY` 或 `APCA_API_SECRET_KEY`
 
-可选环境变量、本地 YAML 配置和 FX 折算见：
+可选环境变量、本地 YAML 配置和汇率折算见：
 
 - [docs/configuration.md](docs/configuration.md)
 
@@ -110,7 +108,7 @@ uv run pytest -m e2e
 uv run pytest -m integration
 ```
 
-如果你想看覆盖率，可以显式开启，而不是让默认测试强制失败：
+如果你想看覆盖率，可以显式开启：
 
 ```bash
 uv run pytest --cov=src/quant_execution_engine --cov-report=term-missing -m 'not integration and not e2e and not slow'
@@ -142,12 +140,7 @@ PYTHONPATH=src python project_tools/smoke_operator_harness.py --broker alpaca-pa
 
 ## 输入约定
 
-执行引擎只接受 canonical schema-v2 `targets.json`。
-
-- 不再接受 Excel
-- 不再接受 legacy ticker-list 作为 live execution 输入
-
-最小示例：
+持仓清单最小示例：
 
 ```json
 {

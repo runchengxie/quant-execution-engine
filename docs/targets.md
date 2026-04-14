@@ -2,7 +2,7 @@
 
 ## 约束
 
-execution-engine 只接受 schema-v2 `targets.json`。
+该项目接受 `targets.json` 作为输入。
 
 每个 target 必须包含：
 
