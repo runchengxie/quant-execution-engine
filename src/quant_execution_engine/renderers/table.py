@@ -4,7 +4,11 @@ Provides table format data rendering functionality.
 """
 
 from ..broker.base import BrokerOrderRecord, BrokerReconcileReport
-from ..execution import ExecutionBulkCancelResult, ExecutionTrackedOrder
+from ..execution import (
+    ExecutionBulkCancelResult,
+    ExecutionStaleRetryResult,
+    ExecutionTrackedOrder,
+)
 from ..models import AccountSnapshot, Order, Quote, RebalanceResult
 
 
@@ -398,4 +402,43 @@ def render_retry_summary(
         lines.append("- Warnings:")
         for warning in warnings:
             lines.append(f"  * {warning}")
+    return "\n".join(lines)
+
+
+def render_stale_retry_summary(outcome: ExecutionStaleRetryResult) -> str:
+    """Render stale tracked-order retry summary."""
+
+    lines = [
+        "Stale retry summary:",
+        f"- Broker / Account: {outcome.broker_name} / {outcome.account_label}",
+        f"- Older Than (minutes): {outcome.older_than_minutes}",
+        f"- Targeted stale tracked orders: {outcome.targeted_orders}",
+        f"- Cancel attempts completed: {len(outcome.cancel_results)}",
+        f"- Retry attempts completed: {len(outcome.retry_results)}",
+        f"- State file: {outcome.state_path}",
+    ]
+    if outcome.cancel_results:
+        lines.append("- Cancel results:")
+        for result in outcome.cancel_results:
+            lines.append(f"  * {result.broker_order_id} -> {result.status}")
+            for warning in result.warnings:
+                lines.append(f"    warning: {warning}")
+    if outcome.retry_results:
+        lines.append("- Retry results:")
+        for result in outcome.retry_results:
+            lines.append(
+                f"  * {result.order_ref} -> child {result.new_child_order_id} / broker {result.broker_order_id or '-'} / status {result.broker_status or '-'}"
+            )
+            for warning in result.warnings:
+                lines.append(f"    warning: {warning}")
+    if outcome.warnings:
+        lines.append("- Warnings:")
+        for warning in outcome.warnings:
+            lines.append(f"  * {warning}")
+    if (
+        not outcome.cancel_results
+        and not outcome.retry_results
+        and not outcome.warnings
+    ):
+        lines.append("- No stale tracked open orders were eligible for retry")
     return "\n".join(lines)

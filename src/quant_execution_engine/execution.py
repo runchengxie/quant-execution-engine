@@ -6,6 +6,7 @@ import hashlib
 import json
 import re
 from dataclasses import asdict, dataclass, field, is_dataclass
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -39,6 +40,7 @@ OPEN_BROKER_STATUSES = {
 SUCCESS_BROKER_STATUSES = {"FILLED"}
 FAILURE_BROKER_STATUSES = {"CANCELED", "REJECTED", "EXPIRED", "FAILED"}
 TERMINAL_BROKER_STATUSES = SUCCESS_BROKER_STATUSES | FAILURE_BROKER_STATUSES
+STALE_RETRY_EXCLUDED_STATUSES = {"PENDING_CANCEL", "WAIT_TO_CANCEL"}
 
 
 @dataclass(slots=True)
@@ -192,6 +194,20 @@ class ExecutionRetryResult:
     broker_order_id: str | None
     broker_status: str | None
     state_path: Path
+    warnings: list[str] = field(default_factory=list)
+
+
+@dataclass(slots=True)
+class ExecutionStaleRetryResult:
+    """Result of a stale tracked-order retry pass."""
+
+    broker_name: str
+    account_label: str
+    state_path: Path
+    older_than_minutes: int
+    targeted_orders: int = 0
+    cancel_results: list[ExecutionCancelResult] = field(default_factory=list)
+    retry_results: list[ExecutionRetryResult] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
 
 
@@ -588,6 +604,83 @@ class OrderLifecycleService:
             warnings=[],
         )
 
+    def retry_stale_orders(
+        self,
+        *,
+        account_label: str,
+        older_than_minutes: int,
+    ) -> ExecutionStaleRetryResult:
+        """Cancel and retry locally tracked stale open orders with zero fills."""
+
+        if older_than_minutes <= 0:
+            raise ValueError("older_than_minutes must be greater than 0")
+
+        account = self.adapter.resolve_account(account_label)
+        state = self.state_store.load(self.adapter.backend_name, account.label)
+        cutoff = datetime.now(timezone.utc) - timedelta(minutes=int(older_than_minutes))
+        warnings: list[str] = []
+        targets = sorted(
+            self._find_stale_retry_targets(state, cutoff=cutoff, warnings=warnings),
+            key=lambda record: (
+                self._timestamp_for_stale_retry(record) or datetime.min.replace(tzinfo=timezone.utc),
+                record.broker_order_id,
+            ),
+        )
+
+        cancel_results: list[ExecutionCancelResult] = []
+        retry_results: list[ExecutionRetryResult] = []
+        for target in targets:
+            try:
+                cancel_outcome = self.cancel_order(
+                    account_label=account.label,
+                    order_ref=target.broker_order_id,
+                )
+            except Exception as exc:
+                message = f"{target.broker_order_id}: cancel failed: {exc}"
+                warnings.append(message)
+                logger.warning(
+                    "Stale retry cancel failed for %s (%s/%s): %s",
+                    target.broker_order_id,
+                    self.adapter.backend_name,
+                    account.label,
+                    exc,
+                )
+                continue
+            cancel_results.append(cancel_outcome)
+            if cancel_outcome.status != "CANCELED":
+                warnings.append(
+                    f"{target.broker_order_id}: skipped retry because post-cancel status is {cancel_outcome.status}"
+                )
+                continue
+            try:
+                retry_outcome = self.retry_order(
+                    account_label=account.label,
+                    order_ref=target.broker_order_id,
+                )
+            except Exception as exc:
+                message = f"{target.broker_order_id}: retry failed: {exc}"
+                warnings.append(message)
+                logger.warning(
+                    "Stale retry submit failed for %s (%s/%s): %s",
+                    target.broker_order_id,
+                    self.adapter.backend_name,
+                    account.label,
+                    exc,
+                )
+                continue
+            retry_results.append(retry_outcome)
+
+        return ExecutionStaleRetryResult(
+            broker_name=self.adapter.backend_name,
+            account_label=account.label,
+            state_path=self.state_store.path_for(self.adapter.backend_name, account.label),
+            older_than_minutes=int(older_than_minutes),
+            targeted_orders=len(targets),
+            cancel_results=cancel_results,
+            retry_results=retry_results,
+            warnings=warnings,
+        )
+
     def _build_intent(
         self,
         order: Order,
@@ -875,6 +968,54 @@ class OrderLifecycleService:
             state_path=self.state_store.path_for(self.adapter.backend_name, account.label),
             warnings=warnings,
         )
+
+    def _find_stale_retry_targets(
+        self,
+        state: ExecutionState,
+        *,
+        cutoff: datetime,
+        warnings: list[str],
+    ) -> list[BrokerOrderRecord]:
+        targets: list[BrokerOrderRecord] = []
+        for broker_order in state.broker_orders:
+            if broker_order.status not in OPEN_BROKER_STATUSES:
+                continue
+            if broker_order.status in STALE_RETRY_EXCLUDED_STATUSES:
+                continue
+            if float(broker_order.filled_quantity or 0.0) > 0:
+                continue
+            timestamp = self._timestamp_for_stale_retry(broker_order)
+            if timestamp is None:
+                warnings.append(
+                    f"{broker_order.broker_order_id}: skipped stale retry because timestamp is missing or invalid"
+                )
+                continue
+            if timestamp > cutoff:
+                continue
+            targets.append(broker_order)
+        return targets
+
+    def _timestamp_for_stale_retry(
+        self,
+        broker_order: BrokerOrderRecord,
+    ) -> datetime | None:
+        return self._parse_utc_timestamp(broker_order.updated_at) or self._parse_utc_timestamp(
+            broker_order.submitted_at
+        )
+
+    def _parse_utc_timestamp(self, value: str | None) -> datetime | None:
+        if not value:
+            return None
+        normalized = str(value).strip()
+        if normalized.endswith("Z"):
+            normalized = normalized[:-1] + "+00:00"
+        try:
+            parsed = datetime.fromisoformat(normalized)
+        except ValueError:
+            return None
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=timezone.utc)
+        return parsed.astimezone(timezone.utc)
 
     def _append_fill_event(self, state: ExecutionState, fill: Any) -> None:
         if any(existing.fill_id == fill.fill_id for existing in state.fill_events):

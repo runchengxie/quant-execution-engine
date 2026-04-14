@@ -113,6 +113,16 @@ qexec retry child_abcd1234_1
 qexec retry client-order-id --broker alpaca-paper
 ```
 
+### `retry-stale`
+
+批量处理“过旧但仍未成交”的 tracked open orders：先撤单，再只对明确进入 `CANCELED` 的零成交订单发起重试。
+
+```bash
+qexec retry-stale
+qexec retry-stale --older-than-minutes 15
+qexec retry-stale --broker alpaca-paper
+```
+
 ### `rebalance`
 
 从 canonical `targets.json` 生成预览或进入 live-mode 调仓路径。
@@ -140,6 +150,7 @@ qexec rebalance outputs/targets/2026-04-09.json --target-gross-exposure 0.9
 - `cancel` 支持 `broker_order_id`、`client_order_id` 或 `child_order_id`，撤单后会把本地 state 同步刷新。
 - `cancel-all` 只处理本地 execution state 中仍然 open 的 tracked order，不会扫描 broker 全量订单。
 - `retry` 当前只支持零成交的 `FAILED` / `CANCELED` / `REJECTED` / `EXPIRED` tracked order；部分成交续单还没有实现。
+- `retry-stale` 只处理零成交、仍然 open、且超过阈值的 tracked order；如果撤单后状态不是明确 `CANCELED`，不会继续自动重提。
 - `--execute` 会进入 broker-backed submit/query/reconcile 路径，并写出 richer audit/state 输出。
 - real broker 的 `--execute` 会扫描 repo 根目录 `.env*` / `.envrc*`；如果发现 LongPort live 凭证，CLI 会直接拒绝执行。
 - live / paper 下单前会经过 execution risk gate；如果 spread、参与率、impact 或 kill switch 拦截，CLI 输出里会看到 `BLOCKED` 和具体原因。

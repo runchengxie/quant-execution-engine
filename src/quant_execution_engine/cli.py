@@ -34,6 +34,7 @@ from .renderers.table import (
     render_quotes,
     render_reconcile_summary,
     render_retry_summary,
+    render_stale_retry_summary,
     render_tracked_order_detail,
 )
 from .targets import read_targets_json
@@ -400,6 +401,29 @@ Examples:
         help="Broker account/profile label. Unsupported labels fail fast.",
     )
 
+    retry_stale_parser = subparsers.add_parser(
+        "retry-stale",
+        help="Cancel and retry zero-fill tracked open orders older than a threshold",
+    )
+    retry_stale_parser.add_argument(
+        "--older-than-minutes",
+        type=int,
+        default=5,
+        help="Only target locally tracked open orders older than this many minutes",
+    )
+    retry_stale_parser.add_argument(
+        "--broker",
+        type=str,
+        default=None,
+        help="Broker backend override, e.g. longport or alpaca-paper",
+    )
+    retry_stale_parser.add_argument(
+        "--account",
+        type=str,
+        default="main",
+        help="Broker account/profile label. Unsupported labels fail fast.",
+    )
+
     return parser
 
 
@@ -744,6 +768,31 @@ def run_retry(
             close_fn()
 
 
+def run_retry_stale(
+    *,
+    older_than_minutes: int = 5,
+    account: str = "main",
+    broker: str | None = None,
+) -> CommandResult:
+    adapter = None
+    try:
+        adapter = get_broker_adapter(broker_name=broker)
+        service = OrderLifecycleService(adapter)
+        outcome = service.retry_stale_orders(
+            account_label=account,
+            older_than_minutes=older_than_minutes,
+        )
+        return CommandResult(exit_code=0, stdout=render_stale_retry_summary(outcome))
+    except Exception as exc:
+        msg = f"Stale retry failed: {exc}"
+        get_logger(__name__).error(msg)
+        return CommandResult(exit_code=1, stderr=msg)
+    finally:
+        close_fn = getattr(adapter, "close", None)
+        if callable(close_fn):
+            close_fn()
+
+
 def run_rebalance(
     input_file: str,
     account: str = "main",
@@ -950,6 +999,14 @@ def main() -> int:
         return _handle_command_result(
             run_retry(
                 order_ref=getattr(args, "order_ref"),
+                account=getattr(args, "account", "main"),
+                broker=getattr(args, "broker", None),
+            )
+        )
+    if args.command == "retry-stale":
+        return _handle_command_result(
+            run_retry_stale(
+                older_than_minutes=getattr(args, "older_than_minutes", 5),
                 account=getattr(args, "account", "main"),
                 broker=getattr(args, "broker", None),
             )

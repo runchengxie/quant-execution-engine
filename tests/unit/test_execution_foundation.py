@@ -360,6 +360,51 @@ def test_retry_canceled_zero_fill_order_creates_new_attempt(tmp_path: Path) -> N
     assert adapter.submit_calls == 2
 
 
+def test_retry_stale_orders_only_retries_eligible_open_orders(tmp_path: Path) -> None:
+    adapter = FakeAdapter()
+    store = ExecutionStateStore(root_dir=tmp_path)
+    service = OrderLifecycleService(
+        adapter,
+        state_store=store,
+        risk_chain=RiskGateChain({}),
+    )
+    base_kwargs = {
+        "account_label": "main",
+        "dry_run": False,
+        "target_source": "unit",
+        "target_asof": "2026-04-14",
+        "target_input_path": "tests/targets.json",
+    }
+
+    stale = service.execute_orders(
+        [Order(symbol="AAPL.US", quantity=10, side="BUY", price=10.0)],
+        **base_kwargs,
+    )[0]
+    fresh = service.execute_orders(
+        [Order(symbol="MSFT.US", quantity=5, side="BUY", price=10.0)],
+        **base_kwargs,
+    )[0]
+    state = store.load("fake", "main")
+    for broker_order in state.broker_orders:
+        if broker_order.broker_order_id == stale.broker_order_id:
+            broker_order.updated_at = "2000-01-01T00:00:00+00:00"
+            broker_order.submitted_at = "2000-01-01T00:00:00+00:00"
+    store.save(state)
+
+    outcome = service.retry_stale_orders(account_label="main", older_than_minutes=5)
+    refreshed_state = store.load("fake", "main")
+
+    assert outcome.targeted_orders == 1
+    assert len(outcome.cancel_results) == 1
+    assert len(outcome.retry_results) == 1
+    assert outcome.cancel_results[0].broker_order_id == stale.broker_order_id
+    assert outcome.retry_results[0].new_child_order_id.endswith("_2")
+    assert adapter.cancel_calls.count(str(stale.broker_order_id)) == 1
+    assert adapter.cancel_calls.count(str(fresh.broker_order_id)) == 0
+    assert adapter.submit_calls == 3
+    assert len(refreshed_state.child_orders) == 3
+
+
 def test_retry_rejects_partially_filled_order(tmp_path: Path) -> None:
     adapter = FakeAdapter()
     store = ExecutionStateStore(root_dir=tmp_path)

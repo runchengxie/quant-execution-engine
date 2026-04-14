@@ -1,4 +1,4 @@
-# 执行底座 (Execution Foundation)
+# 执行底座
 
 ## 适用范围
 
@@ -34,7 +34,7 @@ qexec rebalance outputs/targets/demo.json --broker alpaca-paper --execute
 - 是否支持盘外交易 (extended hours)
 - 是否支持多账户选择 (account selection)
 
-## 订单生命周期 (Order Lifecycle)
+## 订单生命周期
 
 执行链路现在明确拆分为以下几层：
 
@@ -77,7 +77,7 @@ outputs/state/*.json
 
 如果行情数据 (market data) 不足，例如拿不到 bid/ask 或日成交量 (daily volume)，引擎会记录 `BYPASS`，而不会去伪造指标。
 
-## 紧急开关 (Kill Switch)
+## 紧急开关
 
 支持两类停机机制：
 
@@ -92,7 +92,7 @@ QEXEC_KILL_SWITCH
 
 当设为 `1` / `true` / `yes` 时，新的 submit 会被拦截，但现有状态仍可正常进行 query / reconcile。
 
-## 审计输出 (Audit Outputs)
+## 审计输出
 
 审计日志仍然输出到：
 
@@ -139,6 +139,7 @@ qexec reconcile
 qexec cancel <order-ref>
 qexec cancel-all
 qexec retry <order-ref>
+qexec retry-stale --older-than-minutes 15
 ```
 
 - `orders` 用于查看本地 execution state 中跟踪的 broker orders
@@ -147,3 +148,4 @@ qexec retry <order-ref>
 - `cancel` 用于按 tracked `broker_order_id` / `client_order_id` / `child_order_id` 发起撤单，并同步更新本地状态
 - `cancel-all` 用于批量撤销本地 execution state 中仍然 open 的 tracked broker orders
 - `retry` 用于重试零成交的失败/撤销 tracked order，并创建新的 child attempt
+- `retry-stale` 用于批量处理超时未成交的 tracked open orders：先撤，再只对明确变成 `CANCELED` 的零成交订单重提

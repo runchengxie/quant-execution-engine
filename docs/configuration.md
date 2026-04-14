@@ -1,8 +1,8 @@
-# Configuration
+# 变量设置
 
 ## 环境变量
 
-### LongPort live
+### LongPort 模拟盘/实盘
 
 必需：
 
@@ -33,7 +33,7 @@
 - `LONGPORT_ACCESS_TOKEN_REAL` 仍会作为 `LONGPORT_ACCESS_TOKEN` 的兼容兜底
 - `LONGPORT_FX_<CCY>_USD` 会作为 `FX_<CCY>_USD` 的兼容兜底
 
-### Alpaca paper
+### Alpaca 模拟盘/实盘
 
 必需：
 

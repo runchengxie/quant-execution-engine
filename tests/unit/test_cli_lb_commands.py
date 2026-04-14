@@ -205,6 +205,27 @@ def test_main_routes_retry() -> None:
     )
 
 
+def test_main_routes_retry_stale() -> None:
+    with patch.object(
+        cli,
+        "run_retry_stale",
+        return_value=cli.CommandResult(exit_code=0),
+    ) as mock_run:
+        with patch.object(
+            sys,
+            "argv",
+            ["qexec", "retry-stale", "--older-than-minutes", "15", "--account", "main"],
+        ):
+            result = cli.main()
+
+    assert result == 0
+    mock_run.assert_called_once_with(
+        older_than_minutes=15,
+        account="main",
+        broker=None,
+    )
+
+
 def test_main_no_command() -> None:
     args = SimpleNamespace(command=None)
 

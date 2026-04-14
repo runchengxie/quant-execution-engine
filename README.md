@@ -50,6 +50,7 @@ qexec reconcile
 qexec cancel broker-order-id
 qexec cancel-all
 qexec retry broker-order-id
+qexec retry-stale --older-than-minutes 15
 qexec rebalance outputs/targets/2026-04-09.json
 QEXEC_ENABLE_LIVE=1 qexec rebalance outputs/targets/2026-04-09.json --execute
 qexec rebalance outputs/targets/2026-04-09.json --broker alpaca-paper --execute
@@ -113,6 +114,7 @@ uv run pytest --cov=src/quant_execution_engine --cov-report=term-missing -m 'not
 - [docs/architecture.md](docs/architecture.md)
 - [docs/cli.md](docs/cli.md)
 - [docs/configuration.md](docs/configuration.md)
+- [docs/execution-checklist.md](docs/execution-checklist.md)
 - [docs/execution-foundation.md](docs/execution-foundation.md)
 - [docs/testing.md](docs/testing.md)
 - [docs/targets.md](docs/targets.md)
