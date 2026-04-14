@@ -39,6 +39,7 @@ class FakeAdapter(BrokerAdapter):
 
     def __init__(self) -> None:
         self.submit_calls = 0
+        self.cancel_calls: list[str] = []
         self.orders: dict[str, BrokerOrderRecord] = {}
 
     def resolve_account(self, account_label: str | None = None) -> ResolvedBrokerAccount:
@@ -93,6 +94,7 @@ class FakeAdapter(BrokerAdapter):
         broker_order_id: str,
         account: ResolvedBrokerAccount | None = None,
     ) -> None:
+        self.cancel_calls.append(broker_order_id)
         self.orders[broker_order_id].status = "CANCELED"
 
     def reconcile(
@@ -275,6 +277,50 @@ def test_get_tracked_order_returns_lifecycle_details(tmp_path: Path) -> None:
     assert tracked.broker_order is not None
     assert tracked.child.child_order_id == result.child_order_id
     assert tracked.broker_order.broker_order_id == result.broker_order_id
+
+
+def test_cancel_all_open_orders_only_targets_tracked_open_orders(tmp_path: Path) -> None:
+    adapter = FakeAdapter()
+    store = ExecutionStateStore(root_dir=tmp_path)
+    service = OrderLifecycleService(
+        adapter,
+        state_store=store,
+        risk_chain=RiskGateChain({}),
+    )
+    base_kwargs = {
+        "account_label": "main",
+        "dry_run": False,
+        "target_source": "unit",
+        "target_asof": "2026-04-14",
+        "target_input_path": "tests/targets.json",
+    }
+
+    first = service.execute_orders(
+        [Order(symbol="AAPL.US", quantity=10, side="BUY", price=10.0)],
+        **base_kwargs,
+    )[0]
+    second = service.execute_orders(
+        [Order(symbol="MSFT.US", quantity=5, side="BUY", price=10.0)],
+        **base_kwargs,
+    )[0]
+    third = service.execute_orders(
+        [Order(symbol="TSLA.US", quantity=3, side="BUY", price=10.0)],
+        **base_kwargs,
+    )[0]
+    service.cancel_order(account_label="main", order_ref=str(third.broker_order_id))
+
+    outcome = service.cancel_all_open_orders(account_label="main")
+    state = store.load("fake", "main")
+
+    assert outcome.targeted_orders == 2
+    assert {result.broker_order_id for result in outcome.results} == {
+        str(first.broker_order_id),
+        str(second.broker_order_id),
+    }
+    assert adapter.cancel_calls.count(str(first.broker_order_id)) == 1
+    assert adapter.cancel_calls.count(str(second.broker_order_id)) == 1
+    assert adapter.cancel_calls.count(str(third.broker_order_id)) == 1
+    assert all(record.status == "CANCELED" for record in state.broker_orders)
 
 
 def test_retry_canceled_zero_fill_order_creates_new_attempt(tmp_path: Path) -> None:

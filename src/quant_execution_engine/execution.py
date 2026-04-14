@@ -155,6 +155,18 @@ class ExecutionCancelResult:
 
 
 @dataclass(slots=True)
+class ExecutionBulkCancelResult:
+    """Result of a bulk tracked-order cancel request."""
+
+    broker_name: str
+    account_label: str
+    state_path: Path
+    targeted_orders: int = 0
+    results: list[ExecutionCancelResult] = field(default_factory=list)
+    warnings: list[str] = field(default_factory=list)
+
+
+@dataclass(slots=True)
 class ExecutionTrackedOrder:
     """Tracked order details resolved from local execution state."""
 
@@ -412,32 +424,72 @@ class OrderLifecycleService:
             raise ValueError(
                 f"tracked order not found for ref '{order_ref}' in {self.adapter.backend_name}/{account.label}"
             )
+        outcome = self._cancel_tracked_broker_order(
+            state=state,
+            account=account,
+            target=target,
+            order_ref=order_ref,
+        )
+        outcome.state_path = self.state_store.save(state)
+        return outcome
+
+    def cancel_all_open_orders(
+        self,
+        *,
+        account_label: str,
+    ) -> ExecutionBulkCancelResult:
+        """Cancel all locally tracked open broker orders for an account."""
+
+        account = self.adapter.resolve_account(account_label)
+        state = self.state_store.load(self.adapter.backend_name, account.label)
+        state.broker_name = self.adapter.backend_name
+        state.account_label = account.label
+        targets = sorted(
+            (
+                broker_order
+                for broker_order in state.broker_orders
+                if broker_order.status in OPEN_BROKER_STATUSES
+            ),
+            key=lambda record: (record.updated_at, record.submitted_at, record.broker_order_id),
+            reverse=True,
+        )
 
         warnings: list[str] = []
-        refreshed = target
-        if target.status not in TERMINAL_BROKER_STATUSES:
-            self.adapter.cancel_order(target.broker_order_id, account)
+        results: list[ExecutionCancelResult] = []
+        for target in targets:
             try:
-                refreshed = self.adapter.get_order(target.broker_order_id, account)
-            except Exception as exc:
-                warnings.append(
-                    f"cancel submitted but post-cancel refresh failed: {exc}"
+                outcome = self._cancel_tracked_broker_order(
+                    state=state,
+                    account=account,
+                    target=target,
+                    order_ref=target.broker_order_id,
                 )
-                refreshed = self._updated_broker_order_record(target, status="PENDING_CANCEL")
-        else:
-            warnings.append(f"order already in terminal state: {target.status}")
+            except Exception as exc:
+                message = f"{target.broker_order_id}: {exc}"
+                warnings.append(message)
+                logger.warning(
+                    "Bulk cancel failed for %s (%s/%s): %s",
+                    target.broker_order_id,
+                    self.adapter.backend_name,
+                    account.label,
+                    exc,
+                )
+                continue
+            results.append(outcome)
 
-        self._upsert_broker_order(state, refreshed)
-        self._sync_child_from_broker_order(state, refreshed)
-        state_path = self.state_store.save(state)
-        return ExecutionCancelResult(
+        state_path = (
+            self.state_store.save(state)
+            if results
+            else self.state_store.path_for(self.adapter.backend_name, account.label)
+        )
+        for outcome in results:
+            outcome.state_path = state_path
+        return ExecutionBulkCancelResult(
             broker_name=self.adapter.backend_name,
             account_label=account.label,
-            order_ref=order_ref,
-            broker_order_id=refreshed.broker_order_id,
-            client_order_id=refreshed.client_order_id,
-            status=refreshed.status,
             state_path=state_path,
+            targeted_orders=len(targets),
+            results=results,
             warnings=warnings,
         )
 
@@ -790,6 +842,39 @@ class OrderLifecycleService:
             )
             state.fill_events.append(event)
             self._update_parent_from_fill(parent, event)
+
+    def _cancel_tracked_broker_order(
+        self,
+        *,
+        state: ExecutionState,
+        account: ResolvedBrokerAccount,
+        target: BrokerOrderRecord,
+        order_ref: str,
+    ) -> ExecutionCancelResult:
+        warnings: list[str] = []
+        refreshed = target
+        if target.status not in TERMINAL_BROKER_STATUSES:
+            self.adapter.cancel_order(target.broker_order_id, account)
+            try:
+                refreshed = self.adapter.get_order(target.broker_order_id, account)
+            except Exception as exc:
+                warnings.append(f"cancel submitted but post-cancel refresh failed: {exc}")
+                refreshed = self._updated_broker_order_record(target, status="PENDING_CANCEL")
+        else:
+            warnings.append(f"order already in terminal state: {target.status}")
+
+        self._upsert_broker_order(state, refreshed)
+        self._sync_child_from_broker_order(state, refreshed)
+        return ExecutionCancelResult(
+            broker_name=self.adapter.backend_name,
+            account_label=account.label,
+            order_ref=order_ref,
+            broker_order_id=refreshed.broker_order_id,
+            client_order_id=refreshed.client_order_id,
+            status=refreshed.status,
+            state_path=self.state_store.path_for(self.adapter.backend_name, account.label),
+            warnings=warnings,
+        )
 
     def _append_fill_event(self, state: ExecutionState, fill: Any) -> None:
         if any(existing.fill_id == fill.fill_id for existing in state.fill_events):

@@ -52,7 +52,7 @@ project_tools/
 ## 分层说明
 
 - `cli.py`
-  负责参数解析、broker/backend 选择、命令分发和错误码收口，包括 `orders` / `order` / `reconcile` / `cancel` / `retry` 这类运维入口。
+  负责参数解析、broker/backend 选择、命令分发和错误码收口，包括 `orders` / `order` / `reconcile` / `cancel` / `cancel-all` / `retry` 这类运维入口。
 - `broker/base.py` / `broker/factory.py`
   定义 broker lifecycle 契约、capability matrix 和 backend 选择逻辑。
 - `broker/longport.py` / `broker/alpaca.py`

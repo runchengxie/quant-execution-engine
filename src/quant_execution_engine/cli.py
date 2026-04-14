@@ -27,6 +27,7 @@ from .risk import get_kill_switch_config, get_risk_config
 from .renderers.diff import render_rebalance_diff
 from .renderers.jsonout import render_multiple_account_snapshots_json
 from .renderers.table import (
+    render_bulk_cancel_summary,
     render_broker_orders,
     render_cancel_summary,
     render_multiple_account_snapshots,
@@ -332,6 +333,23 @@ Examples:
         help="Broker backend override, e.g. longport or alpaca-paper",
     )
     cancel_parser.add_argument(
+        "--account",
+        type=str,
+        default="main",
+        help="Broker account/profile label. Unsupported labels fail fast.",
+    )
+
+    cancel_all_parser = subparsers.add_parser(
+        "cancel-all",
+        help="Cancel all tracked open broker orders from local execution state",
+    )
+    cancel_all_parser.add_argument(
+        "--broker",
+        type=str,
+        default=None,
+        help="Broker backend override, e.g. longport or alpaca-paper",
+    )
+    cancel_all_parser.add_argument(
         "--account",
         type=str,
         default="main",
@@ -649,6 +667,27 @@ def run_cancel(
             close_fn()
 
 
+def run_cancel_all(
+    *,
+    account: str = "main",
+    broker: str | None = None,
+) -> CommandResult:
+    adapter = None
+    try:
+        adapter = get_broker_adapter(broker_name=broker)
+        service = OrderLifecycleService(adapter)
+        outcome = service.cancel_all_open_orders(account_label=account)
+        return CommandResult(exit_code=0, stdout=render_bulk_cancel_summary(outcome))
+    except Exception as exc:
+        msg = f"Bulk cancel failed: {exc}"
+        get_logger(__name__).error(msg)
+        return CommandResult(exit_code=1, stderr=msg)
+    finally:
+        close_fn = getattr(adapter, "close", None)
+        if callable(close_fn):
+            close_fn()
+
+
 def run_order(
     *,
     order_ref: str,
@@ -888,6 +927,13 @@ def main() -> int:
         return _handle_command_result(
             run_cancel(
                 order_ref=getattr(args, "order_ref"),
+                account=getattr(args, "account", "main"),
+                broker=getattr(args, "broker", None),
+            )
+        )
+    if args.command == "cancel-all":
+        return _handle_command_result(
+            run_cancel_all(
                 account=getattr(args, "account", "main"),
                 broker=getattr(args, "broker", None),
             )

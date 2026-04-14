@@ -4,7 +4,7 @@ Provides table format data rendering functionality.
 """
 
 from ..broker.base import BrokerOrderRecord, BrokerReconcileReport
-from ..execution import ExecutionTrackedOrder
+from ..execution import ExecutionBulkCancelResult, ExecutionTrackedOrder
 from ..models import AccountSnapshot, Order, Quote, RebalanceResult
 
 
@@ -287,6 +287,40 @@ def render_cancel_summary(
         lines.append("- Warnings:")
         for warning in warnings:
             lines.append(f"  * {warning}")
+    return "\n".join(lines)
+
+
+def render_bulk_cancel_summary(outcome: ExecutionBulkCancelResult) -> str:
+    """Render tracked bulk-cancel summary."""
+
+    canceled = sum(1 for result in outcome.results if result.status == "CANCELED")
+    pending_cancel = sum(1 for result in outcome.results if result.status == "PENDING_CANCEL")
+    other_statuses = len(outcome.results) - canceled - pending_cancel
+
+    lines = [
+        "Bulk cancel summary:",
+        f"- Broker / Account: {outcome.broker_name} / {outcome.account_label}",
+        f"- Tracked open orders targeted: {outcome.targeted_orders}",
+        f"- Cancel requests completed: {len(outcome.results)}",
+        f"- Final CANCELED: {canceled}",
+        f"- Final PENDING_CANCEL: {pending_cancel}",
+        f"- Other statuses: {other_statuses}",
+        f"- State file: {outcome.state_path}",
+    ]
+    if outcome.results:
+        lines.append("- Orders:")
+        for result in outcome.results:
+            lines.append(
+                f"  * {result.broker_order_id} ({result.client_order_id or '-'}) -> {result.status}"
+            )
+            for warning in result.warnings:
+                lines.append(f"    warning: {warning}")
+    if outcome.warnings:
+        lines.append("- Warnings:")
+        for warning in outcome.warnings:
+            lines.append(f"  * {warning}")
+    if not outcome.results and not outcome.warnings:
+        lines.append("- No tracked open orders were found in local execution state")
     return "\n".join(lines)
 
 

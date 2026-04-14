@@ -93,6 +93,16 @@ qexec cancel child_abcd1234_1
 qexec cancel client-order-id --broker alpaca-paper
 ```
 
+### `cancel-all`
+
+撤销本地 execution state 中仍然 open 的全部 tracked broker orders。
+
+```bash
+qexec cancel-all
+qexec cancel-all --broker alpaca-paper
+qexec cancel-all --account main
+```
+
 ### `retry`
 
 重试一笔零成交的失败/撤销 tracked order。
@@ -128,6 +138,7 @@ qexec rebalance outputs/targets/2026-04-09.json --target-gross-exposure 0.9
 - `order` 会把 intent / parent / child / broker / fill 这些本地生命周期信息合并展示出来。
 - `reconcile` 会主动访问 broker，刷新 tracked open/closed orders，并尝试补录缺失的 fills。
 - `cancel` 支持 `broker_order_id`、`client_order_id` 或 `child_order_id`，撤单后会把本地 state 同步刷新。
+- `cancel-all` 只处理本地 execution state 中仍然 open 的 tracked order，不会扫描 broker 全量订单。
 - `retry` 当前只支持零成交的 `FAILED` / `CANCELED` / `REJECTED` / `EXPIRED` tracked order；部分成交续单还没有实现。
 - `--execute` 会进入 broker-backed submit/query/reconcile 路径，并写出 richer audit/state 输出。
 - real broker 的 `--execute` 会扫描 repo 根目录 `.env*` / `.envrc*`；如果发现 LongPort live 凭证，CLI 会直接拒绝执行。

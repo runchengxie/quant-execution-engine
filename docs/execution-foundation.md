@@ -137,6 +137,7 @@ qexec orders
 qexec order <order-ref>
 qexec reconcile
 qexec cancel <order-ref>
+qexec cancel-all
 qexec retry <order-ref>
 ```
 
@@ -144,4 +145,5 @@ qexec retry <order-ref>
 - `order` 用于查看单笔 tracked order 的完整本地生命周期信息
 - `reconcile` 用于主动刷新 broker open/closed order 状态，并把补录的 fills 写回状态文件
 - `cancel` 用于按 tracked `broker_order_id` / `client_order_id` / `child_order_id` 发起撤单，并同步更新本地状态
+- `cancel-all` 用于批量撤销本地 execution state 中仍然 open 的 tracked broker orders
 - `retry` 用于重试零成交的失败/撤销 tracked order，并创建新的 child attempt

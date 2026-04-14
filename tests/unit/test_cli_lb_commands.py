@@ -143,6 +143,26 @@ def test_main_routes_cancel() -> None:
     )
 
 
+def test_main_routes_cancel_all() -> None:
+    with patch.object(
+        cli,
+        "run_cancel_all",
+        return_value=cli.CommandResult(exit_code=0),
+    ) as mock_run:
+        with patch.object(
+            sys,
+            "argv",
+            ["qexec", "cancel-all", "--broker", "alpaca-paper"],
+        ):
+            result = cli.main()
+
+    assert result == 0
+    mock_run.assert_called_once_with(
+        account="main",
+        broker="alpaca-paper",
+    )
+
+
 def test_main_routes_order() -> None:
     with patch.object(
         cli,
