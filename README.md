@@ -154,6 +154,8 @@ PYTHONPATH=src python project_tools/smoke_operator_harness.py --broker longport-
 
 它们的目标是驱动 dry-run / paper / 人工监督验证。
 
+如果你想系统化重复 `longport-paper` 的 operator failure smoke，而不是只跑一次 happy path，先看 [docs/longport-paper-failure-smoke.md](docs/longport-paper-failure-smoke.md)。
+
 ## 输入与输出
 
 持仓清单最小示例：
@@ -189,6 +191,7 @@ PYTHONPATH=src python project_tools/smoke_operator_harness.py --broker longport-
 - [docs/configuration.md](docs/configuration.md)
 - [docs/execution-checklist.md](docs/execution-checklist.md)
 - [docs/execution-foundation.md](docs/execution-foundation.md)
+- [docs/longport-paper-failure-smoke.md](docs/longport-paper-failure-smoke.md)
 - [docs/longport-real-smoke.md](docs/longport-real-smoke.md)
 - [docs/testing.md](docs/testing.md)
 - [docs/targets.md](docs/targets.md)

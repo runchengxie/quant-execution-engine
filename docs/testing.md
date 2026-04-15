@@ -127,4 +127,6 @@ PYTHONPATH=src python project_tools/smoke_operator_harness.py --broker longport-
 
 这个工装默认拒绝 non-paper broker；如果你明确知道自己要这么做，需要额外传 `--allow-non-paper`。
 
+如果你想系统化重复 `longport-paper` 的 operator failure smoke，而不是只跑一次 baseline happy path，先看 [docs/longport-paper-failure-smoke.md](longport-paper-failure-smoke.md)。
+
 如果你准备开始做 LongPort real 的最小实盘验证，先看 [docs/longport-real-smoke.md](longport-real-smoke.md)。

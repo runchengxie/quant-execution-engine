@@ -73,12 +73,12 @@
 
 负责把 broker 侧事实重新拉回本地：
 
-- 刷新 tracked open orders
-- 刷新 tracked closed orders
-- 尝试回补缺失 fill
-- 产出 delta / change view，告诉 operator 这次到底改了哪些单
+- 刷新本地跟踪中的未结订单
+- 刷新本地跟踪中的已结订单
+- 尝试回补缺失已成交订单
+- 产出变更摘要，告诉操作员这次到底哪些订单发生了变化
 
-换句话说，reconcile 是本地 state 和 broker state 之间的修正机制，而不是可有可无的辅助命令。
+换句话说，对账是本地状态和券商状态之间的修正机制。
 
 ## 6. 风控与 kill switch
 
@@ -139,6 +139,7 @@ kill switch 也遵守 execution-only 语义：
 对于 LongPort：
 
 - `longport-paper` 现在已经适合用来做 broker-backed paper evidence
+- `longport-paper` 的 operator failure smoke 应优先通过单独 playbook 来重复，而不是继续扩一层 synthetic broker failure 框架
 - `longport` real broker 则应该通过单独的 operator-supervised smoke playbook 来补实盘证据，而不是把 live secret 留在 repo 本地文件里
 
 ## 9. paper / real 配置隔离为什么也是底座设计

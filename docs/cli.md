@@ -295,3 +295,5 @@ PYTHONPATH=src python project_tools/smoke_operator_harness.py --broker longport-
 ```
 
 `smoke_operator_harness.py` 是最接近 operator workflow 的工装；需要留证时可以加 `--evidence-output`。
+
+如果你想围绕 `longport-paper` 系统化做 operator failure smoke，建议直接按 [longport-paper-failure-smoke.md](longport-paper-failure-smoke.md) 的场景跑，而不是临时拼命令。
