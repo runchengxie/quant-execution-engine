@@ -1,5 +1,6 @@
 from datetime import date
 from decimal import Decimal
+from enum import Enum
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
@@ -57,7 +58,7 @@ def test_candles_parameters() -> None:
 
 @pytest.mark.unit
 def test_submit_limit_buy_order() -> None:
-    from quant_execution_engine.broker._stubs import (
+    from quant_execution_engine.broker.longport import (
         OrderSide,
         OrderType,
         TimeInForceType,
@@ -87,7 +88,7 @@ def test_submit_limit_buy_order() -> None:
 
 @pytest.mark.unit
 def test_submit_limit_sell_order() -> None:
-    from quant_execution_engine.broker._stubs import (
+    from quant_execution_engine.broker.longport import (
         OrderSide,
         OrderType,
         TimeInForceType,
@@ -166,6 +167,46 @@ def test_decimal_precision() -> None:
     assert call_args.kwargs["submitted_quantity"] == Decimal("25")
     assert isinstance(call_args.kwargs["submitted_price"], Decimal)
     assert isinstance(call_args.kwargs["submitted_quantity"], Decimal)
+
+
+@pytest.mark.unit
+def test_submit_market_preserves_sdk_enum_objects() -> None:
+    class FakeOrderType(Enum):
+        LO = "LO"
+        MO = "MO"
+
+    class FakeOrderSide(Enum):
+        Buy = "Buy"
+        Sell = "Sell"
+
+    class FakeTif(Enum):
+        Day = "Day"
+        GTC = "GTC"
+
+    mock_trade_context = Mock()
+    mock_trade_context.submit_order.return_value = SimpleNamespace(order_id="33333")
+
+    with patch("quant_execution_engine.broker.longport.get_config"):
+        with patch("quant_execution_engine.broker.longport.OrderType", FakeOrderType):
+            with patch("quant_execution_engine.broker.longport.OrderSide", FakeOrderSide):
+                with patch(
+                    "quant_execution_engine.broker.longport.TimeInForceType",
+                    FakeTif,
+                ):
+                    client = LongPortClient.__new__(LongPortClient)
+                    client.q = Mock()
+                    client.t = mock_trade_context
+
+                    client.submit_market("AAPL", 1)
+
+    mock_trade_context.submit_order.assert_called_with(
+        symbol="AAPL.US",
+        order_type=FakeOrderType.MO,
+        side=FakeOrderSide.Buy,
+        submitted_quantity=Decimal("1"),
+        time_in_force=FakeTif.Day,
+        remark=None,
+    )
 
 
 @pytest.mark.unit

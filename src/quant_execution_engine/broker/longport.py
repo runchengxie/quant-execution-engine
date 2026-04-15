@@ -493,11 +493,11 @@ class LongPortClient:
             tif = TimeInForceType.Day
         return trade_ctx.submit_order(
             symbol=_to_lb_symbol(symbol),
-            order_type=_enum_value(OrderType.LO),
-            side=_enum_value(side),
+            order_type=OrderType.LO,
+            side=side,
             submitted_price=px,
             submitted_quantity=qty,
-            time_in_force=_enum_value(tif),
+            time_in_force=tif,
             remark=remark,
         )
 
@@ -520,10 +520,10 @@ class LongPortClient:
             tif = TimeInForceType.Day
         return trade_ctx.submit_order(
             symbol=_to_lb_symbol(symbol),
-            order_type=_enum_value(OrderType.MO),
-            side=_enum_value(side),
+            order_type=OrderType.MO,
+            side=side,
             submitted_quantity=qty,
-            time_in_force=_enum_value(tif),
+            time_in_force=tif,
             remark=remark,
         )
 
