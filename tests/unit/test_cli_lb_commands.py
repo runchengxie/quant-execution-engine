@@ -127,6 +127,38 @@ def test_main_routes_config() -> None:
     mock_run.assert_called_once_with(True, broker=None)
 
 
+def test_run_config_longport_reports_credential_sources(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("LONGPORT_REGION", "cn")
+    monkeypatch.setenv("LONGPORT_ENABLE_OVERNIGHT", "true")
+    monkeypatch.setattr(
+        cli,
+        "probe_longport_credentials",
+        lambda env_name: SimpleNamespace(
+            env_name=env_name,
+            app_key="paper_app_key",
+            app_secret="paper_app_secret",
+            access_token="paper_access_token",
+            token_var_name="LONGPORT_ACCESS_TOKEN",
+            app_key_source="repo-local .env (LONGPORT_APP_KEY)",
+            app_secret_source="repo-local .env (LONGPORT_APP_SECRET)",
+            access_token_source="user-private ~/.config/qexec/longport-live.env (LONGPORT_ACCESS_TOKEN)",
+        ),
+    )
+
+    result = cli.run_config(True, broker="longport")
+
+    assert result.exit_code == 0
+    assert result.stdout is not None
+    assert "- App Key Source:        repo-local .env (LONGPORT_APP_KEY)" in result.stdout
+    assert "- App Secret Source:     repo-local .env (LONGPORT_APP_SECRET)" in result.stdout
+    assert (
+        "- Access Token Source:   user-private ~/.config/qexec/longport-live.env (LONGPORT_ACCESS_TOKEN)"
+        in result.stdout
+    )
+
+
 def test_main_routes_orders() -> None:
     with patch.object(
         cli,
@@ -542,7 +574,7 @@ def test_run_rebalance_live_rejects_repo_local_longport_secrets(
     assert result.stderr is not None
     assert ".env" in result.stderr
     assert "LONGPORT_ACCESS_TOKEN" in result.stderr
-    assert "LONGPORT_APP_SECRET" in result.stderr
+    assert "live access tokens" in result.stderr
     mock_read_targets.assert_not_called()
 
 

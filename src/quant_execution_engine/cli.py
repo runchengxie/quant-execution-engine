@@ -20,7 +20,10 @@ from .broker import (
     resolve_broker_name,
     resolve_default_account_label,
 )
-from .broker.longport_credentials import probe_longport_credentials
+from .broker.longport_credentials import (
+    probe_longport_credentials,
+    resolve_longport_runtime_value,
+)
 from .execution import ExecutionStateStore, OrderLifecycleService
 from .execution import (
     DEFAULT_EXCEPTION_STATUSES,
@@ -689,9 +692,16 @@ def run_config(show: bool = True, broker: str | None = None) -> CommandResult:
     kill_switch_cfg = get_kill_switch_config()
     default_account = resolve_default_account_label()
 
-    region = _getenv_both("LONGPORT_REGION", "LONGBRIDGE_REGION", "hk")
-    overnight = _getenv_both(
-        "LONGPORT_ENABLE_OVERNIGHT", "LONGBRIDGE_ENABLE_OVERNIGHT", "false"
+    longport_env_name = "paper" if selected_broker == "longport-paper" else "real"
+    region, _region_source = resolve_longport_runtime_value(
+        ("LONGPORT_REGION", "LONGBRIDGE_REGION"),
+        env_name=longport_env_name,
+        default="hk",
+    )
+    overnight, _overnight_source = resolve_longport_runtime_value(
+        ("LONGPORT_ENABLE_OVERNIGHT", "LONGBRIDGE_ENABLE_OVERNIGHT"),
+        env_name=longport_env_name,
+        default="false",
     )
     max_notional = _getenv_both(
         "LONGPORT_MAX_NOTIONAL_PER_ORDER", "LONGBRIDGE_MAX_NOTIONAL_PER_ORDER", "0"
@@ -746,11 +756,14 @@ def run_config(show: bool = True, broker: str | None = None) -> CommandResult:
     ]
     if is_longport_broker(selected_broker):
         credentials = probe_longport_credentials(
-            "paper" if selected_broker == "longport-paper" else "real"
+            longport_env_name
         )
         app_key = credentials.app_key
         app_secret = credentials.app_secret
         token = credentials.access_token
+        app_key_source = credentials.app_key_source or "(not found)"
+        app_secret_source = credentials.app_secret_source or "(not found)"
+        token_source = credentials.access_token_source or "(not found)"
         lines.extend(
             [
                 "- Region:                " + region,
@@ -760,8 +773,11 @@ def run_config(show: bool = True, broker: str | None = None) -> CommandResult:
                 "- Local Max Quantity:    " + _fmt_unlimited(_to_int(max_qty, 0)),
                 "- Trade Window:          " + f"{tw_start} - {tw_end}",
                 "- App Key:               " + _mask(app_key),
+                "- App Key Source:        " + app_key_source,
                 "- App Secret:            " + _mask(app_secret),
+                "- App Secret Source:     " + app_secret_source,
                 "- Access Token:          " + _mask(token),
+                "- Access Token Source:   " + token_source,
             ]
         )
     elif selected_broker in {"alpaca", "alpaca-paper"}:

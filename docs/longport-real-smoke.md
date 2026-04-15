@@ -1,12 +1,10 @@
-# LongPort Real Smoke
+# 长桥 LongPort 实盘冒烟测试
 
-这份文档的目标很克制：
+这份文档的目标：
 
-- 为 `longport` real broker 提供一套最小实盘 smoke playbook
+- 为 `longport` real broker 提供一套最小实盘冒烟测试playbook
 - 补 `submit / query / reconcile / cancel` 的证据链
 - 不把 live secret 留在 repo 根目录 `.env*` / `.envrc*`
-
-它不是全自动交易手册，也不是 broker onboarding 文档。
 
 ## 1. 什么时候值得开始
 
@@ -63,6 +61,18 @@ export QEXEC_ENABLE_LIVE="1"
 ```bash
 source ~/.config/qexec/longport-live.env
 ```
+
+如果你希望新开的 `bash` 会话自动带上这些变量，可以把下面这行加到 `~/.bashrc` 和 `~/.bash_profile`：
+
+```bash
+[ -f "$HOME/.config/qexec/longport-live.env" ] && source "$HOME/.config/qexec/longport-live.env"
+```
+
+这样：
+
+- 交互式 `bash` 会话会自动加载
+- `bash -lc` 这类 login shell 也会自动加载
+- live token 仍然不会落进 repo 根目录 `.env*`
 
 ## 3. 执行前检查
 

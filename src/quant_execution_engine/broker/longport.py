@@ -47,7 +47,10 @@ except Exception:  # pragma: no cover
 
 from datetime import date, datetime
 
-from .longport_credentials import resolve_longport_credentials
+from .longport_credentials import (
+    resolve_longport_credentials,
+    resolve_longport_runtime_value,
+)
 from ..fx import to_usd
 from ..logging import get_logger
 from ..models import Quote
@@ -222,7 +225,11 @@ class LongPortClient:
         """
         requested_env = str(env or "real").strip().lower()
         self.env = Env.PAPER if requested_env == "paper" else Env.REAL
-        self.region = getenv_both("LONGPORT_REGION", "LONGBRIDGE_REGION", "hk")
+        self.region, _region_source = resolve_longport_runtime_value(
+            ("LONGPORT_REGION", "LONGBRIDGE_REGION"),
+            env_name=self.env.value,
+            default="hk",
+        )
         credentials = resolve_longport_credentials(self.env.value)
         self.app_key = credentials.app_key
         self.app_secret = credentials.app_secret
@@ -350,8 +357,10 @@ class LongPortClient:
         else:
             self.limits = limits
 
-        enable_overnight = getenv_both(
-            "LONGPORT_ENABLE_OVERNIGHT", "LONGBRIDGE_ENABLE_OVERNIGHT", "false"
+        enable_overnight, _overnight_source = resolve_longport_runtime_value(
+            ("LONGPORT_ENABLE_OVERNIGHT", "LONGBRIDGE_ENABLE_OVERNIGHT"),
+            env_name=self.env.value,
+            default="false",
         )
         self.allow_extended = str(enable_overnight).strip().lower() in {
             "1",

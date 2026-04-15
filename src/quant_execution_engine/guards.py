@@ -9,14 +9,11 @@ from pathlib import Path
 from .paths import PROJECT_ROOT
 
 LIVE_ENABLE_ENV_VAR = "QEXEC_ENABLE_LIVE"
+DEFAULT_USER_LIVE_ENV_PATH = Path.home() / ".config" / "qexec" / "longport-live.env"
 LIVE_SECRET_ENV_NAMES = frozenset(
     {
-        "LONGPORT_APP_KEY",
-        "LONGPORT_APP_SECRET",
         "LONGPORT_ACCESS_TOKEN",
         "LONGPORT_ACCESS_TOKEN_REAL",
-        "LONGBRIDGE_APP_KEY",
-        "LONGBRIDGE_APP_SECRET",
         "LONGBRIDGE_ACCESS_TOKEN",
         "LONGBRIDGE_ACCESS_TOKEN_REAL",
     }
@@ -60,6 +57,34 @@ def _looks_like_placeholder_secret(value: str) -> bool:
         "replace-this",
         "replace_this",
     }
+
+
+def _read_env_value_from_file(path: Path, env_name: str) -> str | None:
+    if not path.is_file():
+        return None
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError:
+        return None
+    for raw_line in text.splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#"):
+            continue
+        match = ENV_ASSIGNMENT_RE.match(raw_line)
+        if match is None:
+            continue
+        if match.group("name") != env_name:
+            continue
+        return _normalize_env_assignment_value(match.group("value"))
+    return None
+
+
+def resolve_live_enable_value() -> str | None:
+    current = os.getenv(LIVE_ENABLE_ENV_VAR)
+    if current is not None:
+        return current
+    fallback = _read_env_value_from_file(DEFAULT_USER_LIVE_ENV_PATH, LIVE_ENABLE_ENV_VAR)
+    return fallback
 
 
 def iter_repo_local_env_files(project_root: Path) -> list[Path]:
@@ -128,7 +153,7 @@ def validate_live_execution_guard(
 ) -> str | None:
     if dry_run or env_name == "paper":
         return None
-    if not is_truthy(os.getenv(LIVE_ENABLE_ENV_VAR)):
+    if not is_truthy(resolve_live_enable_value()):
         return (
             f"real broker live execution requires {LIVE_ENABLE_ENV_VAR}=1. "
             "Paper execution paths are unaffected."
@@ -141,6 +166,6 @@ def validate_live_execution_guard(
     locations = format_live_secret_findings(findings, root)
     return (
         "refusing live execution because repo-local env files contain LongPort live "
-        f"credentials: {locations}. Move live secrets to system environment variables "
+        f"access tokens: {locations}. Move live tokens to system environment variables "
         "or an external secret manager, then retry."
     )
