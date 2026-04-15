@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+from collections import Counter
 from dataclasses import asdict, dataclass, field, is_dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -87,6 +88,7 @@ class ParentOrder:
     child_order_ids: list[str] = field(default_factory=list)
     created_at: str = field(default_factory=utc_now_iso)
     updated_at: str = field(default_factory=utc_now_iso)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(slots=True)
@@ -150,6 +152,20 @@ class ExecutionReconcileResult:
     state_path: Path
     new_fill_events: int = 0
     refreshed_orders: int = 0
+    changed_orders: list["ExecutionReconcileDelta"] = field(default_factory=list)
+
+
+@dataclass(slots=True)
+class ExecutionReconcileDelta:
+    """Single tracked order change detected during reconcile."""
+
+    broker_order_id: str
+    symbol: str
+    before_status: str | None
+    after_status: str
+    before_filled_quantity: float = 0.0
+    after_filled_quantity: float = 0.0
+    new_fill_events: int = 0
 
 
 @dataclass(slots=True)
@@ -228,6 +244,21 @@ class ExecutionRetryResult:
 
 
 @dataclass(slots=True)
+class ExecutionResumeRemainingResult:
+    """Result of resubmitting the remaining quantity after a partial fill."""
+
+    broker_name: str
+    account_label: str
+    order_ref: str
+    submitted_quantity: float
+    new_child_order_id: str
+    broker_order_id: str | None
+    broker_status: str | None
+    state_path: Path
+    warnings: list[str] = field(default_factory=list)
+
+
+@dataclass(slots=True)
 class ExecutionRepriceResult:
     """Result of a tracked-order reprice request."""
 
@@ -241,6 +272,20 @@ class ExecutionRepriceResult:
     new_child_order_id: str | None
     broker_order_id: str | None
     broker_status: str | None
+    state_path: Path
+    warnings: list[str] = field(default_factory=list)
+
+
+@dataclass(slots=True)
+class ExecutionAcceptPartialResult:
+    """Result of accepting a partial fill locally."""
+
+    broker_name: str
+    account_label: str
+    order_ref: str
+    parent_order_id: str
+    accepted_filled_quantity: float
+    abandoned_remaining_quantity: float
     state_path: Path
     warnings: list[str] = field(default_factory=list)
 
@@ -471,8 +516,18 @@ class OrderLifecycleService:
         state.broker_name = self.adapter.backend_name
         state.account_label = account.label
         state = self._apply_manual_kill_switch(state)
+        before_orders = {
+            broker_order.broker_order_id: broker_order for broker_order in state.broker_orders
+        }
+        before_fill_counts = Counter(fill.broker_order_id for fill in state.fill_events if fill.broker_order_id)
         before_fills = len(state.fill_events)
         report, refreshed_orders = self._fetch_and_merge_reconcile_report(state, account)
+        changed_orders = self._build_reconcile_deltas(
+            before_orders=before_orders,
+            after_orders=state.broker_orders,
+            before_fill_counts=before_fill_counts,
+            fill_events=state.fill_events,
+        )
         state_path = self.state_store.save(state)
         return ExecutionReconcileResult(
             report=report,
@@ -480,6 +535,7 @@ class OrderLifecycleService:
             state_path=state_path,
             new_fill_events=max(0, len(state.fill_events) - before_fills),
             refreshed_orders=refreshed_orders,
+            changed_orders=changed_orders,
         )
 
     def cancel_order(
@@ -737,6 +793,187 @@ class OrderLifecycleService:
             warnings=[],
         )
 
+    def cancel_remaining_order(
+        self,
+        *,
+        account_label: str,
+        order_ref: str,
+    ) -> ExecutionCancelResult:
+        """Cancel the open remainder of a partially filled tracked order."""
+
+        tracked = self.get_tracked_order(account_label=account_label, order_ref=order_ref)
+        if tracked.parent is None or tracked.broker_order is None:
+            raise ValueError("tracked order is incomplete and cannot cancel the remaining quantity")
+        if float(tracked.parent.filled_quantity or 0.0) <= 0 or float(
+            tracked.parent.remaining_quantity or 0.0
+        ) <= 0:
+            raise ValueError("cancel-rest only applies to partially filled tracked orders")
+        if tracked.broker_order.status not in OPEN_BROKER_STATUSES:
+            raise ValueError(
+                f"cancel-rest only supports open tracked broker orders, got: {tracked.broker_order.status}"
+            )
+        return self.cancel_order(account_label=account_label, order_ref=order_ref)
+
+    def resume_remaining_order(
+        self,
+        *,
+        account_label: str,
+        order_ref: str,
+    ) -> ExecutionResumeRemainingResult:
+        """Submit a new child attempt for the remaining quantity after a partial fill."""
+
+        account = self.adapter.resolve_account(account_label)
+        state = self.state_store.load(self.adapter.backend_name, account.label)
+        state.broker_name = self.adapter.backend_name
+        state.account_label = account.label
+        resolved = self._resolve_tracked_order(state, order_ref)
+        if resolved is None:
+            raise ValueError(
+                f"tracked order not found for ref '{order_ref}' in {self.adapter.backend_name}/{account.label}"
+            )
+        child, parent, intent, broker_order = resolved
+        if child is None or parent is None or intent is None:
+            raise ValueError("tracked order is incomplete and cannot resume remaining quantity")
+        if parent.metadata.get("manual_resolution") == "accepted_partial":
+            raise ValueError("remaining quantity was already accepted locally; resume is disabled")
+        if float(parent.filled_quantity or 0.0) <= 0 or float(parent.remaining_quantity or 0.0) <= 0:
+            raise ValueError("resume-remaining only applies to partially filled tracked orders")
+        if broker_order is not None and broker_order.status in OPEN_BROKER_STATUSES:
+            raise ValueError(
+                "tracked broker order is still open; cancel the remaining quantity before resubmitting it"
+            )
+
+        quantity = float(parent.remaining_quantity or 0.0)
+        if not quantity.is_integer():
+            raise ValueError("resume-remaining currently only supports integer-share tracked orders")
+
+        order = Order(
+            symbol=intent.symbol,
+            quantity=int(quantity),
+            side=intent.side,
+            price=intent.limit_price,
+            order_type=intent.order_type,
+        )
+        new_child = self._ensure_child(state, parent, intent, order)
+        parent.metadata["last_resume_remaining_at"] = utc_now_iso()
+        warnings: list[str] = []
+        new_broker_order_id, broker_status = self._submit_child_attempt(
+            state=state,
+            parent=parent,
+            intent=intent,
+            child=new_child,
+            account=account,
+            order=order,
+            warnings=warnings,
+            failure_prefix="resume submit failed",
+        )
+        state_path = self.state_store.save(state)
+        return ExecutionResumeRemainingResult(
+            broker_name=self.adapter.backend_name,
+            account_label=account.label,
+            order_ref=order_ref,
+            submitted_quantity=float(order.quantity),
+            new_child_order_id=new_child.child_order_id,
+            broker_order_id=new_broker_order_id,
+            broker_status=broker_status,
+            state_path=state_path,
+            warnings=warnings,
+        )
+
+    def accept_partial_fill(
+        self,
+        *,
+        account_label: str,
+        order_ref: str,
+    ) -> ExecutionAcceptPartialResult:
+        """Accept a partial fill locally and stop expecting the remaining quantity."""
+
+        account = self.adapter.resolve_account(account_label)
+        state = self.state_store.load(self.adapter.backend_name, account.label)
+        state.broker_name = self.adapter.backend_name
+        state.account_label = account.label
+        resolved = self._resolve_tracked_order(state, order_ref)
+        if resolved is None:
+            raise ValueError(
+                f"tracked order not found for ref '{order_ref}' in {self.adapter.backend_name}/{account.label}"
+            )
+        child, parent, _intent, broker_order = resolved
+        if child is None or parent is None:
+            raise ValueError("tracked order is incomplete and cannot accept a partial fill")
+        if float(parent.filled_quantity or 0.0) <= 0 or float(parent.remaining_quantity or 0.0) <= 0:
+            raise ValueError("accept-partial only applies to partially filled tracked orders")
+        if broker_order is not None and broker_order.status in OPEN_BROKER_STATUSES:
+            raise ValueError(
+                "tracked broker order is still open; cancel the remaining quantity before accepting the partial fill"
+            )
+
+        accepted_filled = float(parent.filled_quantity or 0.0)
+        abandoned_remaining = float(parent.remaining_quantity or 0.0)
+        resolved_at = utc_now_iso()
+        parent.status = "ACCEPTED_PARTIAL"
+        parent.updated_at = resolved_at
+        parent.metadata["manual_resolution"] = "accepted_partial"
+        parent.metadata["manual_resolution_at"] = resolved_at
+        parent.metadata["accepted_filled_quantity"] = accepted_filled
+        parent.metadata["abandoned_remaining_quantity"] = abandoned_remaining
+        state_path = self.state_store.save(state)
+        return ExecutionAcceptPartialResult(
+            broker_name=self.adapter.backend_name,
+            account_label=account.label,
+            order_ref=order_ref,
+            parent_order_id=parent.parent_order_id,
+            accepted_filled_quantity=accepted_filled,
+            abandoned_remaining_quantity=abandoned_remaining,
+            state_path=state_path,
+            warnings=[],
+        )
+
+    def _submit_child_attempt(
+        self,
+        *,
+        state: ExecutionState,
+        parent: ParentOrder,
+        intent: OrderIntent,
+        child: ChildOrder,
+        account: ResolvedBrokerAccount,
+        order: Order,
+        warnings: list[str],
+        failure_prefix: str,
+    ) -> tuple[str | None, str | None]:
+        request = BrokerOrderRequest(
+            symbol=order.symbol,
+            quantity=float(order.quantity),
+            side=order.side,
+            order_type=order.order_type,
+            limit_price=order.price if order.order_type.upper() == "LIMIT" else None,
+            client_order_id=child.child_order_id,
+            account=account,
+        )
+        try:
+            broker_order = self.adapter.submit_order(request)
+            child.broker_order_id = broker_order.broker_order_id
+            child.client_order_id = broker_order.client_order_id or child.child_order_id
+            child.status = broker_order.status
+            child.message = broker_order.message
+            child.updated_at = utc_now_iso()
+            self._upsert_broker_order(state, broker_order)
+            try:
+                self._record_fill_events(state, intent, parent, broker_order, account)
+            except Exception as exc:
+                warnings.append(
+                    f"fill lookup failed after submit for {broker_order.broker_order_id}: {exc}"
+                )
+            state.consecutive_failures = 0
+            state.kill_switch_active = False
+            state.kill_switch_reason = None
+            return broker_order.broker_order_id, broker_order.status
+        except Exception as exc:
+            state.consecutive_failures += 1
+            self._apply_auto_kill_switch(state)
+            self._mark_tracked_order_failed(parent, child, message=str(exc))
+            warnings.append(f"{failure_prefix}: {exc}")
+            return None, child.status
+
     def reprice_order(
         self,
         *,
@@ -808,42 +1045,16 @@ class OrderLifecycleService:
                 )
                 replacement_child = self._ensure_child(state, parent, intent, order)
                 new_child_order_id = replacement_child.child_order_id
-                request = BrokerOrderRequest(
-                    symbol=order.symbol,
-                    quantity=float(order.quantity),
-                    side=order.side,
-                    order_type="LIMIT",
-                    limit_price=next_limit,
-                    client_order_id=replacement_child.child_order_id,
+                new_broker_order_id, broker_status = self._submit_child_attempt(
+                    state=state,
+                    parent=parent,
+                    intent=intent,
+                    child=replacement_child,
                     account=account,
+                    order=order,
+                    warnings=warnings,
+                    failure_prefix="replacement submit failed",
                 )
-                try:
-                    replacement = self.adapter.submit_order(request)
-                    replacement_child.broker_order_id = replacement.broker_order_id
-                    replacement_child.client_order_id = (
-                        replacement.client_order_id or replacement_child.child_order_id
-                    )
-                    replacement_child.status = replacement.status
-                    replacement_child.message = replacement.message
-                    replacement_child.updated_at = utc_now_iso()
-                    self._upsert_broker_order(state, replacement)
-                    try:
-                        self._record_fill_events(state, intent, parent, replacement, account)
-                    except Exception as exc:
-                        warnings.append(
-                            f"fill lookup failed after replacement submit for {replacement.broker_order_id}: {exc}"
-                        )
-                    state.consecutive_failures = 0
-                    state.kill_switch_active = False
-                    state.kill_switch_reason = None
-                    new_broker_order_id = replacement.broker_order_id
-                    broker_status = replacement.status
-                except Exception as exc:
-                    state.consecutive_failures += 1
-                    self._apply_auto_kill_switch(state)
-                    self._mark_tracked_order_failed(parent, replacement_child, message=str(exc))
-                    broker_status = replacement_child.status
-                    warnings.append(f"replacement submit failed: {exc}")
         else:
             warnings.append(
                 f"replacement skipped because cancel completed with status {cancel_outcome.status}"
@@ -941,6 +1152,45 @@ class OrderLifecycleService:
             retry_results=retry_results,
             warnings=warnings,
         )
+
+    def _build_reconcile_deltas(
+        self,
+        *,
+        before_orders: dict[str, BrokerOrderRecord],
+        after_orders: list[BrokerOrderRecord],
+        before_fill_counts: Counter[str],
+        fill_events: list[ExecutionFillEvent],
+    ) -> list[ExecutionReconcileDelta]:
+        after_fill_counts = Counter(fill.broker_order_id for fill in fill_events if fill.broker_order_id)
+        deltas: list[ExecutionReconcileDelta] = []
+        for after in sorted(after_orders, key=lambda item: item.broker_order_id):
+            before = before_orders.get(after.broker_order_id)
+            new_fill_events = max(
+                0,
+                int(after_fill_counts.get(after.broker_order_id, 0))
+                - int(before_fill_counts.get(after.broker_order_id, 0)),
+            )
+            before_status = before.status if before is not None else None
+            before_filled = float(before.filled_quantity or 0.0) if before is not None else 0.0
+            after_filled = float(after.filled_quantity or 0.0)
+            if (
+                before is None
+                or before_status != after.status
+                or abs(before_filled - after_filled) > 0.0
+                or new_fill_events > 0
+            ):
+                deltas.append(
+                    ExecutionReconcileDelta(
+                        broker_order_id=after.broker_order_id,
+                        symbol=after.symbol,
+                        before_status=before_status,
+                        after_status=after.status,
+                        before_filled_quantity=before_filled,
+                        after_filled_quantity=after_filled,
+                        new_fill_events=new_fill_events,
+                    )
+                )
+        return deltas
 
     def _build_intent(
         self,
@@ -1437,7 +1687,12 @@ class OrderLifecycleService:
         parent.remaining_quantity = max(
             0.0, float(parent.requested_quantity) - float(parent.filled_quantity)
         )
-        parent.status = "FILLED" if parent.remaining_quantity <= 0 else "PARTIALLY_FILLED"
+        if parent.remaining_quantity <= 0:
+            parent.status = "FILLED"
+        elif parent.metadata.get("manual_resolution") == "accepted_partial":
+            parent.status = "ACCEPTED_PARTIAL"
+        else:
+            parent.status = "PARTIALLY_FILLED"
         parent.updated_at = utc_now_iso()
 
     def _upsert_broker_order(

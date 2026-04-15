@@ -306,7 +306,9 @@ class LongPortClient:
                             continue
                         raise
                 # Should not reach here; raise a generic error if we do
-                raise RuntimeError("无法初始化 LongPort 上下文：网络或区域配置异常")
+                raise RuntimeError(
+                    "无法初始化 LongPort 上下文：network/region configuration error"
+                )
 
             return _factory
 

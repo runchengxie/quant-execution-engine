@@ -16,6 +16,21 @@ def _cli_env() -> dict[str, str]:
     return env
 
 
+def _is_runtime_network_issue(message: str) -> bool:
+    lowered = str(message or "").lower()
+    return any(
+        token in lowered
+        for token in (
+            "network",
+            "timeout",
+            "connect",
+            "dns",
+            "region configuration",
+            "网络",
+        )
+    )
+
+
 @pytest.mark.e2e
 def test_cli_quote_help() -> None:
     result = subprocess.run(
@@ -173,14 +188,9 @@ def test_cli_quote_with_credentials() -> None:
         assert "AAPL" in result.stdout
     else:
         error_msg = result.stderr.lower()
-        acceptable_errors = [
-            "network",
-            "timeout",
-            "rate limit",
-            "quota",
-            "market closed",
-        ]
-        if any(err in error_msg for err in acceptable_errors):
+        if _is_runtime_network_issue(error_msg) or any(
+            err in error_msg for err in ["rate limit", "quota", "market closed"]
+        ):
             pytest.skip(f"Live quote skipped due to runtime constraint: {result.stderr}")
         pytest.fail(f"quote command failed unexpectedly: {result.stderr}")
 

@@ -17,13 +17,11 @@ uv run pytest
 ## 测试分层
 
 - `tests/unit/`
-  快速、隔离的行为测试，应该是日常改动的默认入口。
+  快速、隔离的行为测试。这里覆盖 CLI 路由、lifecycle、partial-fill 恢复、preflight、本地 state 维护和 renderers。
 - `tests/integration/`
-  覆盖 adapter/lifecycle 的跨模块行为，例如 reconcile、kill switch、重启恢复；可以用 fake adapter，也可以扩展到真实 broker backend。
+  覆盖 adapter / lifecycle 的跨模块行为，例如 reconcile、kill switch、状态恢复，以及带凭证时的 LongPort quote 级别验证。
 - `tests/e2e/`
   通过 subprocess 跑 CLI 和 smoke harness 的端到端 smoke 测试。
-
-当前目录分层本身不算过度；更需要避免的是低价值的静态字符串断言和重复的 CLI smoke 套测。
 
 ## 常用命令
 
@@ -51,20 +49,30 @@ uv run pytest -m integration
 uv run pytest --cov=src/quant_execution_engine --cov-report=term-missing -m 'not integration and not e2e and not slow'
 ```
 
-## 覆盖率策略
+## 当前测试证明了什么
 
-- 覆盖率现在是显式选择的附加视角。
-- 这个仓库采用关键路径有行为测试的思路。
+- 默认 `pytest` 能证明快速行为测试通过。
+- lifecycle 相关单测覆盖了 tracked order 的 retry、reprice、reconcile、partial-fill operator action、state doctor/prune/repair。
+- CLI 单测覆盖了新旧命令的分发和 live guard 行为。
+- e2e 当前证明了 CLI / harness 的 subprocess smoke 行为，包括 signal/target harness 输出、operator harness 的非 paper 拒绝路径。
+- `smoke_operator_harness.py` 已有单测覆盖固定 workflow、preflight-only 路径和 evidence JSON 输出。
+- LongPort live quote 相关测试现在会把典型的网络 / 区域 / 凭证异常视为 skip，而不是误报失败。
+
+## 当前测试还没有证明什么
+
+- 这些测试不能单独证明 LongPort real broker 的完整 `submit / query / cancel / reconcile` 已经被自动化端到端跑实。
+- 当前最完整、可重复的 smoke 环境仍然是 Alpaca paper。
+- real broker 成熟度判断仍要看 operator-supervised smoke、审计日志和可复现 evidence，而不是只看默认测试绿了。
 
 ## 运行前提
 
-- `tests/integration/` 依赖 `LONGPORT_APP_KEY`、`LONGPORT_APP_SECRET`、`LONGPORT_ACCESS_TOKEN`。
-- `tests/e2e/` 大多不需要真实凭证，但其中的 live quote 用例在没凭证时会自动跳过。
+- `tests/integration/` 的 LongPort live quote 用例依赖 `LONGPORT_APP_KEY`、`LONGPORT_APP_SECRET`、`LONGPORT_ACCESS_TOKEN`。
+- `tests/e2e/` 大多不需要真实凭证；凭证缺失或网络 / 区域不可达时，live quote 相关用例会自动跳过。
 - Alpaca 相关路径默认不会在测试里真实联网；需要真实 paper 验证时再单独配 `ALPACA_*` 环境变量并显式跑场景。
 
-## Alpaca Paper Smoke 回归
+## Operator Smoke
 
-如果你想重复验证 paper account 的执行主路径和 operator 命令，可以直接跑外置工装：
+如果你想重复验证 paper account 的执行主路径和 operator 命令，可以直接跑：
 
 ```bash
 PYTHONPATH=src python project_tools/smoke_operator_harness.py --broker alpaca-paper --execute
@@ -76,6 +84,12 @@ PYTHONPATH=src python project_tools/smoke_operator_harness.py --broker alpaca-pa
 PYTHONPATH=src python project_tools/smoke_operator_harness.py --broker alpaca-paper --preflight-only
 ```
 
+如果你希望把一次 smoke 运行沉淀成可复查的证据，可以加：
+
+```bash
+PYTHONPATH=src python project_tools/smoke_operator_harness.py --broker alpaca-paper --execute --evidence-output outputs/evidence/operator-smoke.json
+```
+
 默认 workflow 会串起这些步骤：
 
 1. `config`
@@ -84,7 +98,7 @@ PYTHONPATH=src python project_tools/smoke_operator_harness.py --broker alpaca-pa
 4. 写出一个最小 `targets.json`
 5. `rebalance --execute`
 6. `orders`
-7. `order`（如果本地 state 里找到了最新 tracked order）
+7. `order`，如果本地 state 里找到了最新 tracked order
 8. `reconcile`
 9. `exceptions`
 

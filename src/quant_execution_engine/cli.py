@@ -5,7 +5,6 @@ from __future__ import annotations
 import argparse
 import importlib.util
 import os
-import re
 import sys
 import uuid
 from dataclasses import dataclass
@@ -27,25 +26,33 @@ from .execution import (
     SUCCESS_BROKER_STATUSES,
     TERMINAL_BROKER_STATUSES,
 )
+from .guards import validate_live_execution_guard
 from .logging import get_logger, set_run_id
-from .paths import PROJECT_ROOT
+from .preflight import run_preflight_checks
 from .rebalance import RebalanceService
 from .risk import get_kill_switch_config, get_risk_config
 from .renderers.diff import render_rebalance_diff
 from .renderers.jsonout import render_multiple_account_snapshots_json
 from .renderers.table import (
+    render_accept_partial_summary,
     render_bulk_cancel_summary,
     render_broker_orders,
     render_cancel_summary,
     render_exception_orders,
     render_multiple_account_snapshots,
+    render_preflight_summary,
     render_quotes,
     render_reconcile_summary,
     render_reprice_summary,
+    render_resume_remaining_summary,
     render_retry_summary,
+    render_state_doctor_summary,
+    render_state_prune_summary,
+    render_state_repair_summary,
     render_stale_retry_summary,
     render_tracked_order_detail,
 )
+from .state_tools import StateMaintenanceService
 from .targets import read_targets_json
 
 if TYPE_CHECKING:
@@ -73,22 +80,6 @@ if _RICH_AVAILABLE:
     install_rich_traceback(show_locals=False)
 
 
-_LIVE_ENABLE_ENV_VAR = "QEXEC_ENABLE_LIVE"
-_LIVE_SECRET_ENV_NAMES = frozenset(
-    {
-        "LONGPORT_APP_KEY",
-        "LONGPORT_APP_SECRET",
-        "LONGPORT_ACCESS_TOKEN",
-        "LONGPORT_ACCESS_TOKEN_REAL",
-        "LONGBRIDGE_APP_KEY",
-        "LONGBRIDGE_APP_SECRET",
-        "LONGBRIDGE_ACCESS_TOKEN",
-        "LONGBRIDGE_ACCESS_TOKEN_REAL",
-    }
-)
-_ENV_ASSIGNMENT_RE = re.compile(
-    r"^\s*(?:export\s+)?(?P<name>[A-Za-z_][A-Za-z0-9_]*)\s*=\s*(?P<value>.+?)\s*$"
-)
 _BROKER_STATUS_GROUPS: dict[str, set[str]] = {
     "OPEN": set(OPEN_BROKER_STATUSES),
     "TERMINAL": set(TERMINAL_BROKER_STATUSES),
@@ -102,121 +93,6 @@ _EXCEPTION_STATUS_GROUPS: dict[str, set[str]] = {
     "OPEN": {"PARTIALLY_FILLED", "PENDING_CANCEL", "WAIT_TO_CANCEL"},
     "FAILURE": {"BLOCKED", "FAILED", "REJECTED", "EXPIRED"},
 }
-
-
-def _is_truthy(value: str | None) -> bool:
-    return str(value or "").strip().lower() in {"1", "true", "yes", "y", "on"}
-
-
-def _normalize_env_assignment_value(raw: str) -> str:
-    value = raw.strip()
-    if not value:
-        return ""
-    if value[0] in {"'", '"'}:
-        quote = value[0]
-        end = value.find(quote, 1)
-        if end != -1:
-            return value[1:end].strip()
-        return value[1:].strip()
-    return value.split("#", 1)[0].strip().strip("'").strip('"').strip()
-
-
-def _looks_like_placeholder_secret(value: str) -> bool:
-    normalized = value.strip()
-    lowered = normalized.lower()
-    if not lowered:
-        return True
-    if normalized.startswith(("$", "${", "$(", "`")):
-        return True
-    if lowered.startswith("your_") and lowered.endswith("_here"):
-        return True
-    return lowered in {
-        "changeme",
-        "example",
-        "placeholder",
-        "replace_me",
-        "replace-this",
-        "replace_this",
-    }
-
-
-def _iter_repo_local_env_files(project_root: Path) -> list[Path]:
-    candidates: set[Path] = set()
-    for pattern in (".env", ".env.*", ".envrc", ".envrc.*"):
-        candidates.update(project_root.glob(pattern))
-
-    files: list[Path] = []
-    for path in sorted(candidates):
-        if not path.is_file():
-            continue
-        if path.name.endswith((".example", ".sample", ".template")):
-            continue
-        files.append(path)
-    return files
-
-
-def _find_repo_local_live_secret_sources(project_root: Path) -> list[tuple[Path, str]]:
-    findings: list[tuple[Path, str]] = []
-    for path in _iter_repo_local_env_files(project_root):
-        try:
-            text = path.read_text(encoding="utf-8")
-        except OSError:
-            continue
-        for raw_line in text.splitlines():
-            line = raw_line.strip()
-            if not line or line.startswith("#"):
-                continue
-            match = _ENV_ASSIGNMENT_RE.match(raw_line)
-            if match is None:
-                continue
-            name = match.group("name")
-            if name not in _LIVE_SECRET_ENV_NAMES:
-                continue
-            value = _normalize_env_assignment_value(match.group("value"))
-            if _looks_like_placeholder_secret(value):
-                continue
-            findings.append((path, name))
-    return findings
-
-
-def _format_live_secret_findings(
-    findings: list[tuple[Path, str]], project_root: Path
-) -> str:
-    grouped: dict[Path, set[str]] = {}
-    for path, env_name in findings:
-        grouped.setdefault(path, set()).add(env_name)
-    parts = []
-    for path in sorted(grouped):
-        label = str(path.relative_to(project_root))
-        names = ", ".join(sorted(grouped[path]))
-        parts.append(f"{label} ({names})")
-    return ", ".join(parts)
-
-
-def _validate_live_execution_guard(
-    *,
-    env_name: str,
-    dry_run: bool,
-    project_root: Path | None = None,
-) -> str | None:
-    if dry_run or env_name == "paper":
-        return None
-    if not _is_truthy(os.getenv(_LIVE_ENABLE_ENV_VAR)):
-        return (
-            f"real broker live execution requires {_LIVE_ENABLE_ENV_VAR}=1. "
-            "Paper execution paths are unaffected."
-        )
-
-    root = project_root or PROJECT_ROOT
-    findings = _find_repo_local_live_secret_sources(root)
-    if not findings:
-        return None
-    locations = _format_live_secret_findings(findings, root)
-    return (
-        "refusing live execution because repo-local env files contain LongPort live "
-        f"credentials: {locations}. Move live secrets to system environment variables "
-        "or an external secret manager, then retry."
-    )
 
 
 def create_parser() -> argparse.ArgumentParser:
@@ -515,6 +391,176 @@ Examples:
         help="Broker account/profile label. Unsupported labels fail fast.",
     )
 
+    preflight_parser = subparsers.add_parser(
+        "preflight",
+        help="Run non-mutating broker/account readiness checks",
+    )
+    preflight_parser.add_argument(
+        "symbols",
+        nargs="*",
+        help="Optional symbols used for quote/depth reachability checks, default: AAPL",
+    )
+    preflight_parser.add_argument(
+        "--broker",
+        type=str,
+        default=None,
+        help="Broker backend override, e.g. longport or alpaca-paper",
+    )
+    preflight_parser.add_argument(
+        "--account",
+        type=str,
+        default="main",
+        help="Broker account/profile label. Unsupported labels fail fast.",
+    )
+
+    cancel_rest_parser = subparsers.add_parser(
+        "cancel-rest",
+        help="Cancel the open remainder of a partially filled tracked order",
+    )
+    cancel_rest_parser.add_argument(
+        "order_ref",
+        type=str,
+        help="Tracked order reference: broker_order_id, client_order_id, or child_order_id",
+    )
+    cancel_rest_parser.add_argument(
+        "--broker",
+        type=str,
+        default=None,
+        help="Broker backend override, e.g. longport or alpaca-paper",
+    )
+    cancel_rest_parser.add_argument(
+        "--account",
+        type=str,
+        default="main",
+        help="Broker account/profile label. Unsupported labels fail fast.",
+    )
+
+    resume_remaining_parser = subparsers.add_parser(
+        "resume-remaining",
+        help="Submit a new child attempt for the remaining quantity after a partial fill",
+    )
+    resume_remaining_parser.add_argument(
+        "order_ref",
+        type=str,
+        help="Tracked order reference: broker_order_id, client_order_id, or child_order_id",
+    )
+    resume_remaining_parser.add_argument(
+        "--broker",
+        type=str,
+        default=None,
+        help="Broker backend override, e.g. longport or alpaca-paper",
+    )
+    resume_remaining_parser.add_argument(
+        "--account",
+        type=str,
+        default="main",
+        help="Broker account/profile label. Unsupported labels fail fast.",
+    )
+
+    accept_partial_parser = subparsers.add_parser(
+        "accept-partial",
+        help="Accept a partial fill locally and stop expecting the remaining quantity",
+    )
+    accept_partial_parser.add_argument(
+        "order_ref",
+        type=str,
+        help="Tracked order reference: broker_order_id, client_order_id, or child_order_id",
+    )
+    accept_partial_parser.add_argument(
+        "--broker",
+        type=str,
+        default=None,
+        help="Broker backend override, e.g. longport or alpaca-paper",
+    )
+    accept_partial_parser.add_argument(
+        "--account",
+        type=str,
+        default="main",
+        help="Broker account/profile label. Unsupported labels fail fast.",
+    )
+
+    state_doctor_parser = subparsers.add_parser(
+        "state-doctor",
+        help="Inspect the local execution state file for consistency issues",
+    )
+    state_doctor_parser.add_argument(
+        "--broker",
+        type=str,
+        default=None,
+        help="Broker backend override, e.g. longport or alpaca-paper",
+    )
+    state_doctor_parser.add_argument(
+        "--account",
+        type=str,
+        default="main",
+        help="Broker account/profile label. Unsupported labels fail fast.",
+    )
+
+    state_prune_parser = subparsers.add_parser(
+        "state-prune",
+        help="Preview or prune old terminal records from the local execution state",
+    )
+    state_prune_parser.add_argument(
+        "--older-than-days",
+        type=int,
+        default=30,
+        help="Only target terminal parent orders older than this many days",
+    )
+    state_prune_parser.add_argument(
+        "--apply",
+        action="store_true",
+        help="Actually write the pruned state back to disk; default is preview only",
+    )
+    state_prune_parser.add_argument(
+        "--broker",
+        type=str,
+        default=None,
+        help="Broker backend override, e.g. longport or alpaca-paper",
+    )
+    state_prune_parser.add_argument(
+        "--account",
+        type=str,
+        default="main",
+        help="Broker account/profile label. Unsupported labels fail fast.",
+    )
+
+    state_repair_parser = subparsers.add_parser(
+        "state-repair",
+        help="Apply safe local execution state repairs",
+    )
+    state_repair_parser.add_argument(
+        "--clear-kill-switch",
+        action="store_true",
+        help="Clear the local kill switch and reset consecutive failure count",
+    )
+    state_repair_parser.add_argument(
+        "--dedupe-fills",
+        action="store_true",
+        help="Remove duplicate fill ids from the local execution state",
+    )
+    state_repair_parser.add_argument(
+        "--drop-orphan-fills",
+        action="store_true",
+        help="Remove fill events that no longer map to any tracked order",
+    )
+    state_repair_parser.add_argument(
+        "--drop-orphan-terminal-broker-orders",
+        action="store_true",
+        help="Remove terminal broker orders that are not referenced by any child order",
+    )
+    state_repair_parser.add_argument(
+        "--broker",
+        type=str,
+        default=None,
+        help="Broker backend override, e.g. longport or alpaca-paper",
+    )
+    state_repair_parser.add_argument(
+        "--account",
+        type=str,
+        default="main",
+        help="Broker account/profile label. Unsupported labels fail fast.",
+    )
+
     return parser
 
 
@@ -546,6 +592,28 @@ def run_quote(tickers: list[str], broker: str | None = None) -> CommandResult:
             exc,
         )
         return CommandResult(exit_code=1, stderr=str(exc))
+
+
+def run_preflight(
+    *,
+    symbols: list[str] | None = None,
+    account: str = "main",
+    broker: str | None = None,
+) -> CommandResult:
+    try:
+        result = run_preflight_checks(
+            broker_name=broker,
+            account_label=account,
+            symbols=symbols or ["AAPL"],
+        )
+        return CommandResult(
+            exit_code=1 if result.has_failures else 0,
+            stdout=render_preflight_summary(result),
+        )
+    except Exception as exc:
+        msg = f"Preflight failed: {exc}"
+        get_logger(__name__).error(msg)
+        return CommandResult(exit_code=1, stderr=msg)
 
 
 def run_account(
@@ -785,6 +853,7 @@ def run_reconcile(
                 fill_events=len(outcome.state.fill_events),
                 new_fill_events=outcome.new_fill_events,
                 refreshed_orders=outcome.refreshed_orders,
+                changed_orders=outcome.changed_orders,
             ),
         )
     except Exception as exc:
@@ -852,6 +921,40 @@ def run_cancel_all(
             close_fn()
 
 
+def run_cancel_rest(
+    *,
+    order_ref: str,
+    account: str = "main",
+    broker: str | None = None,
+) -> CommandResult:
+    adapter = None
+    try:
+        adapter = get_broker_adapter(broker_name=broker)
+        service = OrderLifecycleService(adapter)
+        outcome = service.cancel_remaining_order(account_label=account, order_ref=order_ref)
+        return CommandResult(
+            exit_code=0,
+            stdout=render_cancel_summary(
+                broker_name=outcome.broker_name,
+                account_label=outcome.account_label,
+                order_ref=outcome.order_ref,
+                broker_order_id=outcome.broker_order_id,
+                client_order_id=outcome.client_order_id,
+                status=outcome.status,
+                state_path=str(outcome.state_path),
+                warnings=outcome.warnings,
+            ),
+        )
+    except Exception as exc:
+        msg = f"Cancel-rest failed: {exc}"
+        get_logger(__name__).error(msg)
+        return CommandResult(exit_code=1, stderr=msg)
+    finally:
+        close_fn = getattr(adapter, "close", None)
+        if callable(close_fn):
+            close_fn()
+
+
 def run_order(
     *,
     order_ref: str,
@@ -900,6 +1003,56 @@ def run_retry(
         )
     except Exception as exc:
         msg = f"Retry failed: {exc}"
+        get_logger(__name__).error(msg)
+        return CommandResult(exit_code=1, stderr=msg)
+    finally:
+        close_fn = getattr(adapter, "close", None)
+        if callable(close_fn):
+            close_fn()
+
+
+def run_resume_remaining(
+    *,
+    order_ref: str,
+    account: str = "main",
+    broker: str | None = None,
+) -> CommandResult:
+    adapter = None
+    try:
+        adapter = get_broker_adapter(broker_name=broker)
+        service = OrderLifecycleService(adapter)
+        outcome = service.resume_remaining_order(account_label=account, order_ref=order_ref)
+        return CommandResult(
+            exit_code=0,
+            stdout=render_resume_remaining_summary(outcome),
+        )
+    except Exception as exc:
+        msg = f"Resume remaining failed: {exc}"
+        get_logger(__name__).error(msg)
+        return CommandResult(exit_code=1, stderr=msg)
+    finally:
+        close_fn = getattr(adapter, "close", None)
+        if callable(close_fn):
+            close_fn()
+
+
+def run_accept_partial(
+    *,
+    order_ref: str,
+    account: str = "main",
+    broker: str | None = None,
+) -> CommandResult:
+    adapter = None
+    try:
+        adapter = get_broker_adapter(broker_name=broker)
+        service = OrderLifecycleService(adapter)
+        outcome = service.accept_partial_fill(account_label=account, order_ref=order_ref)
+        return CommandResult(
+            exit_code=0,
+            stdout=render_accept_partial_summary(outcome),
+        )
+    except Exception as exc:
+        msg = f"Accept partial failed: {exc}"
         get_logger(__name__).error(msg)
         return CommandResult(exit_code=1, stderr=msg)
     finally:
@@ -960,6 +1113,73 @@ def run_retry_stale(
             close_fn()
 
 
+def run_state_doctor(
+    *,
+    account: str = "main",
+    broker: str | None = None,
+) -> CommandResult:
+    try:
+        selected_broker = resolve_broker_name(broker)
+        result = StateMaintenanceService().doctor(
+            broker_name=selected_broker,
+            account_label=account,
+        )
+        exit_code = 0 if all(issue.severity != "ERROR" for issue in result.issues) else 1
+        return CommandResult(exit_code=exit_code, stdout=render_state_doctor_summary(result))
+    except Exception as exc:
+        msg = f"State doctor failed: {exc}"
+        get_logger(__name__).error(msg)
+        return CommandResult(exit_code=1, stderr=msg)
+
+
+def run_state_prune(
+    *,
+    older_than_days: int,
+    apply: bool,
+    account: str = "main",
+    broker: str | None = None,
+) -> CommandResult:
+    try:
+        selected_broker = resolve_broker_name(broker)
+        result = StateMaintenanceService().prune(
+            broker_name=selected_broker,
+            account_label=account,
+            older_than_days=older_than_days,
+            apply=apply,
+        )
+        return CommandResult(exit_code=0, stdout=render_state_prune_summary(result))
+    except Exception as exc:
+        msg = f"State prune failed: {exc}"
+        get_logger(__name__).error(msg)
+        return CommandResult(exit_code=1, stderr=msg)
+
+
+def run_state_repair(
+    *,
+    clear_kill_switch: bool,
+    dedupe_fills: bool,
+    drop_orphan_fills: bool,
+    drop_orphan_terminal_broker_orders: bool,
+    account: str = "main",
+    broker: str | None = None,
+) -> CommandResult:
+    try:
+        selected_broker = resolve_broker_name(broker)
+        result = StateMaintenanceService().repair(
+            broker_name=selected_broker,
+            account_label=account,
+            clear_kill_switch=clear_kill_switch,
+            dedupe_fills=dedupe_fills,
+            drop_orphan_fills=drop_orphan_fills,
+            drop_orphan_terminal_broker_orders=drop_orphan_terminal_broker_orders,
+        )
+        return CommandResult(exit_code=0, stdout=render_state_repair_summary(result))
+    except Exception as exc:
+        msg = f"State repair failed: {exc}"
+        get_logger(__name__).error(msg)
+        return CommandResult(exit_code=1, stderr=msg)
+
+
 def run_rebalance(
     input_file: str,
     account: str = "main",
@@ -986,7 +1206,7 @@ def run_rebalance(
     try:
         selected_broker = resolve_broker_name(broker)
         env_name = "paper" if selected_broker in {"alpaca", "alpaca-paper"} else "real"
-        guard_error = _validate_live_execution_guard(env_name=env_name, dry_run=dry_run)
+        guard_error = validate_live_execution_guard(env_name=env_name, dry_run=dry_run)
         if guard_error:
             return CommandResult(exit_code=1, stderr=guard_error)
         logger.info("Mode: %s", "dry-run" if dry_run else "live")
@@ -1155,6 +1375,14 @@ def main() -> int:
         return _handle_command_result(
             run_quote(args.tickers, broker=getattr(args, "broker", None))
         )
+    if args.command == "preflight":
+        return _handle_command_result(
+            run_preflight(
+                symbols=getattr(args, "symbols", None),
+                account=getattr(args, "account", "main"),
+                broker=getattr(args, "broker", None),
+            )
+        )
     if args.command == "rebalance":
         return _handle_command_result(
             run_rebalance(
@@ -1212,6 +1440,14 @@ def main() -> int:
                 broker=getattr(args, "broker", None),
             )
         )
+    if args.command == "cancel-rest":
+        return _handle_command_result(
+            run_cancel_rest(
+                order_ref=getattr(args, "order_ref"),
+                account=getattr(args, "account", "main"),
+                broker=getattr(args, "broker", None),
+            )
+        )
     if args.command == "cancel-all":
         return _handle_command_result(
             run_cancel_all(
@@ -1235,6 +1471,22 @@ def main() -> int:
                 broker=getattr(args, "broker", None),
             )
         )
+    if args.command == "resume-remaining":
+        return _handle_command_result(
+            run_resume_remaining(
+                order_ref=getattr(args, "order_ref"),
+                account=getattr(args, "account", "main"),
+                broker=getattr(args, "broker", None),
+            )
+        )
+    if args.command == "accept-partial":
+        return _handle_command_result(
+            run_accept_partial(
+                order_ref=getattr(args, "order_ref"),
+                account=getattr(args, "account", "main"),
+                broker=getattr(args, "broker", None),
+            )
+        )
     if args.command == "reprice":
         return _handle_command_result(
             run_reprice(
@@ -1248,6 +1500,35 @@ def main() -> int:
         return _handle_command_result(
             run_retry_stale(
                 older_than_minutes=getattr(args, "older_than_minutes", 5),
+                account=getattr(args, "account", "main"),
+                broker=getattr(args, "broker", None),
+            )
+        )
+    if args.command == "state-doctor":
+        return _handle_command_result(
+            run_state_doctor(
+                account=getattr(args, "account", "main"),
+                broker=getattr(args, "broker", None),
+            )
+        )
+    if args.command == "state-prune":
+        return _handle_command_result(
+            run_state_prune(
+                older_than_days=getattr(args, "older_than_days", 30),
+                apply=getattr(args, "apply", False),
+                account=getattr(args, "account", "main"),
+                broker=getattr(args, "broker", None),
+            )
+        )
+    if args.command == "state-repair":
+        return _handle_command_result(
+            run_state_repair(
+                clear_kill_switch=getattr(args, "clear_kill_switch", False),
+                dedupe_fills=getattr(args, "dedupe_fills", False),
+                drop_orphan_fills=getattr(args, "drop_orphan_fills", False),
+                drop_orphan_terminal_broker_orders=getattr(
+                    args, "drop_orphan_terminal_broker_orders", False
+                ),
                 account=getattr(args, "account", "main"),
                 broker=getattr(args, "broker", None),
             )

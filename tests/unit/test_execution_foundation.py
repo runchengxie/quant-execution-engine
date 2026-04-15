@@ -15,6 +15,7 @@ from quant_execution_engine.broker.base import (
 )
 from quant_execution_engine.broker.factory import get_broker_capabilities
 from quant_execution_engine.execution import (
+    ExecutionFillEvent,
     ExecutionState,
     ExecutionStateStore,
     OrderLifecycleService,
@@ -22,6 +23,7 @@ from quant_execution_engine.execution import (
 from quant_execution_engine.models import Order, Quote
 from quant_execution_engine.renderers.table import render_tracked_order_detail
 from quant_execution_engine.risk import RiskGateChain
+from quant_execution_engine.state_tools import StateMaintenanceService
 
 
 pytestmark = pytest.mark.unit
@@ -596,6 +598,295 @@ def test_retry_rejects_partially_filled_order(tmp_path: Path) -> None:
         )
 
 
+def test_cancel_rest_on_partially_filled_open_order(tmp_path: Path) -> None:
+    adapter = FakeAdapter()
+    store = ExecutionStateStore(root_dir=tmp_path)
+    service = OrderLifecycleService(
+        adapter,
+        state_store=store,
+        risk_chain=RiskGateChain({}),
+    )
+    base_kwargs = {
+        "account_label": "main",
+        "dry_run": False,
+        "target_source": "unit",
+        "target_asof": "2026-04-14",
+        "target_input_path": "tests/targets.json",
+    }
+
+    result = service.execute_orders(
+        [Order(symbol="AAPL.US", quantity=10, side="BUY", price=10.0)],
+        **base_kwargs,
+    )[0]
+    state = store.load("fake", "main")
+    state.parent_orders[0].filled_quantity = 1.0
+    state.parent_orders[0].remaining_quantity = 9.0
+    state.parent_orders[0].status = "PARTIALLY_FILLED"
+    state.child_orders[0].status = "PARTIALLY_FILLED"
+    state.broker_orders[0].filled_quantity = 1.0
+    state.broker_orders[0].remaining_quantity = 9.0
+    state.broker_orders[0].status = "PARTIALLY_FILLED"
+    store.save(state)
+    adapter.orders[str(result.broker_order_id)].filled_quantity = 1.0
+    adapter.orders[str(result.broker_order_id)].remaining_quantity = 9.0
+    adapter.orders[str(result.broker_order_id)].status = "PARTIALLY_FILLED"
+
+    outcome = service.cancel_remaining_order(
+        account_label="main",
+        order_ref=str(result.broker_order_id),
+    )
+    refreshed = store.load("fake", "main")
+
+    assert outcome.status == "CANCELED"
+    assert refreshed.broker_orders[0].status == "CANCELED"
+    assert refreshed.parent_orders[0].status == "PARTIALLY_FILLED"
+
+
+def test_resume_remaining_order_creates_new_child_attempt(tmp_path: Path) -> None:
+    adapter = FakeAdapter()
+    store = ExecutionStateStore(root_dir=tmp_path)
+    service = OrderLifecycleService(
+        adapter,
+        state_store=store,
+        risk_chain=RiskGateChain({}),
+    )
+    base_kwargs = {
+        "account_label": "main",
+        "dry_run": False,
+        "target_source": "unit",
+        "target_asof": "2026-04-14",
+        "target_input_path": "tests/targets.json",
+    }
+
+    result = service.execute_orders(
+        [Order(symbol="AAPL.US", quantity=10, side="BUY", price=10.0)],
+        **base_kwargs,
+    )[0]
+    state = store.load("fake", "main")
+    state.parent_orders[0].filled_quantity = 1.0
+    state.parent_orders[0].remaining_quantity = 9.0
+    state.parent_orders[0].status = "PARTIALLY_FILLED"
+    state.child_orders[0].status = "CANCELED"
+    state.broker_orders[0].filled_quantity = 1.0
+    state.broker_orders[0].remaining_quantity = 9.0
+    state.broker_orders[0].status = "CANCELED"
+    store.save(state)
+    adapter.orders[str(result.broker_order_id)].filled_quantity = 1.0
+    adapter.orders[str(result.broker_order_id)].remaining_quantity = 9.0
+    adapter.orders[str(result.broker_order_id)].status = "CANCELED"
+
+    outcome = service.resume_remaining_order(
+        account_label="main",
+        order_ref=str(result.broker_order_id),
+    )
+    refreshed = store.load("fake", "main")
+
+    assert outcome.submitted_quantity == 9.0
+    assert outcome.new_child_order_id.endswith("_2")
+    assert outcome.broker_status == "NEW"
+    assert adapter.submit_calls == 2
+    assert refreshed.child_orders[-1].quantity == 9.0
+
+
+def test_accept_partial_fill_marks_parent_complete_locally(tmp_path: Path) -> None:
+    adapter = FakeAdapter()
+    store = ExecutionStateStore(root_dir=tmp_path)
+    service = OrderLifecycleService(
+        adapter,
+        state_store=store,
+        risk_chain=RiskGateChain({}),
+    )
+    base_kwargs = {
+        "account_label": "main",
+        "dry_run": False,
+        "target_source": "unit",
+        "target_asof": "2026-04-14",
+        "target_input_path": "tests/targets.json",
+    }
+
+    result = service.execute_orders(
+        [Order(symbol="AAPL.US", quantity=10, side="BUY", price=10.0)],
+        **base_kwargs,
+    )[0]
+    state = store.load("fake", "main")
+    state.parent_orders[0].filled_quantity = 1.0
+    state.parent_orders[0].remaining_quantity = 9.0
+    state.parent_orders[0].status = "PARTIALLY_FILLED"
+    state.child_orders[0].status = "CANCELED"
+    state.broker_orders[0].filled_quantity = 1.0
+    state.broker_orders[0].remaining_quantity = 9.0
+    state.broker_orders[0].status = "CANCELED"
+    store.save(state)
+    adapter.orders[str(result.broker_order_id)].filled_quantity = 1.0
+    adapter.orders[str(result.broker_order_id)].remaining_quantity = 9.0
+    adapter.orders[str(result.broker_order_id)].status = "CANCELED"
+
+    outcome = service.accept_partial_fill(
+        account_label="main",
+        order_ref=str(result.broker_order_id),
+    )
+    refreshed = store.load("fake", "main")
+
+    assert outcome.accepted_filled_quantity == 1.0
+    assert outcome.abandoned_remaining_quantity == 9.0
+    assert refreshed.parent_orders[0].status == "ACCEPTED_PARTIAL"
+    assert refreshed.parent_orders[0].metadata["manual_resolution"] == "accepted_partial"
+
+
+def test_state_doctor_reports_duplicate_fill_and_orphan_broker_order(tmp_path: Path) -> None:
+    store = ExecutionStateStore(root_dir=tmp_path)
+    state = ExecutionState(broker_name="fake", account_label="main")
+    state.broker_orders = [
+        BrokerOrderRecord(
+            broker_order_id="orphan-broker-order",
+            symbol="AAPL.US",
+            side="BUY",
+            quantity=1,
+            status="CANCELED",
+            broker_name="fake",
+            account_label="main",
+        )
+    ]
+    state.fill_events = [
+        ExecutionFillEvent(
+            fill_id="fill-1",
+            intent_id="intent-1",
+            parent_order_id="parent-1",
+            broker_order_id="missing-broker-order",
+            symbol="AAPL.US",
+            quantity=1,
+            price=10.0,
+            broker_name="fake",
+            account_label="main",
+        ),
+        ExecutionFillEvent(
+            fill_id="fill-1",
+            intent_id="intent-1",
+            parent_order_id="parent-1",
+            broker_order_id="missing-broker-order",
+            symbol="AAPL.US",
+            quantity=1,
+            price=10.0,
+            broker_name="fake",
+            account_label="main",
+        ),
+    ]
+    store.save(state)
+
+    result = StateMaintenanceService(state_store=store).doctor(
+        broker_name="fake",
+        account_label="main",
+    )
+
+    codes = {issue.code for issue in result.issues}
+    assert "ORPHAN_TERMINAL_BROKER_ORDER" in codes
+    assert "DUPLICATE_FILL_ID" in codes
+    assert "ORPHAN_FILL_EVENT" in codes
+
+
+def test_state_prune_previews_and_applies_old_terminal_records(tmp_path: Path) -> None:
+    adapter = FakeAdapter()
+    store = ExecutionStateStore(root_dir=tmp_path)
+    service = OrderLifecycleService(
+        adapter,
+        state_store=store,
+        risk_chain=RiskGateChain({}),
+    )
+    result = service.execute_orders(
+        [Order(symbol="AAPL.US", quantity=10, side="BUY", price=10.0)],
+        account_label="main",
+        dry_run=False,
+        target_source="unit",
+        target_asof="2026-04-14",
+        target_input_path="tests/targets.json",
+    )[0]
+    service.cancel_order(account_label="main", order_ref=str(result.broker_order_id))
+    state = store.load("fake", "main")
+    state.parent_orders[0].updated_at = "2000-01-01T00:00:00+00:00"
+    store.save(state)
+
+    preview = StateMaintenanceService(state_store=store).prune(
+        broker_name="fake",
+        account_label="main",
+        older_than_days=30,
+        apply=False,
+    )
+    applied = StateMaintenanceService(state_store=store).prune(
+        broker_name="fake",
+        account_label="main",
+        older_than_days=30,
+        apply=True,
+    )
+    refreshed = store.load("fake", "main")
+
+    assert preview.parent_orders_removed == 1
+    assert applied.parent_orders_removed == 1
+    assert refreshed.parent_orders == []
+    assert refreshed.child_orders == []
+
+
+def test_state_repair_clears_kill_switch_and_dedupes_fills(tmp_path: Path) -> None:
+    store = ExecutionStateStore(root_dir=tmp_path)
+    state = ExecutionState(broker_name="fake", account_label="main")
+    state.kill_switch_active = True
+    state.kill_switch_reason = "manual test"
+    state.consecutive_failures = 2
+    state.broker_orders = [
+        BrokerOrderRecord(
+            broker_order_id="orphan-broker-order",
+            symbol="AAPL.US",
+            side="BUY",
+            quantity=1,
+            status="CANCELED",
+            broker_name="fake",
+            account_label="main",
+        )
+    ]
+    state.fill_events = [
+        ExecutionFillEvent(
+            fill_id="fill-1",
+            intent_id="intent-1",
+            parent_order_id="parent-1",
+            broker_order_id="missing-broker-order",
+            symbol="AAPL.US",
+            quantity=1,
+            price=10.0,
+            broker_name="fake",
+            account_label="main",
+        ),
+        ExecutionFillEvent(
+            fill_id="fill-1",
+            intent_id="intent-1",
+            parent_order_id="parent-1",
+            broker_order_id="missing-broker-order",
+            symbol="AAPL.US",
+            quantity=1,
+            price=10.0,
+            broker_name="fake",
+            account_label="main",
+        ),
+    ]
+    store.save(state)
+
+    result = StateMaintenanceService(state_store=store).repair(
+        broker_name="fake",
+        account_label="main",
+        clear_kill_switch=True,
+        dedupe_fills=True,
+        drop_orphan_fills=True,
+        drop_orphan_terminal_broker_orders=True,
+    )
+    refreshed = store.load("fake", "main")
+
+    assert result.cleared_kill_switch is True
+    assert result.duplicate_fills_removed == 1
+    assert result.orphan_fills_removed == 1
+    assert result.orphan_terminal_broker_orders_removed == 1
+    assert refreshed.kill_switch_active is False
+    assert refreshed.fill_events == []
+    assert refreshed.broker_orders == []
+
+
 def test_list_exception_orders_includes_local_blocked_and_failed(tmp_path: Path) -> None:
     store = ExecutionStateStore(root_dir=tmp_path)
     blocked_service = OrderLifecycleService(
@@ -747,6 +1038,8 @@ def test_manual_reconcile_recovers_fill_for_closed_tracked_order(tmp_path: Path)
 
     assert outcome.new_fill_events == 1
     assert outcome.refreshed_orders == 1
+    assert outcome.changed_orders[0].after_status == "FILLED"
+    assert outcome.changed_orders[0].new_fill_events == 1
     assert state.fill_events[0].broker_order_id.startswith("fake-child_")
     assert state.parent_orders[0].status == "FILLED"
     assert state.parent_orders[0].remaining_quantity == 0.0

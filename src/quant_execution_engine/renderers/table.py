@@ -3,15 +3,21 @@
 Provides table format data rendering functionality.
 """
 
+from ..diagnostics import diagnose_order_issue, diagnose_warning_message
 from ..broker.base import BrokerOrderRecord, BrokerReconcileReport
 from ..execution import (
+    ExecutionAcceptPartialResult,
     ExecutionBulkCancelResult,
     ExecutionExceptionRecord,
+    ExecutionReconcileDelta,
     ExecutionRepriceResult,
+    ExecutionResumeRemainingResult,
     ExecutionStaleRetryResult,
     ExecutionTrackedOrder,
 )
 from ..models import AccountSnapshot, Order, Quote, RebalanceResult
+from ..preflight import PreflightResult
+from ..state_tools import StateDoctorResult, StatePruneResult, StateRepairResult
 
 
 def render_quotes(quotes: list[Quote]) -> str:
@@ -262,8 +268,13 @@ def render_exception_orders(records: list[ExecutionExceptionRecord]) -> str:
             f"{(record.child_order_id or '-')[:21]:21s} | "
             f"{(record.broker_order_id or '-')[:18]:18s}"
         )
+        diagnostic = diagnose_order_issue(record)
         if record.message:
             lines.append(f"  -> {record.message}")
+        if diagnostic is not None:
+            lines.append(f"  -> [{diagnostic.code}] {diagnostic.summary}")
+            if diagnostic.action_hint:
+                lines.append(f"  -> Next: {diagnostic.action_hint}")
 
     return "\n".join(lines)
 
@@ -276,6 +287,7 @@ def render_reconcile_summary(
     fill_events: int,
     new_fill_events: int,
     refreshed_orders: int,
+    changed_orders: list[ExecutionReconcileDelta],
 ) -> str:
     """Render manual reconcile summary."""
 
@@ -287,12 +299,31 @@ def render_reconcile_summary(
         f"- Total fill events in state: {fill_events}",
         f"- New fill events recorded: {new_fill_events}",
         f"- Closed tracked orders refreshed: {refreshed_orders}",
+        f"- Changed tracked orders: {len(changed_orders)}",
         f"- State file: {state_path}",
     ]
+    if changed_orders:
+        lines.append("- Changes:")
+        for delta in changed_orders:
+            before_status = delta.before_status or "-"
+            fill_delta = delta.after_filled_quantity - delta.before_filled_quantity
+            lines.append(
+                "  * "
+                f"{delta.broker_order_id} {delta.symbol}: "
+                f"{before_status} -> {delta.after_status}, "
+                f"filled {delta.before_filled_quantity:g} -> {delta.after_filled_quantity:g}"
+            )
+            if delta.new_fill_events > 0 or fill_delta > 0:
+                lines.append(
+                    f"    new_fill_events={delta.new_fill_events}, filled_delta={fill_delta:g}"
+                )
     if report.warnings:
         lines.append("- Warnings:")
         for warning in report.warnings:
-            lines.append(f"  * {warning}")
+            diagnostic = diagnose_warning_message(warning)
+            lines.append(f"  * [{diagnostic.code}] {diagnostic.summary}")
+            if diagnostic.action_hint:
+                lines.append(f"    next: {diagnostic.action_hint}")
     return "\n".join(lines)
 
 
@@ -321,7 +352,10 @@ def render_cancel_summary(
     if warnings:
         lines.append("- Warnings:")
         for warning in warnings:
-            lines.append(f"  * {warning}")
+            diagnostic = diagnose_warning_message(warning)
+            lines.append(f"  * [{diagnostic.code}] {diagnostic.summary}")
+            if diagnostic.action_hint:
+                lines.append(f"    next: {diagnostic.action_hint}")
     return "\n".join(lines)
 
 
@@ -349,11 +383,17 @@ def render_bulk_cancel_summary(outcome: ExecutionBulkCancelResult) -> str:
                 f"  * {result.broker_order_id} ({result.client_order_id or '-'}) -> {result.status}"
             )
             for warning in result.warnings:
-                lines.append(f"    warning: {warning}")
+                diagnostic = diagnose_warning_message(warning)
+                lines.append(f"    warning: [{diagnostic.code}] {diagnostic.summary}")
+                if diagnostic.action_hint:
+                    lines.append(f"    next: {diagnostic.action_hint}")
     if outcome.warnings:
         lines.append("- Warnings:")
         for warning in outcome.warnings:
-            lines.append(f"  * {warning}")
+            diagnostic = diagnose_warning_message(warning)
+            lines.append(f"  * [{diagnostic.code}] {diagnostic.summary}")
+            if diagnostic.action_hint:
+                lines.append(f"    next: {diagnostic.action_hint}")
     if not outcome.results and not outcome.warnings:
         lines.append("- No tracked open orders were found in local execution state")
     return "\n".join(lines)
@@ -398,6 +438,13 @@ def render_tracked_order_detail(tracked: ExecutionTrackedOrder) -> str:
                 f"- Parent Filled / Remaining: {tracked.parent.filled_quantity:g} / {tracked.parent.remaining_quantity:g}",
             ]
         )
+        manual_resolution = tracked.parent.metadata.get("manual_resolution")
+        if manual_resolution:
+            lines.append(f"- Manual Resolution: {manual_resolution}")
+        if tracked.parent.metadata.get("manual_resolution_at"):
+            lines.append(
+                f"- Manual Resolution At: {tracked.parent.metadata.get('manual_resolution_at')}"
+            )
     if tracked.child is not None:
         lines.extend(
             [
@@ -416,6 +463,17 @@ def render_tracked_order_detail(tracked: ExecutionTrackedOrder) -> str:
                 f"- Broker Filled / Remaining: {float(tracked.broker_order.filled_quantity or 0.0):g} / {float(tracked.broker_order.remaining_quantity or 0.0):g}",
             ]
         )
+        diagnostic = diagnose_order_issue(tracked.broker_order)
+        if diagnostic is not None:
+            lines.append(f"- Diagnostic: [{diagnostic.code}] {diagnostic.summary}")
+            if diagnostic.action_hint:
+                lines.append(f"- Suggested Next Step: {diagnostic.action_hint}")
+    elif tracked.child is not None:
+        diagnostic = diagnose_order_issue(tracked.child)
+        if diagnostic is not None:
+            lines.append(f"- Diagnostic: [{diagnostic.code}] {diagnostic.summary}")
+            if diagnostic.action_hint:
+                lines.append(f"- Suggested Next Step: {diagnostic.action_hint}")
     lines.append(f"- Fill Events: {len(tracked.fill_events)}")
     for fill in tracked.fill_events:
         lines.append(
@@ -449,7 +507,10 @@ def render_retry_summary(
     if warnings:
         lines.append("- Warnings:")
         for warning in warnings:
-            lines.append(f"  * {warning}")
+            diagnostic = diagnose_warning_message(warning)
+            lines.append(f"  * [{diagnostic.code}] {diagnostic.summary}")
+            if diagnostic.action_hint:
+                lines.append(f"    next: {diagnostic.action_hint}")
     return "\n".join(lines)
 
 
@@ -472,7 +533,10 @@ def render_reprice_summary(outcome: ExecutionRepriceResult) -> str:
     if outcome.warnings:
         lines.append("- Warnings:")
         for warning in outcome.warnings:
-            lines.append(f"  * {warning}")
+            diagnostic = diagnose_warning_message(warning)
+            lines.append(f"  * [{diagnostic.code}] {diagnostic.summary}")
+            if diagnostic.action_hint:
+                lines.append(f"    next: {diagnostic.action_hint}")
     return "\n".join(lines)
 
 
@@ -501,11 +565,17 @@ def render_stale_retry_summary(outcome: ExecutionStaleRetryResult) -> str:
                 f"  * {result.order_ref} -> child {result.new_child_order_id} / broker {result.broker_order_id or '-'} / status {result.broker_status or '-'}"
             )
             for warning in result.warnings:
-                lines.append(f"    warning: {warning}")
+                diagnostic = diagnose_warning_message(warning)
+                lines.append(f"    warning: [{diagnostic.code}] {diagnostic.summary}")
+                if diagnostic.action_hint:
+                    lines.append(f"    next: {diagnostic.action_hint}")
     if outcome.warnings:
         lines.append("- Warnings:")
         for warning in outcome.warnings:
-            lines.append(f"  * {warning}")
+            diagnostic = diagnose_warning_message(warning)
+            lines.append(f"  * [{diagnostic.code}] {diagnostic.summary}")
+            if diagnostic.action_hint:
+                lines.append(f"    next: {diagnostic.action_hint}")
     if (
         not outcome.cancel_results
         and not outcome.retry_results
@@ -513,3 +583,113 @@ def render_stale_retry_summary(outcome: ExecutionStaleRetryResult) -> str:
     ):
         lines.append("- No stale tracked open orders were eligible for retry")
     return "\n".join(lines)
+
+
+def render_resume_remaining_summary(outcome: ExecutionResumeRemainingResult) -> str:
+    """Render resume-remaining summary."""
+
+    lines = [
+        "Resume remaining summary:",
+        f"- Broker / Account: {outcome.broker_name} / {outcome.account_label}",
+        f"- Requested Ref: {outcome.order_ref}",
+        f"- Submitted Remaining Quantity: {outcome.submitted_quantity:g}",
+        f"- New Child Order ID: {outcome.new_child_order_id}",
+        f"- Broker Order ID: {outcome.broker_order_id or '-'}",
+        f"- Broker Status: {outcome.broker_status or '-'}",
+        f"- State file: {outcome.state_path}",
+    ]
+    if outcome.warnings:
+        lines.append("- Warnings:")
+        for warning in outcome.warnings:
+            diagnostic = diagnose_warning_message(warning)
+            lines.append(f"  * [{diagnostic.code}] {diagnostic.summary}")
+            if diagnostic.action_hint:
+                lines.append(f"    next: {diagnostic.action_hint}")
+    return "\n".join(lines)
+
+
+def render_accept_partial_summary(outcome: ExecutionAcceptPartialResult) -> str:
+    """Render accept-partial summary."""
+
+    lines = [
+        "Accept partial summary:",
+        f"- Broker / Account: {outcome.broker_name} / {outcome.account_label}",
+        f"- Requested Ref: {outcome.order_ref}",
+        f"- Parent Order ID: {outcome.parent_order_id}",
+        f"- Accepted Filled Quantity: {outcome.accepted_filled_quantity:g}",
+        f"- Abandoned Remaining Quantity: {outcome.abandoned_remaining_quantity:g}",
+        f"- State file: {outcome.state_path}",
+    ]
+    if outcome.warnings:
+        lines.append("- Warnings:")
+        for warning in outcome.warnings:
+            diagnostic = diagnose_warning_message(warning)
+            lines.append(f"  * [{diagnostic.code}] {diagnostic.summary}")
+            if diagnostic.action_hint:
+                lines.append(f"    next: {diagnostic.action_hint}")
+    return "\n".join(lines)
+
+
+def render_preflight_summary(result: PreflightResult) -> str:
+    """Render broker/account readiness checks."""
+
+    readiness = "BLOCKED" if result.has_failures else "READY_WITH_WARNINGS" if result.has_warnings else "READY"
+    lines = [
+        "Preflight summary:",
+        f"- Broker / Account / Env: {result.broker_name} / {result.account_label} / {result.env_name}",
+        f"- Symbols: {', '.join(result.symbols)}",
+        f"- Readiness: {readiness}",
+    ]
+    for check in result.checks:
+        lines.append(f"  * [{check.outcome}] {check.name}: {check.message}")
+    return "\n".join(lines)
+
+
+def render_state_doctor_summary(result: StateDoctorResult) -> str:
+    """Render state doctor findings."""
+
+    lines = [
+        "State doctor summary:",
+        f"- Broker / Account: {result.broker_name} / {result.account_label}",
+        f"- State file: {result.state_path}",
+        f"- Findings: {len(result.issues)}",
+    ]
+    for issue in result.issues:
+        lines.append(f"  * [{issue.severity}] {issue.code}: {issue.message}")
+    return "\n".join(lines)
+
+
+def render_state_prune_summary(result: StatePruneResult) -> str:
+    """Render state prune summary."""
+
+    action = "applied" if result.apply else "preview"
+    return "\n".join(
+        [
+            "State prune summary:",
+            f"- Broker / Account: {result.broker_name} / {result.account_label}",
+            f"- Older Than (days): {result.older_than_days}",
+            f"- Mode: {action}",
+            f"- Parent Orders Removed: {result.parent_orders_removed}",
+            f"- Child Orders Removed: {result.child_orders_removed}",
+            f"- Broker Orders Removed: {result.broker_orders_removed}",
+            f"- Fill Events Removed: {result.fill_events_removed}",
+            f"- Intents Removed: {result.intents_removed}",
+            f"- State file: {result.state_path}",
+        ]
+    )
+
+
+def render_state_repair_summary(result: StateRepairResult) -> str:
+    """Render state repair summary."""
+
+    return "\n".join(
+        [
+            "State repair summary:",
+            f"- Broker / Account: {result.broker_name} / {result.account_label}",
+            f"- Cleared Kill Switch: {'yes' if result.cleared_kill_switch else 'no'}",
+            f"- Duplicate Fills Removed: {result.duplicate_fills_removed}",
+            f"- Orphan Fills Removed: {result.orphan_fills_removed}",
+            f"- Orphan Terminal Broker Orders Removed: {result.orphan_terminal_broker_orders_removed}",
+            f"- State file: {result.state_path}",
+        ]
+    )

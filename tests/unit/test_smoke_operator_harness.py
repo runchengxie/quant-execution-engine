@@ -234,3 +234,55 @@ def test_run_operator_smoke_workflow_preflight_only_skips_mutating_steps(
     assert called == ["config", "account", "quote"]
     assert not (tmp_path / "smoke-operator.json").exists()
     assert "Preflight checks passed" in output
+
+
+def test_run_operator_smoke_workflow_writes_evidence_json(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = load_smoke_operator_module()
+
+    def ok(name: str):
+        def _inner(*args, **kwargs):
+            return SimpleNamespace(exit_code=0, stdout=f"{name} ok", stderr=None)
+
+        return _inner
+
+    monkeypatch.setattr(module, "run_config", ok("config"))
+    monkeypatch.setattr(module, "run_account", ok("account"))
+    monkeypatch.setattr(module, "run_quote", ok("quote"))
+    monkeypatch.setattr(module, "run_rebalance", ok("rebalance"))
+    monkeypatch.setattr(module, "get_broker_adapter", lambda broker_name=None: DummyAdapter())
+    monkeypatch.setattr(
+        module,
+        "get_account_snapshot",
+        lambda **kwargs: AccountSnapshot(
+            env="paper",
+            cash_usd=1000.0,
+            positions=[],
+        ),
+    )
+
+    output_path = tmp_path / "smoke-operator.json"
+    evidence_path = tmp_path / "smoke-evidence.json"
+    args = argparse.Namespace(
+        broker="alpaca-paper",
+        account="main",
+        symbol="AAPL",
+        market="US",
+        output=str(output_path),
+        execute=False,
+        preflight_only=False,
+        cleanup_open_orders=False,
+        allow_non_paper=False,
+        evidence_output=str(evidence_path),
+    )
+
+    result = module.run_operator_smoke_workflow(args)
+    evidence = json.loads(evidence_path.read_text(encoding="utf-8"))
+
+    assert result == 0
+    assert evidence["broker"] == "alpaca-paper"
+    assert evidence["latest_tracked_order_ref"] is None
+    assert evidence["targets_output"] == str(output_path)
+    assert [step["name"] for step in evidence["steps"]] == ["config", "account", "quote", "rebalance"]

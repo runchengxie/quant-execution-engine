@@ -63,3 +63,23 @@ def test_smoke_target_harness_prints_json(tmp_path: Path) -> None:
     assert payload["source"] == "smoke-target-harness"
     assert payload["targets"][0]["target_quantity"] == 2000
     assert "carry-over" in result.stdout
+
+
+@pytest.mark.e2e
+def test_smoke_operator_harness_refuses_non_paper_by_default() -> None:
+    result = subprocess.run(
+        [
+            sys.executable,
+            "project_tools/smoke_operator_harness.py",
+            "--broker",
+            "longport",
+            "--preflight-only",
+        ],
+        capture_output=True,
+        text=True,
+        cwd=Path.cwd(),
+        env=_cli_env(),
+    )
+
+    assert result.returncode == 2
+    assert "Refusing non-paper broker" in result.stderr

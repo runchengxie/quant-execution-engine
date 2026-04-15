@@ -4,7 +4,9 @@
 from __future__ import annotations
 
 import argparse
+import json
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 from quant_execution_engine.account import get_account_snapshot
@@ -92,7 +94,7 @@ def symbol_matches(symbol: str, allowed: set[str] | None) -> bool:
     return normalized in allowed or base in allowed
 
 
-def run_step(name: str, result: object) -> None:
+def run_step(name: str, result: object) -> dict[str, object]:
     exit_code = int(getattr(result, "exit_code", 1))
     stdout = getattr(result, "stdout", None)
     stderr = getattr(result, "stderr", None)
@@ -103,6 +105,46 @@ def run_step(name: str, result: object) -> None:
         print(stderr, file=sys.stderr)
     if exit_code != 0:
         raise RuntimeError(f"{name} failed with exit code {exit_code}")
+    return {
+        "name": name,
+        "exit_code": exit_code,
+        "stdout": stdout,
+        "stderr": stderr,
+    }
+
+
+def write_evidence(
+    *,
+    args: argparse.Namespace,
+    broker: str,
+    account_label: str,
+    canonical: str,
+    steps: list[dict[str, object]],
+    output_path: Path,
+    latest_order_ref: str | None,
+) -> Path | None:
+    evidence_output = getattr(args, "evidence_output", None)
+    if not evidence_output:
+        return None
+    evidence_path = Path(evidence_output)
+    evidence_path.parent.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "broker": broker,
+        "account_label": account_label,
+        "symbol": canonical,
+        "execute": bool(args.execute),
+        "preflight_only": bool(args.preflight_only),
+        "cleanup_open_orders": bool(args.cleanup_open_orders),
+        "allow_non_paper": bool(args.allow_non_paper),
+        "targets_output": str(output_path),
+        "state_path": str(ExecutionStateStore().path_for(broker, account_label)),
+        "latest_tracked_order_ref": latest_order_ref,
+        "steps": steps,
+    }
+    evidence_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    print(f"\n== evidence ==\nWrote {evidence_path}")
+    return evidence_path
 
 
 def run_operator_smoke_workflow(args: argparse.Namespace) -> int:
@@ -125,12 +167,23 @@ def run_operator_smoke_workflow(args: argparse.Namespace) -> int:
             close_fn()
 
     canonical = canonical_symbol(args.symbol, args.market)
-    run_step("config", run_config(True, broker=broker))
-    run_step("account", run_account(account=account_label, broker=broker))
-    run_step("quote", run_quote([canonical], broker=broker))
+    steps: list[dict[str, object]] = []
+    output_path = Path(args.output)
+    steps.append(run_step("config", run_config(True, broker=broker)))
+    steps.append(run_step("account", run_account(account=account_label, broker=broker)))
+    steps.append(run_step("quote", run_quote([canonical], broker=broker)))
 
     if args.preflight_only:
         print("\n== preflight ==\nPreflight checks passed; skipping targets and broker mutation steps.")
+        write_evidence(
+            args=args,
+            broker=broker,
+            account_label=account_label,
+            canonical=canonical,
+            steps=steps,
+            output_path=output_path,
+            latest_order_ref=None,
+        )
         return 0
 
     snapshot = get_account_snapshot(
@@ -152,7 +205,6 @@ def run_operator_smoke_workflow(args: argparse.Namespace) -> int:
         market=args.market,
         current_quantity=current_quantity,
     )
-    output_path = Path(args.output)
     write_targets_json(
         output_path,
         asof="smoke-operator",
@@ -162,26 +214,39 @@ def run_operator_smoke_workflow(args: argparse.Namespace) -> int:
     )
     print(f"\n== targets ==\nWrote {output_path} with target_quantity={targets[0]['target_quantity']}")
 
-    run_step(
-        "rebalance",
-        run_rebalance(
-            str(output_path),
-            account=account_label,
-            dry_run=not args.execute,
-            broker=broker,
-        ),
+    steps.append(
+        run_step(
+            "rebalance",
+            run_rebalance(
+                str(output_path),
+                account=account_label,
+                dry_run=not args.execute,
+                broker=broker,
+            ),
+        )
     )
 
     if not args.execute:
+        write_evidence(
+            args=args,
+            broker=broker,
+            account_label=account_label,
+            canonical=canonical,
+            steps=steps,
+            output_path=output_path,
+            latest_order_ref=None,
+        )
         return 0
 
-    run_step(
-        "orders",
-        run_orders(
-            account=account_label,
-            broker=broker,
-            symbol_filter=args.symbol,
-        ),
+    steps.append(
+        run_step(
+            "orders",
+            run_orders(
+                account=account_label,
+                broker=broker,
+                symbol_filter=args.symbol,
+            ),
+        )
     )
     order_ref = latest_tracked_order_ref(
         broker_name=broker,
@@ -189,41 +254,59 @@ def run_operator_smoke_workflow(args: argparse.Namespace) -> int:
         symbol_filter=args.symbol,
     )
     if order_ref:
-        run_step(
-            "order",
-            run_order(
-                order_ref=order_ref,
-                account=account_label,
-                broker=broker,
-            ),
+        steps.append(
+            run_step(
+                "order",
+                run_order(
+                    order_ref=order_ref,
+                    account=account_label,
+                    broker=broker,
+                ),
+            )
         )
     else:
         print("\n== order ==\nNo tracked broker order found after rebalance")
 
-    run_step(
-        "reconcile",
-        run_reconcile(
-            account=account_label,
-            broker=broker,
-        ),
-    )
-    run_step(
-        "exceptions",
-        run_exceptions(
-            account=account_label,
-            broker=broker,
-            symbol_filter=args.symbol,
-        ),
-    )
-
-    if args.cleanup_open_orders:
+    steps.append(
         run_step(
-            "cancel-all",
-            run_cancel_all(
+            "reconcile",
+            run_reconcile(
                 account=account_label,
                 broker=broker,
             ),
         )
+    )
+    steps.append(
+        run_step(
+            "exceptions",
+            run_exceptions(
+                account=account_label,
+                broker=broker,
+                symbol_filter=args.symbol,
+            ),
+        )
+    )
+
+    if args.cleanup_open_orders:
+        steps.append(
+            run_step(
+                "cancel-all",
+                run_cancel_all(
+                    account=account_label,
+                    broker=broker,
+                ),
+            )
+        )
+
+    write_evidence(
+        args=args,
+        broker=broker,
+        account_label=account_label,
+        canonical=canonical,
+        steps=steps,
+        output_path=output_path,
+        latest_order_ref=order_ref,
+    )
 
     return 0
 
@@ -280,6 +363,11 @@ def main() -> int:
         "--allow-non-paper",
         action="store_true",
         help="Allow running the harness against non-paper brokers",
+    )
+    parser.add_argument(
+        "--evidence-output",
+        default=None,
+        help="Optional JSON file used to persist a reproducible smoke evidence record",
     )
     args = parser.parse_args()
     try:

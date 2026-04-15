@@ -2,7 +2,7 @@
 
 ## 环境变量
 
-### LongPort 模拟盘/实盘
+### LongPort live
 
 必需：
 
@@ -14,14 +14,12 @@
 
 - `qexec rebalance --execute` 在 real broker 路径下要求 `QEXEC_ENABLE_LIVE=1`
 - repo 根目录下的 `.env*` / `.envrc*` 如果包含 LongPort live 凭证，CLI 会拒绝执行
-- 这条保护的目的是防止把 real secret 留在仓库本地文件里；paper 凭证不受这个限制
+- 这条保护的目的是防止把 real secret 留在仓库本地文件里；paper 路径不受这个限制
 
 可选：
 
 - `LONGPORT_REGION`
 - `LONGPORT_ENABLE_OVERNIGHT`
-- `LONGPORT_MAX_NOTIONAL_PER_ORDER`
-- `LONGPORT_MAX_QTY_PER_ORDER`
 - `LONGPORT_TRADING_WINDOW_START`
 - `LONGPORT_TRADING_WINDOW_END`
 - `FX_<CCY>_USD`，例如 `FX_HKD_USD=0.128`
@@ -33,7 +31,14 @@
 - `LONGPORT_ACCESS_TOKEN_REAL` 仍会作为 `LONGPORT_ACCESS_TOKEN` 的兼容兜底
 - `LONGPORT_FX_<CCY>_USD` 会作为 `FX_<CCY>_USD` 的兼容兜底
 
-### Alpaca 模拟盘/实盘
+兼容限额变量：
+
+- `LONGPORT_MAX_NOTIONAL_PER_ORDER`
+- `LONGPORT_MAX_QTY_PER_ORDER`
+
+这两个变量仍会被兼容读取，但当前 CLI 主执行路径更推荐通过 `execution.risk.*` 配置本地风控阈值。
+
+### Alpaca paper
 
 必需：
 
@@ -43,8 +48,8 @@
 说明：
 
 - Alpaca 支持来自可选依赖 `alpaca-py`，安装方式：`uv sync --extra alpaca`
-- 如果你使用仓库自带的 `.envrc` / `.envrc.example`，并且 `.env` 或 `.env.local` 里已经有 `ALPACA_*` / `APCA_*` 凭证，direnv 载入目录时会自动把 `--extra alpaca` 加进 `uv sync`
-- 当前 adapter 以 paper 为默认模式，不提供多账户切换
+- 当前 adapter 是 paper-only 验证路径，不提供实盘切换
+- 当前也不提供真实多账户切换
 
 ## 本地 YAML
 
@@ -100,7 +105,7 @@ fx:
     HKD: 0.128
 ```
 
-也兼容这个汇率计算结构：
+也兼容这个汇率结构：
 
 ```yaml
 fx:
@@ -119,12 +124,9 @@ fx:
 
 ## 行为说明
 
+- `execution.risk.*` 是当前 CLI 主执行路径的主要本地风控来源。
 - `LONGPORT_TRADING_WINDOW_START/END` 只是 session API 不可用时的本地降级判断。
-- `LONGPORT_MAX_QTY_PER_ORDER` 只在非 dry-run 路径强制拦截。
-- `LONGPORT_MAX_NOTIONAL_PER_ORDER` 当前只做告警提示，不会在本地直接拦截；最终仍以 broker 风控为准。
-- LongPort real `--execute` 需要显式设置 `QEXEC_ENABLE_LIVE=1` 作为二次确认。
-- LongPort real `--execute` 会拒绝使用 repo 根目录 `.env*` / `.envrc*` 中的 live 凭证，避免本地 secret 文件随仓库传播。
-- execution risk gate 的主要本地阈值改为读 `execution.risk.*`。
+- `LONGPORT_MAX_QTY_PER_ORDER` 和 `LONGPORT_MAX_NOTIONAL_PER_ORDER` 更偏兼容层 / legacy client 语义，不应该替代 `execution.risk.*`。
 - `execution.kill_switch.env_var` 和可选 `execution.kill_switch.path` 可以手动停掉新的 broker submit。
 - `broker.default_account` 是 CLI 没显式传 `--account` 时的默认 label；如果 adapter 不支持该 label，会直接报错。
-- `execution.state_dir` 控制幂等/恢复状态文件目录，默认是 `outputs/state`。
+- `execution.state_dir` 控制幂等 / 恢复状态文件目录，默认是 `outputs/state`。

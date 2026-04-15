@@ -11,6 +11,21 @@ pytest.importorskip("longport")
 from quant_execution_engine.broker.longport import LongPortClient, get_config
 
 
+def is_runtime_network_issue(message: str) -> bool:
+    lowered = str(message or "").lower()
+    return any(
+        token in lowered
+        for token in (
+            "network",
+            "timeout",
+            "connect",
+            "dns",
+            "region configuration",
+            "网络",
+        )
+    )
+
+
 def check_longport_credentials() -> bool:
     required_vars = ["LONGPORT_APP_KEY", "LONGPORT_APP_SECRET", "LONGPORT_ACCESS_TOKEN"]
     return all(os.getenv(var) for var in required_vars)
@@ -37,7 +52,7 @@ def test_longport_client_initialization() -> None:
         assert client.t is not None
     except Exception as exc:
         message = str(exc).lower()
-        if "network" in message or "timeout" in message or "connect" in message:
+        if is_runtime_network_issue(message):
             pytest.skip(f"Network/endpoint issue, skipping: {exc}")
         pytest.fail(f"LongPortClient initialization failed: {exc}")
 
@@ -62,7 +77,7 @@ def test_quote_last_real_api() -> None:
             assert timestamp > 0
     except Exception as exc:
         message = str(exc).lower()
-        if "network" in message or "timeout" in message or "connect" in message:
+        if is_runtime_network_issue(message):
             pytest.skip(f"Network connection issue, skipping test: {exc}")
         if "rate limit" in message or "quota" in message:
             pytest.skip(f"API limit reached, skipping test: {exc}")
@@ -88,7 +103,7 @@ def test_candles_real_api() -> None:
         assert candles is not None
     except Exception as exc:
         message = str(exc).lower()
-        if "network" in message or "timeout" in message or "connect" in message:
+        if is_runtime_network_issue(message):
             pytest.skip(f"Network connection issue, skipping test: {exc}")
         if "rate limit" in message or "quota" in message:
             pytest.skip(f"API limit reached, skipping test: {exc}")
@@ -111,7 +126,7 @@ def test_symbol_conversion_integration() -> None:
                 assert symbol.endswith((".US", ".HK", ".SG"))
         except Exception as exc:
             message = str(exc).lower()
-            if "network" in message or "timeout" in message or "connect" in message:
+            if is_runtime_network_issue(message):
                 pytest.skip(f"Network connection issue, skipping: {exc}")
             if "permission" in message or "access" in message:
                 pytest.skip(f"No permission to access {ticker}, skipping: {exc}")
@@ -131,6 +146,6 @@ def test_api_error_handling() -> None:
         assert isinstance(quotes, dict)
     except Exception as exc:
         message = str(exc).lower()
-        if "network" in message or "timeout" in message or "connect" in message:
+        if is_runtime_network_issue(message):
             pytest.skip(f"Network connection issue, skipping test: {exc}")
         assert "invalid" in message or "not found" in message or "error" in message

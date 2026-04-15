@@ -7,6 +7,7 @@ from unittest.mock import Mock, patch
 import pytest
 
 import quant_execution_engine.cli as cli
+import quant_execution_engine.guards as guards
 from quant_execution_engine.broker.base import BrokerAdapter, BrokerOrderRecord, ResolvedBrokerAccount
 from quant_execution_engine.execution import ExecutionExceptionRecord, ExecutionState, ExecutionStateStore
 
@@ -70,6 +71,27 @@ def test_main_routes_rebalance() -> None:
         dry_run=False,
         target_gross_exposure=0.9,
         broker=None,
+    )
+
+
+def test_main_routes_preflight() -> None:
+    with patch.object(
+        cli,
+        "run_preflight",
+        return_value=cli.CommandResult(exit_code=0),
+    ) as mock_run:
+        with patch.object(
+            sys,
+            "argv",
+            ["qexec", "preflight", "AAPL", "MSFT", "--account", "main", "--broker", "longport"],
+        ):
+            result = cli.main()
+
+    assert result == 0
+    mock_run.assert_called_once_with(
+        symbols=["AAPL", "MSFT"],
+        account="main",
+        broker="longport",
     )
 
 
@@ -203,6 +225,27 @@ def test_main_routes_cancel_all() -> None:
     )
 
 
+def test_main_routes_cancel_rest() -> None:
+    with patch.object(
+        cli,
+        "run_cancel_rest",
+        return_value=cli.CommandResult(exit_code=0),
+    ) as mock_run:
+        with patch.object(
+            sys,
+            "argv",
+            ["qexec", "cancel-rest", "fake-order-1", "--account", "main"],
+        ):
+            result = cli.main()
+
+    assert result == 0
+    mock_run.assert_called_once_with(
+        order_ref="fake-order-1",
+        account="main",
+        broker=None,
+    )
+
+
 def test_main_routes_order() -> None:
     with patch.object(
         cli,
@@ -234,6 +277,48 @@ def test_main_routes_retry() -> None:
             sys,
             "argv",
             ["qexec", "retry", "fake-order-1", "--account", "main"],
+        ):
+            result = cli.main()
+
+    assert result == 0
+    mock_run.assert_called_once_with(
+        order_ref="fake-order-1",
+        account="main",
+        broker=None,
+    )
+
+
+def test_main_routes_resume_remaining() -> None:
+    with patch.object(
+        cli,
+        "run_resume_remaining",
+        return_value=cli.CommandResult(exit_code=0),
+    ) as mock_run:
+        with patch.object(
+            sys,
+            "argv",
+            ["qexec", "resume-remaining", "fake-order-1", "--broker", "alpaca-paper"],
+        ):
+            result = cli.main()
+
+    assert result == 0
+    mock_run.assert_called_once_with(
+        order_ref="fake-order-1",
+        account="main",
+        broker="alpaca-paper",
+    )
+
+
+def test_main_routes_accept_partial() -> None:
+    with patch.object(
+        cli,
+        "run_accept_partial",
+        return_value=cli.CommandResult(exit_code=0),
+    ) as mock_run:
+        with patch.object(
+            sys,
+            "argv",
+            ["qexec", "accept-partial", "fake-order-1", "--account", "main"],
         ):
             result = cli.main()
 
@@ -283,6 +368,79 @@ def test_main_routes_retry_stale() -> None:
     assert result == 0
     mock_run.assert_called_once_with(
         older_than_minutes=15,
+        account="main",
+        broker=None,
+    )
+
+
+def test_main_routes_state_doctor() -> None:
+    with patch.object(
+        cli,
+        "run_state_doctor",
+        return_value=cli.CommandResult(exit_code=0),
+    ) as mock_run:
+        with patch.object(
+            sys,
+            "argv",
+            ["qexec", "state-doctor", "--account", "main", "--broker", "longport"],
+        ):
+            result = cli.main()
+
+    assert result == 0
+    mock_run.assert_called_once_with(
+        account="main",
+        broker="longport",
+    )
+
+
+def test_main_routes_state_prune() -> None:
+    with patch.object(
+        cli,
+        "run_state_prune",
+        return_value=cli.CommandResult(exit_code=0),
+    ) as mock_run:
+        with patch.object(
+            sys,
+            "argv",
+            ["qexec", "state-prune", "--older-than-days", "45", "--apply", "--broker", "alpaca-paper"],
+        ):
+            result = cli.main()
+
+    assert result == 0
+    mock_run.assert_called_once_with(
+        older_than_days=45,
+        apply=True,
+        account="main",
+        broker="alpaca-paper",
+    )
+
+
+def test_main_routes_state_repair() -> None:
+    with patch.object(
+        cli,
+        "run_state_repair",
+        return_value=cli.CommandResult(exit_code=0),
+    ) as mock_run:
+        with patch.object(
+            sys,
+            "argv",
+            [
+                "qexec",
+                "state-repair",
+                "--clear-kill-switch",
+                "--dedupe-fills",
+                "--drop-orphan-fills",
+                "--drop-orphan-terminal-broker-orders",
+            ],
+        ):
+            result = cli.main()
+
+    assert result == 0
+    mock_run.assert_called_once_with(
+        clear_kill_switch=True,
+        dedupe_fills=True,
+        drop_orphan_fills=True,
+        drop_orphan_terminal_broker_orders=True,
         account="main",
         broker=None,
     )
@@ -375,7 +533,7 @@ def test_run_rebalance_live_rejects_repo_local_longport_secrets(
         encoding="utf-8",
     )
     monkeypatch.setenv("QEXEC_ENABLE_LIVE", "1")
-    monkeypatch.setattr(cli, "PROJECT_ROOT", tmp_path)
+    monkeypatch.setattr(guards, "PROJECT_ROOT", tmp_path)
 
     with patch.object(cli, "read_targets_json") as mock_read_targets:
         result = cli.run_rebalance(str(target_file), dry_run=False)
@@ -400,7 +558,7 @@ def test_run_rebalance_live_ignores_placeholder_repo_env_values(
         encoding="utf-8",
     )
     monkeypatch.setenv("QEXEC_ENABLE_LIVE", "1")
-    monkeypatch.setattr(cli, "PROJECT_ROOT", tmp_path)
+    monkeypatch.setattr(guards, "PROJECT_ROOT", tmp_path)
 
     with patch.object(cli, "read_targets_json", side_effect=RuntimeError("after-guard")):
         result = cli.run_rebalance(str(target_file), dry_run=False)
@@ -421,7 +579,7 @@ def test_run_rebalance_live_ignores_repo_envrc_secret_references(
         encoding="utf-8",
     )
     monkeypatch.setenv("QEXEC_ENABLE_LIVE", "1")
-    monkeypatch.setattr(cli, "PROJECT_ROOT", tmp_path)
+    monkeypatch.setattr(guards, "PROJECT_ROOT", tmp_path)
 
     with patch.object(cli, "read_targets_json", side_effect=RuntimeError("after-guard")):
         result = cli.run_rebalance(str(target_file), dry_run=False)

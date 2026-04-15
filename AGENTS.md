@@ -22,10 +22,14 @@
 
 ## Current Functional Caveats
 
-- `qexec rebalance --execute` 当前会进入 live-mode 路径并写审计日志，但 broker submit 分支仍返回模拟 `order_id`，没有真正提交 LongPort 订单。
-- `qexec rebalance --account` 目前只记录到日志里，不会切换实际 broker 账户。
+- `qexec rebalance --execute` 在 LongPort 和 Alpaca paper 上都会走 broker-backed submit/query/cancel/reconcile 路径，但 LongPort real broker 的自动化端到端证据仍弱于 Alpaca paper smoke；real broker 仍应按 operator-supervised 路径使用。
+- `qexec rebalance --account` 当前做的是 account/profile label 解析与 fail-fast 校验，不是多账户路由。
+- 当前 adapter 仍按单账户语义运行；unsupported label 会直接报错。
+- `retry` 只支持零成交 terminal tracked order；部分成交要走 `cancel-rest`、`resume-remaining` 或 `accept-partial`。
+- `orders` / `exceptions` / `order` 都是本地 tracked-state 视图，不是 broker 全量订单视图。
 - 调仓输入只接受 canonical schema-v2 `targets.json`。
 
 ## Outputs
 
 - 调仓审计日志输出到 `outputs/orders/*.jsonl`。
+- 本地执行状态输出到 `outputs/state/*.json`。
