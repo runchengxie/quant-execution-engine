@@ -25,6 +25,19 @@
 - `FX_<CCY>_USD`，例如 `FX_HKD_USD=0.128`
 - `LONGPORT_FX_<CCY>_USD`，例如 `LONGPORT_FX_HKD_USD=0.128`
 
+### LongPort paper
+
+必需：
+
+- `LONGPORT_APP_KEY`
+- `LONGPORT_APP_SECRET`
+- `LONGPORT_ACCESS_TOKEN_TEST`
+
+说明：
+
+- LongPort real 和 paper 共用 App Key / Secret，但使用不同 Access Token。
+- 当前 `longport-paper` backend 会优先读取 `LONGPORT_ACCESS_TOKEN_TEST`。
+
 兼容读取：
 
 - 旧的 `LONGBRIDGE_*` 前缀仍会被兼容读取

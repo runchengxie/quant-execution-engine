@@ -606,6 +606,24 @@ def test_run_rebalance_paper_execute_does_not_require_live_enable(
     assert result.stderr == "after-guard"
 
 
+def test_run_rebalance_longport_paper_execute_does_not_require_live_enable(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    target_file = tmp_path / "targets.json"
+    target_file.write_text("{}", encoding="utf-8")
+    monkeypatch.delenv("QEXEC_ENABLE_LIVE", raising=False)
+
+    with patch.object(cli, "read_targets_json", side_effect=RuntimeError("after-guard")):
+        result = cli.run_rebalance(
+            str(target_file),
+            dry_run=False,
+            broker="longport-paper",
+        )
+
+    assert result.exit_code == 1
+    assert result.stderr == "after-guard"
+
+
 def test_run_orders_filters_by_symbol(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     store = ExecutionStateStore(root_dir=tmp_path)
     state = ExecutionState(broker_name="fake", account_label="main")

@@ -56,6 +56,7 @@ uv run pytest --cov=src/quant_execution_engine --cov-report=term-missing -m 'not
 - CLI 单测覆盖了新旧命令的分发和 live guard 行为。
 - e2e 当前证明了 CLI / harness 的 subprocess smoke 行为，包括 signal/target harness 输出、operator harness 的非 paper 拒绝路径。
 - `smoke_operator_harness.py` 已有单测覆盖固定 workflow、preflight-only 路径和 evidence JSON 输出。
+- `longport-paper` 已经是正式 broker backend；提供 `LONGPORT_ACCESS_TOKEN_TEST` 后，可以走 paper preflight / rebalance 路径。
 - LongPort live quote 相关测试现在会把典型的网络 / 区域 / 凭证异常视为 skip，而不是误报失败。
 
 ## 当前测试还没有证明什么
@@ -82,6 +83,7 @@ PYTHONPATH=src python project_tools/smoke_operator_harness.py --broker alpaca-pa
 
 ```bash
 PYTHONPATH=src python project_tools/smoke_operator_harness.py --broker alpaca-paper --preflight-only
+PYTHONPATH=src python project_tools/smoke_operator_harness.py --broker longport-paper --preflight-only
 ```
 
 如果你希望把一次 smoke 运行沉淀成可复查的证据，可以加：

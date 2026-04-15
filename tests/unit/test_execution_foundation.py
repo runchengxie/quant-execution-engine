@@ -226,6 +226,14 @@ def test_broker_capabilities_include_alpaca_paper() -> None:
     assert caps.supports_live_submit is True
 
 
+def test_broker_capabilities_include_longport_paper() -> None:
+    caps = get_broker_capabilities("longport-paper")
+
+    assert caps.name == "longport-paper"
+    assert caps.notes["submit_mode"] == "paper"
+    assert caps.supports_cancel is True
+
+
 def test_cancel_tracked_order_updates_state(tmp_path: Path) -> None:
     adapter = FakeAdapter()
     store = ExecutionStateStore(root_dir=tmp_path)

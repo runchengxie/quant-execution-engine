@@ -37,6 +37,13 @@ class DummyAdapter(BrokerAdapter):
         return ResolvedBrokerAccount(label=account_label or "main")
 
 
+class DummyLongPortPaperAdapter(BrokerAdapter):
+    backend_name = "longport-paper"
+
+    def resolve_account(self, account_label: str | None = None) -> ResolvedBrokerAccount:
+        return ResolvedBrokerAccount(label=account_label or "main")
+
+
 def test_build_operator_smoke_targets_is_minimal_delta() -> None:
     module = load_smoke_operator_module()
 
@@ -234,6 +241,43 @@ def test_run_operator_smoke_workflow_preflight_only_skips_mutating_steps(
     assert called == ["config", "account", "quote"]
     assert not (tmp_path / "smoke-operator.json").exists()
     assert "Preflight checks passed" in output
+
+
+def test_run_operator_smoke_workflow_accepts_longport_paper_as_paper_backend(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = load_smoke_operator_module()
+    called: list[str] = []
+
+    def ok(name: str):
+        def _inner(*args, **kwargs):
+            called.append(name)
+            return SimpleNamespace(exit_code=0, stdout=f"{name} ok", stderr=None)
+
+        return _inner
+
+    monkeypatch.setattr(module, "run_config", ok("config"))
+    monkeypatch.setattr(module, "run_account", ok("account"))
+    monkeypatch.setattr(module, "run_quote", ok("quote"))
+    monkeypatch.setattr(module, "get_broker_adapter", lambda broker_name=None: DummyLongPortPaperAdapter())
+
+    args = argparse.Namespace(
+        broker="longport-paper",
+        account="main",
+        symbol="AAPL",
+        market="US",
+        output=str(tmp_path / "smoke-operator.json"),
+        execute=False,
+        preflight_only=True,
+        cleanup_open_orders=False,
+        allow_non_paper=False,
+    )
+
+    result = module.run_operator_smoke_workflow(args)
+
+    assert result == 0
+    assert called == ["config", "account", "quote"]
 
 
 def test_run_operator_smoke_workflow_writes_evidence_json(

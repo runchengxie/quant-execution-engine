@@ -19,7 +19,7 @@
 - 低频或半自动执行场景
 - 以 `targets.json` 驱动 broker-backed rebalance / submit / reconcile
 - 人工可介入的运维链路
-- 先把 LongPort 和 Alpaca paper 跑稳，再考虑更广泛 broker 支持
+- 先把 LongPort real、`longport-paper` 和 Alpaca paper 跑稳，再考虑更广泛 broker 支持
 
 如果未来目标变成研究 + 回测 + 实盘一体化平台，或者多 broker 多账户统一中台，这份清单就不再适用。
 
@@ -86,6 +86,8 @@
 
 ### 5. 当前仍然值得补的功能
 
+- `[x]` `longport-paper` backend 已落地
+  当前通过 `LONGPORT_ACCESS_TOKEN_TEST` 走 broker-backed paper submit/query/cancel/reconcile 路径。
 - `[~]` LongPort real broker submit/query/cancel/reconcile 的端到端证据仍不够扎实
   代码路径已经存在，但成熟度判断仍要看 operator-supervised smoke 和记载下来的证据链。
 - `[~]` failure-mode regression 还应继续扩

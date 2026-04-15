@@ -15,9 +15,12 @@ from .account import get_account_snapshot, get_quotes
 from .broker import (
     get_broker_adapter,
     get_broker_capabilities,
+    is_longport_broker,
+    is_paper_broker,
     resolve_broker_name,
     resolve_default_account_label,
 )
+from .broker.longport_credentials import probe_longport_credentials
 from .execution import ExecutionStateStore, OrderLifecycleService
 from .execution import (
     DEFAULT_EXCEPTION_STATUSES,
@@ -628,7 +631,7 @@ def run_account(
             only_positions = False
         selected_broker = resolve_broker_name(broker)
         snapshot = get_account_snapshot(
-            env="paper" if selected_broker in {"alpaca", "alpaca-paper"} else "real",
+            env="paper" if is_paper_broker(selected_broker) else "real",
             broker_name=broker,
             account_label=account,
         )
@@ -701,9 +704,6 @@ def run_config(show: bool = True, broker: str | None = None) -> CommandResult:
         "LONGPORT_TRADING_WINDOW_END", "LONGBRIDGE_TRADING_WINDOW_END", "16:00"
     )
 
-    app_key = os.getenv("LONGPORT_APP_KEY") or os.getenv("LONGBRIDGE_APP_KEY")
-    app_secret = os.getenv("LONGPORT_APP_SECRET") or os.getenv("LONGBRIDGE_APP_SECRET")
-    token = os.getenv("LONGPORT_ACCESS_TOKEN") or os.getenv("LONGPORT_ACCESS_TOKEN_REAL")
     alpaca_key = os.getenv("ALPACA_API_KEY") or os.getenv("APCA_API_KEY_ID")
     alpaca_secret = os.getenv("ALPACA_SECRET_KEY") or os.getenv("APCA_API_SECRET_KEY")
 
@@ -721,7 +721,13 @@ def run_config(show: bool = True, broker: str | None = None) -> CommandResult:
         "- Account Selection:     "
         + ("supported" if capabilities.supports_account_selection else "single-account only"),
         "- Live Submit:           "
-        + ("supported" if capabilities.supports_live_submit else "unsupported"),
+        + (
+            "paper-only"
+            if is_paper_broker(selected_broker)
+            else "supported"
+            if capabilities.supports_live_submit
+            else "unsupported"
+        ),
         "- Cancel / Query:        "
         + ("enabled" if capabilities.supports_cancel and capabilities.supports_order_query else "partial"),
         "- Supported Order Types: " + ", ".join(capabilities.supported_order_types),
@@ -735,8 +741,16 @@ def run_config(show: bool = True, broker: str | None = None) -> CommandResult:
         + str(risk_cfg.get("max_participation_rate", 0) or 0),
         "- Kill Switch Env:       "
         + str(kill_switch_cfg.get("env_var") or "QEXEC_KILL_SWITCH"),
+        "- Submit Mode:           "
+        + str(capabilities.notes.get("submit_mode") or ("paper" if is_paper_broker(selected_broker) else "real")),
     ]
-    if selected_broker == "longport":
+    if is_longport_broker(selected_broker):
+        credentials = probe_longport_credentials(
+            "paper" if selected_broker == "longport-paper" else "real"
+        )
+        app_key = credentials.app_key
+        app_secret = credentials.app_secret
+        token = credentials.access_token
         lines.extend(
             [
                 "- Region:                " + region,
@@ -1205,7 +1219,7 @@ def run_rebalance(
 
     try:
         selected_broker = resolve_broker_name(broker)
-        env_name = "paper" if selected_broker in {"alpaca", "alpaca-paper"} else "real"
+        env_name = "paper" if is_paper_broker(selected_broker) else "real"
         guard_error = validate_live_execution_guard(env_name=env_name, dry_run=dry_run)
         if guard_error:
             return CommandResult(exit_code=1, stderr=guard_error)

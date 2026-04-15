@@ -22,7 +22,8 @@
 
 ## Current Functional Caveats
 
-- `qexec rebalance --execute` 在 LongPort 和 Alpaca paper 上都会走 broker-backed submit/query/cancel/reconcile 路径，但 LongPort real broker 的自动化端到端证据仍弱于 Alpaca paper smoke；real broker 仍应按 operator-supervised 路径使用。
+- `qexec rebalance --execute` 在 LongPort real、`longport-paper` 和 Alpaca paper 上都会走 broker-backed submit/query/cancel/reconcile 路径，但 LongPort real broker 的自动化端到端证据仍弱于 paper smoke；real broker 仍应按 operator-supervised 路径使用。
+- `longport-paper` 依赖 `LONGPORT_ACCESS_TOKEN_TEST`；LongPort real 依赖 `LONGPORT_ACCESS_TOKEN`。
 - `qexec rebalance --account` 当前做的是 account/profile label 解析与 fail-fast 校验，不是多账户路由。
 - 当前 adapter 仍按单账户语义运行；unsupported label 会直接报错。
 - `retry` 只支持零成交 terminal tracked order；部分成交要走 `cancel-rest`、`resume-remaining` 或 `accept-partial`。

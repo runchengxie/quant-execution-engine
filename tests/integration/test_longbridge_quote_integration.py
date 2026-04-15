@@ -1,4 +1,3 @@
-import os
 from datetime import date, timedelta
 
 import pytest
@@ -8,6 +7,7 @@ pytestmark = [pytest.mark.integration, pytest.mark.requires_api]
 
 pytest.importorskip("longport")
 
+from quant_execution_engine.broker.longport_credentials import probe_longport_credentials
 from quant_execution_engine.broker.longport import LongPortClient, get_config
 
 
@@ -27,8 +27,8 @@ def is_runtime_network_issue(message: str) -> bool:
 
 
 def check_longport_credentials() -> bool:
-    required_vars = ["LONGPORT_APP_KEY", "LONGPORT_APP_SECRET", "LONGPORT_ACCESS_TOKEN"]
-    return all(os.getenv(var) for var in required_vars)
+    creds = probe_longport_credentials("real")
+    return bool(creds.app_key and creds.app_secret and creds.access_token)
 
 
 @pytest.mark.skipif(

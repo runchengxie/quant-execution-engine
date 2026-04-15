@@ -10,7 +10,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from quant_execution_engine.account import get_account_snapshot
-from quant_execution_engine.broker import get_broker_adapter, resolve_broker_name
+from quant_execution_engine.broker import (
+    get_broker_adapter,
+    is_paper_broker,
+    resolve_broker_name,
+)
 from quant_execution_engine.cli import (
     run_account,
     run_cancel_all,
@@ -149,7 +153,7 @@ def write_evidence(
 
 def run_operator_smoke_workflow(args: argparse.Namespace) -> int:
     broker = resolve_broker_name(args.broker)
-    if broker != "alpaca-paper" and not args.allow_non_paper:
+    if not is_paper_broker(broker) and not args.allow_non_paper:
         print(
             "Refusing non-paper broker for smoke operator harness. "
             "Pass --allow-non-paper to override.",
@@ -187,7 +191,7 @@ def run_operator_smoke_workflow(args: argparse.Namespace) -> int:
         return 0
 
     snapshot = get_account_snapshot(
-        env="paper" if broker == "alpaca-paper" else "real",
+        env="paper" if is_paper_broker(broker) else "real",
         include_quotes=False,
         broker_name=broker,
         account_label=account_label,

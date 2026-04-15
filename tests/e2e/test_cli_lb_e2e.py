@@ -5,6 +5,8 @@ from pathlib import Path
 
 import pytest
 
+from quant_execution_engine.broker.longport_credentials import probe_longport_credentials
+
 
 def _cli_env() -> dict[str, str]:
     env = os.environ.copy()
@@ -14,6 +16,11 @@ def _cli_env() -> dict[str, str]:
         src_path if not existing else f"{src_path}{os.pathsep}{existing}"
     )
     return env
+
+
+def _has_longport_real_credentials() -> bool:
+    creds = probe_longport_credentials("real")
+    return bool(creds.app_key and creds.app_secret and creds.access_token)
 
 
 def _is_runtime_network_issue(message: str) -> bool:
@@ -168,10 +175,7 @@ def test_cli_rebalance_rejects_legacy_workbook(tmp_path: Path) -> None:
 
 @pytest.mark.e2e
 @pytest.mark.skipif(
-    not all(
-        os.getenv(var)
-        for var in ["LONGPORT_APP_KEY", "LONGPORT_APP_SECRET", "LONGPORT_ACCESS_TOKEN"]
-    ),
+    not _has_longport_real_credentials(),
     reason="Skipping live API test because LongPort API credentials are not configured.",
 )
 def test_cli_quote_with_credentials() -> None:

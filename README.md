@@ -2,7 +2,7 @@
 
 execution-only 仓库，聚焦 broker-backed 下单、对账、恢复和 operator 运维，不承担 research / backtest / data ingestion。
 
-当前默认支持 LongPort，并提供 Alpaca paper 适配层作为低成本验证环境。
+当前默认支持 LongPort real broker，并提供 `longport-paper` 与 `alpaca-paper` 两条 paper 验证路径。
 
 ## 当前能力
 
@@ -21,8 +21,8 @@ execution-only 仓库，聚焦 broker-backed 下单、对账、恢复和 operato
 
 ## 成熟度与证明边界
 
-- LongPort real broker 和 Alpaca paper 都已经走 broker-backed `submit / query / cancel / reconcile` 代码路径。
-- Alpaca paper 是当前推荐的重复 smoke 环境；`project_tools/smoke_operator_harness.py` 提供了固定 workflow 和可选 evidence 输出。
+- LongPort real broker、`longport-paper` 和 Alpaca paper 都已经走 broker-backed `submit / query / cancel / reconcile` 代码路径。
+- `longport-paper` 需要 `LONGPORT_ACCESS_TOKEN_TEST`；Alpaca paper 仍是当前更成熟的重复 smoke 环境。
 - LongPort real broker 路径已经存在，但自动化端到端证据仍然弱于 Alpaca paper。对 real broker 的成熟度判断，应该以 operator-supervised smoke 和记载下来的证据链为准，而不是只看“代码路径存在”。
 - `orders` / `exceptions` / `order` 展示的是本地 execution state 中已跟踪的订单，不是 broker 全量订单视图。
 - `--account` 当前是显式 label 解析与 fail-fast 校验；LongPort 和 Alpaca paper 仍按单账户语义运行。
@@ -47,6 +47,7 @@ uv sync --group dev --extra cli --extra alpaca
 qexec --help
 qexec config
 qexec preflight
+qexec preflight --broker longport-paper
 qexec account --format json
 qexec quote AAPL 700.HK
 qexec orders --status open
@@ -64,6 +65,7 @@ qexec state-doctor
 qexec state-prune --older-than-days 30
 qexec state-repair --clear-kill-switch --dedupe-fills
 qexec rebalance outputs/targets/2026-04-09.json
+qexec rebalance outputs/targets/2026-04-09.json --broker longport-paper --execute
 QEXEC_ENABLE_LIVE=1 qexec rebalance outputs/targets/2026-04-09.json --execute
 qexec rebalance outputs/targets/2026-04-09.json --broker alpaca-paper --execute
 ```
@@ -83,6 +85,10 @@ LongPort live 至少需要：
 - `LONGPORT_APP_KEY`
 - `LONGPORT_APP_SECRET`
 - `LONGPORT_ACCESS_TOKEN`
+
+LongPort paper 额外需要：
+
+- `LONGPORT_ACCESS_TOKEN_TEST`
 
 LongPort real broker 的 `--execute` 额外要求：
 
@@ -130,6 +136,7 @@ PYTHONPATH=src python project_tools/smoke_target_harness.py --scenario carry-ove
 PYTHONPATH=src python project_tools/smoke_operator_harness.py --broker alpaca-paper --preflight-only
 PYTHONPATH=src python project_tools/smoke_operator_harness.py --broker alpaca-paper --execute
 PYTHONPATH=src python project_tools/smoke_operator_harness.py --broker alpaca-paper --execute --evidence-output outputs/evidence/operator-smoke.json
+PYTHONPATH=src python project_tools/smoke_operator_harness.py --broker longport-paper --preflight-only
 ```
 
 它们的目标是驱动 dry-run / paper / operator-supervised 验证，而不是提供策略层。

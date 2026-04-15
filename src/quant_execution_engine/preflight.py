@@ -8,6 +8,7 @@ from typing import Any
 from .broker.factory import (
     get_broker_adapter,
     get_broker_capabilities,
+    is_paper_broker,
     resolve_broker_name,
 )
 from .execution import ExecutionStateStore
@@ -80,7 +81,7 @@ def run_preflight_checks(
     """Run broker/account readiness checks without mutating broker state."""
 
     selected_broker = resolve_broker_name(broker_name)
-    env_name = "paper" if selected_broker in {"alpaca", "alpaca-paper"} else "real"
+    env_name = "paper" if is_paper_broker(selected_broker) else "real"
     requested_symbols = [str(symbol).strip() for symbol in (symbols or ["AAPL"]) if str(symbol).strip()]
     checks: list[PreflightCheck] = []
 

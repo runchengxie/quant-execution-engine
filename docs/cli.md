@@ -39,6 +39,7 @@ qexec config --broker alpaca-paper
 qexec preflight
 qexec preflight AAPL MSFT
 qexec preflight --broker alpaca-paper
+qexec preflight --broker longport-paper
 ```
 
 当前会检查：
@@ -256,6 +257,7 @@ qexec state-repair --drop-orphan-terminal-broker-orders
 ```bash
 qexec rebalance outputs/targets/2026-04-09.json
 qexec rebalance outputs/targets/2026-04-09.json --account main
+qexec rebalance outputs/targets/2026-04-09.json --broker longport-paper --execute
 QEXEC_ENABLE_LIVE=1 qexec rebalance outputs/targets/2026-04-09.json --execute
 qexec rebalance outputs/targets/2026-04-09.json --broker alpaca-paper --execute
 qexec rebalance outputs/targets/2026-04-09.json --target-gross-exposure 0.9
@@ -268,6 +270,7 @@ qexec rebalance outputs/targets/2026-04-09.json --target-gross-exposure 0.9
 - schema-v1 / legacy ticker-list 不能作为 live execution 输入。
 - `--execute` 缺省关闭；默认是 dry-run。
 - real broker 的 `--execute` 额外要求 `QEXEC_ENABLE_LIVE=1`，并且 repo 根目录 `.env*` / `.envrc*` 里不能有 LongPort live 凭证。
+- `longport-paper` 是 paper backend，依赖 `LONGPORT_ACCESS_TOKEN_TEST`，不要求 `QEXEC_ENABLE_LIVE=1`。
 - `--broker` 默认读取本地配置里的 backend，没有配置时默认 `longport`。
 - `--account` 会先走 adapter account/profile 校验；不支持的 label 会 fail fast，但当前并不提供真实多账户切换。
 - `orders` / `exceptions` / `order` 读取的是本地 execution state，不会主动扫描 broker 全量订单。
@@ -285,6 +288,7 @@ repo 内置三个外置工装：
 PYTHONPATH=src python project_tools/smoke_signal_harness.py --output outputs/targets/smoke-signal.json
 PYTHONPATH=src python project_tools/smoke_target_harness.py --scenario rebalance --print-json
 PYTHONPATH=src python project_tools/smoke_operator_harness.py --broker alpaca-paper --preflight-only
+PYTHONPATH=src python project_tools/smoke_operator_harness.py --broker longport-paper --preflight-only
 ```
 
 `smoke_operator_harness.py` 是最接近 operator workflow 的工装；需要留证时可以加 `--evidence-output`。

@@ -39,6 +39,7 @@ src/quant_execution_engine/
   account.py
   rebalance.py
   execution.py
+  execution_state.py
   diagnostics.py
   guards.py
   preflight.py
@@ -50,6 +51,8 @@ src/quant_execution_engine/
     factory.py
     alpaca.py
     _stubs.py
+    longport_adapter.py
+    longport_credentials.py
     longport.py
   renderers/
     __init__.py
@@ -68,14 +71,18 @@ project_tools/
   负责参数解析、broker/backend 选择、命令分发和错误码收口，包括 `preflight`、operator 恢复命令和 state maintenance 命令。
 - `broker/base.py` / `broker/factory.py`
   定义 broker lifecycle 契约、capability matrix 和 backend 选择逻辑。
-- `broker/longport.py` / `broker/alpaca.py`
-  分别负责 LongPort real broker 和 Alpaca paper 的 adapter 实现。
+- `broker/longport.py` / `broker/longport_adapter.py` / `broker/alpaca.py`
+  分别负责 LongPort SDK wrapper、LongPort real/paper adapter，以及 Alpaca paper adapter 实现。
+- `broker/longport_credentials.py`
+  负责 LongPort real / paper 的凭证解析与 placeholder 回避。
 - `account.py`
   负责通过 adapter 获取账户快照与行情查询。
 - `rebalance.py`
   负责目标仓位计算、订单规划、执行入口和审计日志。
 - `execution.py`
-  负责 order intent、parent / child order、状态持久化、幂等提交、reconcile、partial-fill 恢复和 tracked-order operator 行为。
+  负责订单提交流程、reconcile、partial-fill 恢复和 tracked-order operator 行为。
+- `execution_state.py`
+  负责 execution lifecycle dataclass、状态常量和 file-backed state store。
 - `diagnostics.py`
   负责把 broker / local order 的异常状态和 warning 统一成 operator-friendly 诊断信息。
 - `guards.py`
@@ -102,7 +109,7 @@ project_tools/
 
 ## 当前限制
 
-- `--account` 已经是显式校验参数，但当前 LongPort 与 Alpaca paper 都按单账户模式运行，不支持真实多账户切换。
+- `--account` 已经是显式校验参数，但当前 LongPort real、`longport-paper` 和 Alpaca paper 都按单账户模式运行，不支持真实多账户切换。
 - `resume-remaining` 当前只支持整数股剩余量；更复杂的碎股或算法单调度仍不在范围内。
 - risk gate 里的 spread / participation / impact 依赖 broker 可提供的 market data；拿不到时会记录 `BYPASS`，而不是伪造指标。
 - LongPort real broker 路径已经存在，但自动化端到端证据仍弱于 Alpaca paper smoke。
