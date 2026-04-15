@@ -102,9 +102,9 @@ project_tools/
 
 ## 设计取向
 
-- 让模块名直接表达职责，避免“平台化”命名先行。
-- live execution 输入边界严格收敛到 canonical `targets.json`。
-- 本地 state 不是附属缓存，而是幂等、恢复和 operator 操作的基础面。
+- 让模块名直接表达职责，避免平台化命名先行。
+- live execution 输入边界严格收敛到统一的持仓清单 targets.json`。
+- 本地 state 是幂等、恢复和 operator 操作的基础面。
 - `orders` / `exceptions` / `order` 明确是 tracked-state 视图，不伪装成 broker 全量 blotter。
 
 ## 当前限制

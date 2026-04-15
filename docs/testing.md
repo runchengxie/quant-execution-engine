@@ -57,6 +57,7 @@ uv run pytest --cov=src/quant_execution_engine --cov-report=term-missing -m 'not
 - e2e 当前证明了 CLI / harness 的 subprocess smoke 行为，包括 signal/target harness 输出、operator harness 的非 paper 拒绝路径。
 - `smoke_operator_harness.py` 已有单测覆盖固定 workflow、preflight-only 路径和 evidence JSON 输出。
 - `longport-paper` 已经是正式 broker backend；提供 `LONGPORT_ACCESS_TOKEN_TEST` 后，可以走 paper preflight / rebalance 路径。
+- `longport-paper` 当前已经通过 operator-supervised paper smoke 跑通过 `submit / query / reconcile / cancel` 最小闭环；这是一条可复现的 paper 证据链，但不是默认自动化测试的一部分。
 - LongPort live quote 相关测试现在会把典型的网络 / 区域 / 凭证异常视为 skip，而不是误报失败。
 
 ## 当前测试还没有证明什么
@@ -77,6 +78,7 @@ uv run pytest --cov=src/quant_execution_engine --cov-report=term-missing -m 'not
 
 ```bash
 PYTHONPATH=src python project_tools/smoke_operator_harness.py --broker alpaca-paper --execute
+PYTHONPATH=src python project_tools/smoke_operator_harness.py --broker longport-paper --execute --cleanup-open-orders --evidence-output outputs/evidence/longport-paper-smoke.json
 ```
 
 如果你只想先确认依赖、凭证、账户和行情都正常，不想写 targets 或发单，可以先跑：
@@ -90,6 +92,7 @@ PYTHONPATH=src python project_tools/smoke_operator_harness.py --broker longport-
 
 ```bash
 PYTHONPATH=src python project_tools/smoke_operator_harness.py --broker alpaca-paper --execute --evidence-output outputs/evidence/operator-smoke.json
+PYTHONPATH=src python project_tools/smoke_operator_harness.py --broker longport-paper --execute --cleanup-open-orders --evidence-output outputs/evidence/longport-paper-smoke.json
 ```
 
 默认 workflow 会串起这些步骤：
@@ -103,11 +106,15 @@ PYTHONPATH=src python project_tools/smoke_operator_harness.py --broker alpaca-pa
 7. `order`，如果本地 state 里找到了最新 tracked order
 8. `reconcile`
 9. `exceptions`
+10. 可选 `cancel-all`
 
 如果你想在 paper 环境末尾顺手清掉仍然 open 的 tracked orders，可以加：
 
 ```bash
 PYTHONPATH=src python project_tools/smoke_operator_harness.py --broker alpaca-paper --execute --cleanup-open-orders
+PYTHONPATH=src python project_tools/smoke_operator_harness.py --broker longport-paper --execute --cleanup-open-orders
 ```
 
 这个工装默认拒绝 non-paper broker；如果你明确知道自己要这么做，需要额外传 `--allow-non-paper`。
+
+如果你准备开始做 LongPort real 的最小实盘验证，先看 [docs/longport-real-smoke.md](longport-real-smoke.md)。

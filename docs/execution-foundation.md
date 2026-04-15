@@ -1,6 +1,6 @@
 # 执行底座
 
-这份文档不是 CLI 手册，也不是目录索引。它的职责是解释这个仓库的执行语义、关键不变量和设计边界。
+这份文档的职责是解释这个仓库的执行语义、关键不变量和设计边界。
 
 如果你想知道命令怎么敲，看 [cli.md](cli.md)。
 如果你想知道文件在哪，看 [architecture.md](architecture.md)。
@@ -23,19 +23,16 @@
 - 账户快照与行情读取
 - `targets.json` 驱动的 rebalance / submit / reconcile
 - tracked order 生命周期
-- execution risk gate
-- kill switch
+- 订单执行的风控检查
 - operator 恢复与本地状态维护
 - 审计日志与 smoke harness
 
 这个仓库不负责：
 
-- research / backtest / alpha
+- 因子研究和回测
 - 数据导入与特征工程
 - 多账户统一路由中台
 - 完整算法执行框架，例如 TWAP / POV
-
-这条边界不是“以后可能会加”的保留口子，而是当前设计原则。
 
 ## 3. 核心对象
 
@@ -87,9 +84,9 @@
 
 ## 6. 风控与 kill switch
 
-这个仓库做的是 execution risk，而不是研究层风控。
+这个仓库做的是订单执行的风控管理。
 
-当前 risk gate 主要关注：
+当前风控管理主要关注：
 
 - 单笔数量
 - 单笔名义金额
@@ -137,17 +134,23 @@ kill switch 也遵守 execution-only 语义：
 - tracked order 查询
 - reconcile
 - exception queue
+- 可选 cleanup / cancel-all
 
 必要时还可以把这次 smoke 写成 evidence JSON，作为 broker-backed 验证记录。
 
+对于 LongPort：
+
+- `longport-paper` 现在已经适合用来做 broker-backed paper evidence
+- `longport` real broker 则应该通过单独的 operator-supervised smoke playbook 来补实盘证据，而不是把 live secret 留在 repo 本地文件里
+
 ## 9. 当前设计取舍
 
-这套底座的设计取舍很明确：
+这套底座的设计取舍：
 
-- 优先把 execution 闭环跑通，而不是优先长平台能力
-- 优先补 operator recovery，而不是先造策略框架
-- 优先补本地状态可诊断性，而不是先切换存储引擎
-- 接受不同 broker 完成度不一致，不强求同时毕业
+- 优先把 execution 闭环跑通
+- 优先补 operator recovery
+- 优先补本地状态可诊断性
+- 接受不同券商支持度和完成度不一致
 
 所以它现在会保留：
 
@@ -163,20 +166,3 @@ kill switch 也遵守 execution-only 语义：
 - event streaming
 - 大而全 dashboard
 - 完整算法执行框架
-
-## 10. 这份文档有没有必要存在
-
-有必要，但前提是它只做“执行语义与设计原则”这件事。
-
-如果它开始重复：
-
-- 命令示例
-- 测试命令
-- 文档目录索引
-- broker 使用教程
-
-那它就会和 README / CLI / testing 文档产生漂移，失去存在价值。
-
-所以这份文档现在的定位应该理解成：
-
-执行域说明书，而不是使用说明书。

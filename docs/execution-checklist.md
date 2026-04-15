@@ -87,7 +87,7 @@
 ### 5. 当前仍然值得补的功能
 
 - `[x]` `longport-paper` backend 已落地
-  当前通过 `LONGPORT_ACCESS_TOKEN_TEST` 走 broker-backed paper submit/query/cancel/reconcile 路径。
+  当前通过 `LONGPORT_ACCESS_TOKEN_TEST` 走 broker-backed paper submit/query/cancel/reconcile 路径，并已经有 operator-supervised paper smoke 证据链。
 - `[~]` LongPort real broker submit/query/cancel/reconcile 的端到端证据仍不够扎实
   代码路径已经存在，但成熟度判断仍要看 operator-supervised smoke 和记载下来的证据链。
 - `[~]` failure-mode regression 还应继续扩
@@ -127,7 +127,8 @@
 1. 继续补 LongPort real broker 的 submit/query/cancel/reconcile 证据链
 2. 扩失败模式回归，优先覆盖拒单、迟到 fill、pending cancel、quote/region/network 异常
 3. 视实际需要补 broker-specific rejection taxonomy
-4. 之后再考虑 IBKR 最小切片
+4. 继续把 Alpaca paper 当作稳定 regression / smoke 基线，而不是新的产品中心
+5. 之后再考虑 IBKR 最小切片
 
 ## 维护原则
 

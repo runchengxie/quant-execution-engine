@@ -22,7 +22,8 @@ execution-only 仓库，聚焦 broker-backed 下单、对账、恢复和 operato
 ## 成熟度与证明边界
 
 - LongPort real broker、`longport-paper` 和 Alpaca paper 都已经走 broker-backed `submit / query / cancel / reconcile` 代码路径。
-- `longport-paper` 需要 `LONGPORT_ACCESS_TOKEN_TEST`；Alpaca paper 仍是当前更成熟的重复 smoke 环境。
+- `longport-paper` 需要 `LONGPORT_ACCESS_TOKEN_TEST`；当前已经通过 operator-supervised paper smoke 跑通过 `submit / query / reconcile / cancel` 最小闭环。
+- Alpaca paper 仍然适合作为更便宜、更稳定的重复 smoke / regression 基线，但不应该反过来驱动仓库长成 Alpaca-first 平台。
 - LongPort real broker 路径已经存在，但自动化端到端证据仍然弱于 Alpaca paper。对 real broker 的成熟度判断，应该以 operator-supervised smoke 和记载下来的证据链为准，而不是只看“代码路径存在”。
 - `orders` / `exceptions` / `order` 展示的是本地 execution state 中已跟踪的订单，不是 broker 全量订单视图。
 - `--account` 当前是显式 label 解析与 fail-fast 校验；LongPort 和 Alpaca paper 仍按单账户语义运行。
@@ -90,6 +91,12 @@ LongPort paper 额外需要：
 
 - `LONGPORT_ACCESS_TOKEN_TEST`
 
+LongPort live token 的注入方式：
+
+- 不要把 real `LONGPORT_ACCESS_TOKEN` 放进 repo 根目录 `.env*` / `.envrc*`
+- 推荐在当前 shell 显式 `export`，或从 repo 外部的私有文件 `source`
+- 具体步骤见 [docs/longport-real-smoke.md](docs/longport-real-smoke.md)
+
 LongPort real broker 的 `--execute` 额外要求：
 
 - `QEXEC_ENABLE_LIVE=1`
@@ -137,6 +144,7 @@ PYTHONPATH=src python project_tools/smoke_operator_harness.py --broker alpaca-pa
 PYTHONPATH=src python project_tools/smoke_operator_harness.py --broker alpaca-paper --execute
 PYTHONPATH=src python project_tools/smoke_operator_harness.py --broker alpaca-paper --execute --evidence-output outputs/evidence/operator-smoke.json
 PYTHONPATH=src python project_tools/smoke_operator_harness.py --broker longport-paper --preflight-only
+PYTHONPATH=src python project_tools/smoke_operator_harness.py --broker longport-paper --execute --cleanup-open-orders --evidence-output outputs/evidence/longport-paper-smoke.json
 ```
 
 它们的目标是驱动 dry-run / paper / operator-supervised 验证，而不是提供策略层。
@@ -176,5 +184,6 @@ PYTHONPATH=src python project_tools/smoke_operator_harness.py --broker longport-
 - [docs/configuration.md](docs/configuration.md)
 - [docs/execution-checklist.md](docs/execution-checklist.md)
 - [docs/execution-foundation.md](docs/execution-foundation.md)
+- [docs/longport-real-smoke.md](docs/longport-real-smoke.md)
 - [docs/testing.md](docs/testing.md)
 - [docs/targets.md](docs/targets.md)

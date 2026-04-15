@@ -289,6 +289,7 @@ PYTHONPATH=src python project_tools/smoke_signal_harness.py --output outputs/tar
 PYTHONPATH=src python project_tools/smoke_target_harness.py --scenario rebalance --print-json
 PYTHONPATH=src python project_tools/smoke_operator_harness.py --broker alpaca-paper --preflight-only
 PYTHONPATH=src python project_tools/smoke_operator_harness.py --broker longport-paper --preflight-only
+PYTHONPATH=src python project_tools/smoke_operator_harness.py --broker longport-paper --execute --cleanup-open-orders --evidence-output outputs/evidence/longport-paper-smoke.json
 ```
 
 `smoke_operator_harness.py` 是最接近 operator workflow 的工装；需要留证时可以加 `--evidence-output`。
