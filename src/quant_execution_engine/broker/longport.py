@@ -1,9 +1,7 @@
 import os
 import time
 from collections.abc import Iterable
-from dataclasses import dataclass
 from decimal import Decimal
-from enum import Enum
 from typing import Any
 
 # Compatibility import: prefer longport, fallback to longbridge and finally local stubs
@@ -51,46 +49,22 @@ from .longport_credentials import (
     resolve_longport_credentials,
     resolve_longport_runtime_value,
 )
+from .longport_support import (
+    BrokerLimits,
+    Env,
+    coerce_iso as _coerce_iso,
+    enum_value as _enum_value,
+    getenv_both,
+    market_of as _market_of,
+    market_tz as _market_tz,
+    normalize_order_status as _normalize_order_status,
+    to_lb_symbol as _to_lb_symbol,
+)
 from ..fx import to_usd
 from ..logging import get_logger
 from ..models import Quote
 
 logger = get_logger(__name__)
-
-
-def _normalize_order_status(status: object) -> str:
-    raw = str(_enum_value(status)).strip()
-    if not raw:
-        return "UNKNOWN"
-    normalized = raw.replace(" ", "").replace("-", "").replace("_", "")
-    mapping = {
-        "NotReported": "PENDING_NEW",
-        "ReplacedNotReported": "PENDING_REPLACE",
-        "ProtectedNotReported": "PENDING_NEW",
-        "VarietiesNotReported": "PENDING_NEW",
-        "WaitToNew": "WAIT_TO_NEW",
-        "New": "NEW",
-        "WaitToReplace": "PENDING_REPLACE",
-        "PendingReplace": "PENDING_REPLACE",
-        "Replaced": "NEW",
-        "PartialFilled": "PARTIALLY_FILLED",
-        "WaitToCancel": "PENDING_CANCEL",
-        "PendingCancel": "PENDING_CANCEL",
-        "Rejected": "REJECTED",
-        "Canceled": "CANCELED",
-        "Expired": "EXPIRED",
-        "PartialWithdrawal": "PARTIALLY_FILLED",
-        "Filled": "FILLED",
-    }
-    return mapping.get(normalized, normalized.upper())
-
-
-def _coerce_iso(value: object) -> str:
-    if value is None:
-        return ""
-    if hasattr(value, "isoformat"):
-        return value.isoformat()
-    return str(value)
 
 
 def get_config():
@@ -101,111 +75,12 @@ def get_config():
     return Config.from_env()
 
 
-def getenv_both(name_new: str, name_old: str, default: str = None) -> str:
-    """Compatibility environment variable reading function, prioritize new prefix, fallback to old prefix.
-
-    Args:
-        name_new: New environment variable name (LONGPORT_*)
-        name_old: Old environment variable name (LONGBRIDGE_*)
-        default: Default value
-
-    Returns:
-        Environment variable value or default value
-    """
-    return os.getenv(name_new) or os.getenv(name_old) or default
-
-
-class Env(str, Enum):
-    REAL = "real"
-    PAPER = "paper"
-
-
-@dataclass
-class BrokerLimits:
-    # 0 or negative means "no local cap" (unlimited, rely on broker)
-    max_notional_per_order: float = 0.0
-    max_qty_per_order: int = 0
-    trading_window_start: str = "09:30"  # Local time (fallback only)
-    trading_window_end: str = "16:00"
-
-
-def _to_lb_symbol(ticker: str, market: str | None = None) -> str:
-    """Convert ticker to LongPort symbol format.
-
-    Args:
-        ticker: Stock ticker symbol
-
-    Returns:
-        Formatted symbol for LongPort API
-    """
-    t = ticker.strip().upper()
-    explicit_market = str(market or "").strip().upper()
-    if explicit_market:
-        if "." in t and t.rsplit(".", 1)[-1] in {"US", "HK", "SG", "CN"}:
-            t = t.rsplit(".", 1)[0]
-        return f"{t}.{explicit_market}"
-    if t.endswith((".US", ".HK", ".SG", ".CN")):
-        return t
-    return f"{t}.US"  # Most stocks in your project are US stocks, default to .US
-
-
-def _market_of(symbol: str) -> str:
-    s = symbol.upper()
-    if s.endswith(".US"):
-        return "US"
-    if s.endswith(".HK"):
-        return "HK"
-    if s.endswith(".CN"):
-        return "CN"
-    if s.endswith(".SG"):
-        return "SG"
-    # 默认为美股
-    return "US"
-
-
 def _market_enum(m: str) -> Market:
     return {
         "US": Market.US,
         "HK": Market.HK,
         "CN": Market.CN,
         "SG": Market.SG,
-    }[m]
-
-
-def _enum_value(e):
-    """Return a comparable value for both enum objects and string constants.
-
-    ``longport`` exposes order-related constants as enum-like objects without
-    a ``value`` attribute, whereas the legacy ``longbridge`` package and the
-    test stubs use plain strings.  This helper normalises these different
-    representations to a simple string such as ``"Buy"`` or ``"LO"``.  If the
-    object provides a ``value`` attribute we use it, otherwise we fall back to
-    the textual representation and extract the last component after a dot
-    (e.g. ``OrderType.LO`` -> ``"LO"``).
-    """
-
-    if hasattr(e, "value"):
-        try:  # ``Mock`` objects also have a ``value`` attribute; keep them as-is
-            from unittest.mock import Mock
-
-            if isinstance(e, Mock):
-                return e
-        except Exception:  # pragma: no cover - mock import always available in tests
-            pass
-        return e.value
-    s = str(e)
-    if "." in s:
-        return s.split(".")[-1]
-    return e
-
-
-def _market_tz(m: str) -> str:
-    # Exchange local timezone
-    return {
-        "US": "America/New_York",
-        "HK": "Asia/Hong_Kong",
-        "CN": "Asia/Shanghai",
-        "SG": "Asia/Singapore",
     }[m]
 
 

@@ -456,6 +456,82 @@ def test_run_operator_smoke_workflow_writes_evidence_json(
 
     assert result == 0
     assert evidence["broker"] == "alpaca-paper"
+    assert evidence["success"] is True
+    assert evidence["failed_step"] is None
     assert evidence["latest_tracked_order_ref"] is None
     assert evidence["targets_output"] == str(output_path)
     assert [step["name"] for step in evidence["steps"]] == ["config", "account", "quote", "rebalance"]
+
+
+def test_run_operator_smoke_workflow_writes_failure_evidence_for_longport_subprocess_step(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = load_smoke_operator_module()
+    subprocess_calls: list[list[str]] = []
+
+    def ok(name: str):
+        def _inner(*args, **kwargs):
+            return SimpleNamespace(exit_code=0, stdout=f"{name} ok", stderr=None)
+
+        return _inner
+
+    def fake_subprocess_run(argv, **kwargs):
+        captured = list(argv)
+        subprocess_calls.append(captured)
+        step_name = captured[3]
+        if step_name == "reconcile":
+            return SimpleNamespace(returncode=7, stdout="", stderr="reconcile exploded\n")
+        return SimpleNamespace(returncode=0, stdout=f"{step_name} ok\n", stderr="")
+
+    monkeypatch.setattr(module, "run_config", ok("config"))
+    monkeypatch.setattr(module, "run_account", ok("account"))
+    monkeypatch.setattr(module, "run_quote", ok("quote"))
+    monkeypatch.setattr(module.subprocess, "run", fake_subprocess_run)
+    monkeypatch.setattr(module, "get_broker_adapter", lambda broker_name=None: DummyLongPortPaperAdapter())
+    monkeypatch.setattr(
+        module,
+        "get_account_snapshot",
+        lambda **kwargs: AccountSnapshot(
+            env="paper",
+            cash_usd=1000.0,
+            positions=[],
+        ),
+    )
+    monkeypatch.setattr(module, "latest_tracked_order_ref", lambda **kwargs: "broker-aapl-1")
+
+    output_path = tmp_path / "smoke-operator.json"
+    evidence_path = tmp_path / "smoke-failure-evidence.json"
+    args = argparse.Namespace(
+        broker="longport-paper",
+        account="main",
+        symbol="AAPL",
+        market="US",
+        output=str(output_path),
+        execute=True,
+        preflight_only=False,
+        cleanup_open_orders=False,
+        allow_non_paper=False,
+        evidence_output=str(evidence_path),
+    )
+
+    result = module.run_operator_smoke_workflow(args)
+    evidence = json.loads(evidence_path.read_text(encoding="utf-8"))
+
+    assert result == 1
+    assert len(subprocess_calls) == 4
+    assert evidence["success"] is False
+    assert evidence["failed_step"] == "reconcile"
+    assert evidence["failure_message"] == "reconcile failed with exit code 7"
+    assert evidence["latest_tracked_order_ref"] == "broker-aapl-1"
+    assert [step["name"] for step in evidence["steps"]] == [
+        "config",
+        "account",
+        "quote",
+        "rebalance",
+        "orders",
+        "order",
+        "reconcile",
+    ]
+    assert evidence["steps"][-1]["exit_code"] == 7
+    assert evidence["steps"][-1]["stderr"] == "reconcile exploded"

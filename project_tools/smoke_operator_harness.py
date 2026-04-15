@@ -52,6 +52,16 @@ LONGPORT_SMOKE_ENV_KEYS = (
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 
+class SmokeWorkflowStepError(RuntimeError):
+    """Raised when a smoke workflow step returns a non-zero exit code."""
+
+    def __init__(self, payload: dict[str, object]) -> None:
+        self.payload = payload
+        super().__init__(
+            f"{payload['name']} failed with exit code {payload['exit_code']}"
+        )
+
+
 def capture_broker_env(broker: str) -> dict[str, str | None]:
     if not str(broker).startswith("longport"):
         return {}
@@ -182,19 +192,20 @@ def run_step(name: str, result: object) -> dict[str, object]:
     exit_code = int(getattr(result, "exit_code", 1))
     stdout = getattr(result, "stdout", None)
     stderr = getattr(result, "stderr", None)
+    payload = {
+        "name": name,
+        "exit_code": exit_code,
+        "stdout": stdout,
+        "stderr": stderr,
+    }
     print(f"\n== {name} ==")
     if stdout:
         print(stdout)
     if stderr:
         print(stderr, file=sys.stderr)
     if exit_code != 0:
-        raise RuntimeError(f"{name} failed with exit code {exit_code}")
-    return {
-        "name": name,
-        "exit_code": exit_code,
-        "stdout": stdout,
-        "stderr": stderr,
-    }
+        raise SmokeWorkflowStepError(payload)
+    return payload
 
 
 def write_evidence(
@@ -206,6 +217,9 @@ def write_evidence(
     steps: list[dict[str, object]],
     output_path: Path,
     latest_order_ref: str | None,
+    success: bool = True,
+    failure_message: str | None = None,
+    failed_step: str | None = None,
 ) -> Path | None:
     evidence_output = getattr(args, "evidence_output", None)
     if not evidence_output:
@@ -224,6 +238,9 @@ def write_evidence(
         "targets_output": str(output_path),
         "state_path": str(ExecutionStateStore().path_for(broker, account_label)),
         "latest_tracked_order_ref": latest_order_ref,
+        "success": bool(success),
+        "failure_message": failure_message,
+        "failed_step": failed_step,
         "steps": steps,
     }
     evidence_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -255,149 +272,181 @@ def run_operator_smoke_workflow(args: argparse.Namespace) -> int:
     longport_cli_isolation = str(broker).startswith("longport") and bool(args.execute)
     steps: list[dict[str, object]] = []
     output_path = Path(args.output)
-    steps.append(run_step_with_env(broker_env, "config", run_config, True, broker=broker))
-    steps.append(
-        run_step_with_env(
-            broker_env,
-            "account",
-            run_account,
-            account=account_label,
-            broker=broker,
-        )
-    )
-    steps.append(run_step_with_env(broker_env, "quote", run_quote, [canonical], broker=broker))
-
-    if args.preflight_only:
-        print("\n== preflight ==\nPreflight checks passed; skipping targets and broker mutation steps.")
-        write_evidence(
-            args=args,
-            broker=broker,
-            account_label=account_label,
-            canonical=canonical,
-            steps=steps,
-            output_path=output_path,
-            latest_order_ref=None,
-        )
-        return 0
-
-    apply_broker_env(broker_env)
-    snapshot = get_account_snapshot(
-        env="paper" if is_paper_broker(broker) else "real",
-        include_quotes=False,
-        broker_name=broker,
-        account_label=account_label,
-    )
-    current_quantity = next(
-        (
-            int(position.quantity)
-            for position in snapshot.positions
-            if position.symbol.upper() == canonical
-        ),
-        0,
-    )
-    targets = build_operator_smoke_targets(
-        symbol=args.symbol,
-        market=args.market,
-        current_quantity=current_quantity,
-    )
-    write_targets_json(
-        output_path,
-        asof="smoke-operator",
-        source="smoke-operator-harness",
-        targets=targets,
-        notes=f"operator smoke for {canonical}",
-    )
-    print(f"\n== targets ==\nWrote {output_path} with target_quantity={targets[0]['target_quantity']}")
-
-    steps.append(
-        (
-            run_cli_subprocess_step(
+    order_ref: str | None = None
+    try:
+        steps.append(run_step_with_env(broker_env, "config", run_config, True, broker=broker))
+        steps.append(
+            run_step_with_env(
                 broker_env,
-                "rebalance",
-                [
-                    sys.executable,
-                    "-m",
-                    "quant_execution_engine",
-                    "rebalance",
-                    str(output_path),
-                    "--broker",
-                    broker,
-                    "--account",
-                    account_label,
-                    "--execute",
-                ],
-            )
-            if longport_cli_isolation
-            else run_step_with_env(
-                broker_env,
-                "rebalance",
-                run_rebalance,
-                str(output_path),
-                account=account_label,
-                dry_run=not args.execute,
-                broker=broker,
-            )
-        )
-    )
-
-    if not args.execute:
-        write_evidence(
-            args=args,
-            broker=broker,
-            account_label=account_label,
-            canonical=canonical,
-            steps=steps,
-            output_path=output_path,
-            latest_order_ref=None,
-        )
-        return 0
-
-    steps.append(
-        (
-            run_cli_subprocess_step(
-                broker_env,
-                "orders",
-                [
-                    sys.executable,
-                    "-m",
-                    "quant_execution_engine",
-                    "orders",
-                    "--broker",
-                    broker,
-                    "--account",
-                    account_label,
-                    "--symbol",
-                    args.symbol,
-                ],
-            )
-            if longport_cli_isolation
-            else run_step_with_env(
-                broker_env,
-                "orders",
-                run_orders,
+                "account",
+                run_account,
                 account=account_label,
                 broker=broker,
-                symbol_filter=args.symbol,
             )
         )
-    )
-    order_ref = latest_tracked_order_ref(
-        broker_name=broker,
-        account_label=account_label,
-        symbol_filter=args.symbol,
-    )
-    if order_ref:
+        steps.append(run_step_with_env(broker_env, "quote", run_quote, [canonical], broker=broker))
+
+        if args.preflight_only:
+            print("\n== preflight ==\nPreflight checks passed; skipping targets and broker mutation steps.")
+            write_evidence(
+                args=args,
+                broker=broker,
+                account_label=account_label,
+                canonical=canonical,
+                steps=steps,
+                output_path=output_path,
+                latest_order_ref=None,
+            )
+            return 0
+
+        apply_broker_env(broker_env)
+        snapshot = get_account_snapshot(
+            env="paper" if is_paper_broker(broker) else "real",
+            include_quotes=False,
+            broker_name=broker,
+            account_label=account_label,
+        )
+        current_quantity = next(
+            (
+                int(position.quantity)
+                for position in snapshot.positions
+                if position.symbol.upper() == canonical
+            ),
+            0,
+        )
+        targets = build_operator_smoke_targets(
+            symbol=args.symbol,
+            market=args.market,
+            current_quantity=current_quantity,
+        )
+        write_targets_json(
+            output_path,
+            asof="smoke-operator",
+            source="smoke-operator-harness",
+            targets=targets,
+            notes=f"operator smoke for {canonical}",
+        )
+        print(f"\n== targets ==\nWrote {output_path} with target_quantity={targets[0]['target_quantity']}")
+
         steps.append(
             (
                 run_cli_subprocess_step(
                     broker_env,
-                    "order",
+                    "rebalance",
                     [
                         sys.executable,
                         "-m",
                         "quant_execution_engine",
+                        "rebalance",
+                        str(output_path),
+                        "--broker",
+                        broker,
+                        "--account",
+                        account_label,
+                        "--execute",
+                    ],
+                )
+                if longport_cli_isolation
+                else run_step_with_env(
+                    broker_env,
+                    "rebalance",
+                    run_rebalance,
+                    str(output_path),
+                    account=account_label,
+                    dry_run=not args.execute,
+                    broker=broker,
+                )
+            )
+        )
+
+        if not args.execute:
+            write_evidence(
+                args=args,
+                broker=broker,
+                account_label=account_label,
+                canonical=canonical,
+                steps=steps,
+                output_path=output_path,
+                latest_order_ref=None,
+            )
+            return 0
+
+        steps.append(
+            (
+                run_cli_subprocess_step(
+                    broker_env,
+                    "orders",
+                    [
+                        sys.executable,
+                        "-m",
+                        "quant_execution_engine",
+                        "orders",
+                        "--broker",
+                        broker,
+                        "--account",
+                        account_label,
+                        "--symbol",
+                        args.symbol,
+                    ],
+                )
+                if longport_cli_isolation
+                else run_step_with_env(
+                    broker_env,
+                    "orders",
+                    run_orders,
+                    account=account_label,
+                    broker=broker,
+                    symbol_filter=args.symbol,
+                )
+            )
+        )
+        order_ref = latest_tracked_order_ref(
+            broker_name=broker,
+            account_label=account_label,
+            symbol_filter=args.symbol,
+        )
+        if order_ref:
+            steps.append(
+                (
+                    run_cli_subprocess_step(
+                        broker_env,
                         "order",
-                        order_ref,
+                        [
+                            sys.executable,
+                            "-m",
+                            "quant_execution_engine",
+                            "order",
+                            order_ref,
+                            "--broker",
+                            broker,
+                            "--account",
+                            account_label,
+                        ],
+                    )
+                    if longport_cli_isolation
+                    else run_step_with_env(
+                        broker_env,
+                        "order",
+                        run_order,
+                        order_ref=order_ref,
+                        account=account_label,
+                        broker=broker,
+                    )
+                )
+            )
+        else:
+            print("\n== order ==\nNo tracked broker order found after rebalance")
+
+        steps.append(
+            (
+                run_cli_subprocess_step(
+                    broker_env,
+                    "reconcile",
+                    [
+                        sys.executable,
+                        "-m",
+                        "quant_execution_engine",
+                        "reconcile",
                         "--broker",
                         broker,
                         "--account",
@@ -407,113 +456,99 @@ def run_operator_smoke_workflow(args: argparse.Namespace) -> int:
                 if longport_cli_isolation
                 else run_step_with_env(
                     broker_env,
-                    "order",
-                    run_order,
-                    order_ref=order_ref,
+                    "reconcile",
+                    run_reconcile,
                     account=account_label,
                     broker=broker,
                 )
             )
         )
-    else:
-        print("\n== order ==\nNo tracked broker order found after rebalance")
-
-    steps.append(
-        (
-            run_cli_subprocess_step(
-                broker_env,
-                "reconcile",
-                [
-                    sys.executable,
-                    "-m",
-                    "quant_execution_engine",
-                    "reconcile",
-                    "--broker",
-                    broker,
-                    "--account",
-                    account_label,
-                ],
-            )
-            if longport_cli_isolation
-            else run_step_with_env(
-                broker_env,
-                "reconcile",
-                run_reconcile,
-                account=account_label,
-                broker=broker,
-            )
-        )
-    )
-    steps.append(
-        (
-            run_cli_subprocess_step(
-                broker_env,
-                "exceptions",
-                [
-                    sys.executable,
-                    "-m",
-                    "quant_execution_engine",
-                    "exceptions",
-                    "--broker",
-                    broker,
-                    "--account",
-                    account_label,
-                    "--symbol",
-                    args.symbol,
-                ],
-            )
-            if longport_cli_isolation
-            else run_step_with_env(
-                broker_env,
-                "exceptions",
-                run_exceptions,
-                account=account_label,
-                broker=broker,
-                symbol_filter=args.symbol,
-            )
-        )
-    )
-
-    if args.cleanup_open_orders:
-        if longport_cli_isolation:
-            steps.append(
+        steps.append(
+            (
                 run_cli_subprocess_step(
                     broker_env,
-                    "cancel-all",
+                    "exceptions",
                     [
                         sys.executable,
                         "-m",
                         "quant_execution_engine",
-                        "cancel-all",
+                        "exceptions",
                         "--broker",
                         broker,
                         "--account",
                         account_label,
+                        "--symbol",
+                        args.symbol,
                     ],
                 )
-            )
-        else:
-            steps.append(
-                run_step_with_env(
+                if longport_cli_isolation
+                else run_step_with_env(
                     broker_env,
-                    "cancel-all",
-                    run_cancel_all,
+                    "exceptions",
+                    run_exceptions,
                     account=account_label,
                     broker=broker,
+                    symbol_filter=args.symbol,
                 )
             )
+        )
 
-    write_evidence(
-        args=args,
-        broker=broker,
-        account_label=account_label,
-        canonical=canonical,
-        steps=steps,
-        output_path=output_path,
-        latest_order_ref=order_ref,
-    )
+        if args.cleanup_open_orders:
+            if longport_cli_isolation:
+                steps.append(
+                    run_cli_subprocess_step(
+                        broker_env,
+                        "cancel-all",
+                        [
+                            sys.executable,
+                            "-m",
+                            "quant_execution_engine",
+                            "cancel-all",
+                            "--broker",
+                            broker,
+                            "--account",
+                            account_label,
+                        ],
+                    )
+                )
+            else:
+                steps.append(
+                    run_step_with_env(
+                        broker_env,
+                        "cancel-all",
+                        run_cancel_all,
+                        account=account_label,
+                        broker=broker,
+                    )
+                )
 
-    return 0
+        write_evidence(
+            args=args,
+            broker=broker,
+            account_label=account_label,
+            canonical=canonical,
+            steps=steps,
+            output_path=output_path,
+            latest_order_ref=order_ref,
+        )
+
+        return 0
+    except SmokeWorkflowStepError as exc:
+        steps.append(exc.payload)
+        write_evidence(
+            args=args,
+            broker=broker,
+            account_label=account_label,
+            canonical=canonical,
+            steps=steps,
+            output_path=output_path,
+            latest_order_ref=order_ref,
+            success=False,
+            failure_message=str(exc),
+            failed_step=str(exc.payload["name"]),
+        )
+        print(str(exc), file=sys.stderr)
+        return 1
 
 
 def main() -> int:

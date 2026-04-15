@@ -96,6 +96,12 @@ PYTHONPATH=src python project_tools/smoke_operator_harness.py --broker alpaca-pa
 PYTHONPATH=src python project_tools/smoke_operator_harness.py --broker longport-paper --execute --cleanup-open-orders --evidence-output outputs/evidence/longport-paper-smoke.json
 ```
 
+如果 workflow 中途某一步失败，`--evidence-output` 现在也会保留 partial evidence，包括：
+
+- 已完成步骤
+- 失败步骤名
+- 失败步骤的 exit code / stderr
+
 默认 workflow 会串起这些步骤：
 
 1. `config`
