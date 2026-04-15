@@ -182,6 +182,16 @@ def _resolve_secret(
     return None, None
 
 
+def _search_order_for_longport_env(env_name: str) -> tuple[str, ...]:
+    """Return deterministic source precedence for LongPort configuration."""
+
+    if env_name == "paper":
+        # Keep paper/smoke behavior anchored to the repo-local test config first,
+        # then allow explicit env overrides or a user-private fallback.
+        return ("repo", "env", "user")
+    return ("user", "env")
+
+
 def resolve_longport_credentials(
     env_name: str,
     *,
@@ -248,14 +258,8 @@ def probe_longport_credentials(
     if normalized_env not in {"real", "paper"}:
         raise ValueError(f"unsupported longport environment: {env_name}")
 
-    app_search_order = ("env", "repo", "user") if normalized_env == "paper" else (
-        "user",
-        "env",
-    )
-    token_search_order = ("env", "repo", "user") if normalized_env == "paper" else (
-        "user",
-        "env",
-    )
+    app_search_order = _search_order_for_longport_env(normalized_env)
+    token_search_order = _search_order_for_longport_env(normalized_env)
 
     app_key, app_key_source = _resolve_secret(
         ("LONGPORT_APP_KEY", "LONGBRIDGE_APP_KEY"),
@@ -319,10 +323,7 @@ def resolve_longport_runtime_value(
     if normalized_env not in {"real", "paper"}:
         raise ValueError(f"unsupported longport environment: {env_name}")
 
-    search_order = ("env", "repo", "user") if normalized_env == "paper" else (
-        "user",
-        "env",
-    )
+    search_order = _search_order_for_longport_env(normalized_env)
     value, source = _resolve_secret(
         names,
         project_root=root,

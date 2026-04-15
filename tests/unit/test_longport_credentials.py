@@ -5,6 +5,7 @@ import pytest
 from quant_execution_engine.broker.longport_credentials import (
     probe_longport_credentials,
     resolve_longport_credentials,
+    resolve_longport_runtime_value,
 )
 
 
@@ -172,3 +173,45 @@ def test_probe_longport_paper_credentials_can_fall_back_to_user_env(
     assert probe.access_token_source == (
         f"user-private {user_env} (LONGPORT_ACCESS_TOKEN_TEST)"
     )
+
+
+def test_resolve_longport_paper_runtime_prefers_repo_over_process_env(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    (tmp_path / ".env").write_text(
+        'LONGPORT_REGION="cn"\n',
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("LONGPORT_REGION", "hk")
+
+    value, source = resolve_longport_runtime_value(
+        ("LONGPORT_REGION",),
+        env_name="paper",
+        project_root=tmp_path,
+    )
+
+    assert value == "cn"
+    assert source == "repo-local .env (LONGPORT_REGION)"
+
+
+def test_resolve_longport_paper_runtime_can_fall_back_to_user_env(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    user_env = tmp_path / "longport-live.env"
+    user_env.write_text(
+        'export LONGPORT_ENABLE_OVERNIGHT="true"\n',
+        encoding="utf-8",
+    )
+    monkeypatch.delenv("LONGPORT_ENABLE_OVERNIGHT", raising=False)
+
+    value, source = resolve_longport_runtime_value(
+        ("LONGPORT_ENABLE_OVERNIGHT",),
+        env_name="paper",
+        project_root=tmp_path,
+        user_env_path=user_env,
+    )
+
+    assert value == "true"
+    assert source == f"user-private {user_env} (LONGPORT_ENABLE_OVERNIGHT)"

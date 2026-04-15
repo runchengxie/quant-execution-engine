@@ -130,8 +130,6 @@ def test_main_routes_config() -> None:
 def test_run_config_longport_reports_credential_sources(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setenv("LONGPORT_REGION", "cn")
-    monkeypatch.setenv("LONGPORT_ENABLE_OVERNIGHT", "true")
     monkeypatch.setattr(
         cli,
         "probe_longport_credentials",
@@ -146,11 +144,28 @@ def test_run_config_longport_reports_credential_sources(
             access_token_source="user-private ~/.config/qexec/longport-live.env (LONGPORT_ACCESS_TOKEN)",
         ),
     )
+    monkeypatch.setattr(
+        cli,
+        "resolve_longport_runtime_value",
+        lambda names, *, env_name, default="": (
+            ("cn", "repo-local .env (LONGPORT_REGION)")
+            if names == ("LONGPORT_REGION", "LONGBRIDGE_REGION")
+            else (
+                "true",
+                "user-private ~/.config/qexec/longport-live.env (LONGPORT_ENABLE_OVERNIGHT)",
+            )
+        ),
+    )
 
     result = cli.run_config(True, broker="longport")
 
     assert result.exit_code == 0
     assert result.stdout is not None
+    assert "- Region Source:         repo-local .env (LONGPORT_REGION)" in result.stdout
+    assert (
+        "- Overnight Source:      user-private ~/.config/qexec/longport-live.env (LONGPORT_ENABLE_OVERNIGHT)"
+        in result.stdout
+    )
     assert "- App Key Source:        repo-local .env (LONGPORT_APP_KEY)" in result.stdout
     assert "- App Secret Source:     repo-local .env (LONGPORT_APP_SECRET)" in result.stdout
     assert (
@@ -544,6 +559,7 @@ def test_run_rebalance_live_requires_explicit_enable(
     target_file = tmp_path / "targets.json"
     target_file.write_text("{}", encoding="utf-8")
     monkeypatch.delenv("QEXEC_ENABLE_LIVE", raising=False)
+    monkeypatch.setattr(guards, "resolve_live_enable_value", lambda: None)
 
     with patch.object(cli, "read_targets_json") as mock_read_targets:
         result = cli.run_rebalance(str(target_file), dry_run=False)

@@ -693,12 +693,12 @@ def run_config(show: bool = True, broker: str | None = None) -> CommandResult:
     default_account = resolve_default_account_label()
 
     longport_env_name = "paper" if selected_broker == "longport-paper" else "real"
-    region, _region_source = resolve_longport_runtime_value(
+    region, region_source = resolve_longport_runtime_value(
         ("LONGPORT_REGION", "LONGBRIDGE_REGION"),
         env_name=longport_env_name,
         default="hk",
     )
-    overnight, _overnight_source = resolve_longport_runtime_value(
+    overnight, overnight_source = resolve_longport_runtime_value(
         ("LONGPORT_ENABLE_OVERNIGHT", "LONGBRIDGE_ENABLE_OVERNIGHT"),
         env_name=longport_env_name,
         default="false",
@@ -764,11 +764,15 @@ def run_config(show: bool = True, broker: str | None = None) -> CommandResult:
         app_key_source = credentials.app_key_source or "(not found)"
         app_secret_source = credentials.app_secret_source or "(not found)"
         token_source = credentials.access_token_source or "(not found)"
+        resolved_region_source = region_source or "(default)"
+        resolved_overnight_source = overnight_source or "(default)"
         lines.extend(
             [
                 "- Region:                " + region,
+                "- Region Source:         " + resolved_region_source,
                 "- Overnight:             "
                 + ("enabled" if _to_bool(overnight) else "disabled"),
+                "- Overnight Source:      " + resolved_overnight_source,
                 "- Local Max Notional:    " + _fmt_unlimited(_to_float(max_notional, 0.0)),
                 "- Local Max Quantity:    " + _fmt_unlimited(_to_int(max_qty, 0)),
                 "- Trade Window:          " + f"{tw_start} - {tw_end}",

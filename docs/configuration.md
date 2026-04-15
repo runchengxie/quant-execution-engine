@@ -51,6 +51,23 @@
 
 这两个变量仍会被兼容读取，但当前 CLI 主执行路径更推荐通过 `execution.risk.*` 配置本地风控阈值。
 
+### LongPort 读取优先级
+
+当前项目把 LongPort 的 paper 和 real 路径故意分开处理：
+
+- `longport-paper`：优先读取 repo 根目录 `.env` / `.env.local`，其次读取当前进程环境变量，最后才回退到 `~/.config/qexec/longport-live.env`
+- `longport` real：优先读取 `~/.config/qexec/longport-live.env`，其次读取当前进程环境变量
+
+这样做的目的很直接：
+
+- paper / smoke 保持以项目内测试配置为主，不容易被外部残留环境变量串偏
+- real 路径默认走用户私有配置，不把 live token 放进 repo 本地文件
+
+另外：
+
+- `QEXEC_ENABLE_LIVE` 会先读当前进程环境变量；如果没设置，再回退到 `~/.config/qexec/longport-live.env`
+- `qexec config --broker longport` 和 `qexec config --broker longport-paper` 现在会显示 App Key / Secret / Token / Region / Overnight 的命中来源，便于排查到底读到了哪一层配置
+
 ### Alpaca paper
 
 必需：

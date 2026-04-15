@@ -95,6 +95,13 @@ uv run python -m quant_execution_engine quote AAPL --broker longport
 
 如果这里没过，不要继续做 real `--execute`。
 
+`config --broker longport` 现在会直接显示：
+
+- App Key / Secret / Access Token 的来源
+- Region / Overnight 的来源
+
+如果你想确认 real 路径是不是确实走了 `~/.config/qexec/longport-live.env`，先看这个输出就够了。
+
 ## 4. 最小 targets 文件
 
 准备一个极小仓位、流动性足够高、你能接受的最小 smoke 目标。
