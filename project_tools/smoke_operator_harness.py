@@ -5,9 +5,12 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
+import subprocess
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
+from types import SimpleNamespace
 
 from quant_execution_engine.account import get_account_snapshot
 from quant_execution_engine.broker import (
@@ -28,6 +31,83 @@ from quant_execution_engine.cli import (
 )
 from quant_execution_engine.execution import ExecutionStateStore
 from quant_execution_engine.targets import write_targets_json
+
+
+LONGPORT_SMOKE_ENV_KEYS = (
+    "LONGPORT_APP_KEY",
+    "LONGPORT_APP_SECRET",
+    "LONGPORT_ACCESS_TOKEN",
+    "LONGPORT_ACCESS_TOKEN_REAL",
+    "LONGPORT_ACCESS_TOKEN_TEST",
+    "LONGPORT_REGION",
+    "LONGPORT_ENABLE_OVERNIGHT",
+    "LONGBRIDGE_APP_KEY",
+    "LONGBRIDGE_APP_SECRET",
+    "LONGBRIDGE_ACCESS_TOKEN",
+    "LONGBRIDGE_ACCESS_TOKEN_REAL",
+    "LONGBRIDGE_ACCESS_TOKEN_TEST",
+    "LONGBRIDGE_REGION",
+    "LONGBRIDGE_ENABLE_OVERNIGHT",
+)
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+
+
+def capture_broker_env(broker: str) -> dict[str, str | None]:
+    if not str(broker).startswith("longport"):
+        return {}
+    return {key: os.getenv(key) for key in LONGPORT_SMOKE_ENV_KEYS}
+
+
+def apply_broker_env(env_snapshot: dict[str, str | None]) -> None:
+    for key, value in env_snapshot.items():
+        if value is None:
+            os.environ.pop(key, None)
+        else:
+            os.environ[key] = value
+
+
+def subprocess_env(env_snapshot: dict[str, str | None]) -> dict[str, str]:
+    env = dict(os.environ)
+    for key, value in env_snapshot.items():
+        if value is None:
+            env.pop(key, None)
+        else:
+            env[key] = value
+    return env
+
+
+def run_step_with_env(
+    env_snapshot: dict[str, str | None],
+    name: str,
+    fn,
+    *args,
+    **kwargs,
+) -> dict[str, object]:
+    apply_broker_env(env_snapshot)
+    return run_step(name, fn(*args, **kwargs))
+
+
+def run_cli_subprocess_step(
+    env_snapshot: dict[str, str | None],
+    name: str,
+    argv: list[str],
+) -> dict[str, object]:
+    completed = subprocess.run(
+        argv,
+        cwd=str(PROJECT_ROOT),
+        env=subprocess_env(env_snapshot),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    return run_step(
+        name,
+        SimpleNamespace(
+            exit_code=int(completed.returncode),
+            stdout=completed.stdout.strip() or None,
+            stderr=completed.stderr.strip() or None,
+        ),
+    )
 
 
 def canonical_symbol(symbol: str, market: str) -> str:
@@ -171,11 +251,21 @@ def run_operator_smoke_workflow(args: argparse.Namespace) -> int:
             close_fn()
 
     canonical = canonical_symbol(args.symbol, args.market)
+    broker_env = capture_broker_env(broker)
+    longport_cli_isolation = str(broker).startswith("longport") and bool(args.execute)
     steps: list[dict[str, object]] = []
     output_path = Path(args.output)
-    steps.append(run_step("config", run_config(True, broker=broker)))
-    steps.append(run_step("account", run_account(account=account_label, broker=broker)))
-    steps.append(run_step("quote", run_quote([canonical], broker=broker)))
+    steps.append(run_step_with_env(broker_env, "config", run_config, True, broker=broker))
+    steps.append(
+        run_step_with_env(
+            broker_env,
+            "account",
+            run_account,
+            account=account_label,
+            broker=broker,
+        )
+    )
+    steps.append(run_step_with_env(broker_env, "quote", run_quote, [canonical], broker=broker))
 
     if args.preflight_only:
         print("\n== preflight ==\nPreflight checks passed; skipping targets and broker mutation steps.")
@@ -190,6 +280,7 @@ def run_operator_smoke_workflow(args: argparse.Namespace) -> int:
         )
         return 0
 
+    apply_broker_env(broker_env)
     snapshot = get_account_snapshot(
         env="paper" if is_paper_broker(broker) else "real",
         include_quotes=False,
@@ -219,14 +310,33 @@ def run_operator_smoke_workflow(args: argparse.Namespace) -> int:
     print(f"\n== targets ==\nWrote {output_path} with target_quantity={targets[0]['target_quantity']}")
 
     steps.append(
-        run_step(
-            "rebalance",
-            run_rebalance(
+        (
+            run_cli_subprocess_step(
+                broker_env,
+                "rebalance",
+                [
+                    sys.executable,
+                    "-m",
+                    "quant_execution_engine",
+                    "rebalance",
+                    str(output_path),
+                    "--broker",
+                    broker,
+                    "--account",
+                    account_label,
+                    "--execute",
+                ],
+            )
+            if longport_cli_isolation
+            else run_step_with_env(
+                broker_env,
+                "rebalance",
+                run_rebalance,
                 str(output_path),
                 account=account_label,
                 dry_run=not args.execute,
                 broker=broker,
-            ),
+            )
         )
     )
 
@@ -243,13 +353,32 @@ def run_operator_smoke_workflow(args: argparse.Namespace) -> int:
         return 0
 
     steps.append(
-        run_step(
-            "orders",
-            run_orders(
+        (
+            run_cli_subprocess_step(
+                broker_env,
+                "orders",
+                [
+                    sys.executable,
+                    "-m",
+                    "quant_execution_engine",
+                    "orders",
+                    "--broker",
+                    broker,
+                    "--account",
+                    account_label,
+                    "--symbol",
+                    args.symbol,
+                ],
+            )
+            if longport_cli_isolation
+            else run_step_with_env(
+                broker_env,
+                "orders",
+                run_orders,
                 account=account_label,
                 broker=broker,
                 symbol_filter=args.symbol,
-            ),
+            )
         )
     )
     order_ref = latest_tracked_order_ref(
@@ -259,48 +388,120 @@ def run_operator_smoke_workflow(args: argparse.Namespace) -> int:
     )
     if order_ref:
         steps.append(
-            run_step(
-                "order",
-                run_order(
+            (
+                run_cli_subprocess_step(
+                    broker_env,
+                    "order",
+                    [
+                        sys.executable,
+                        "-m",
+                        "quant_execution_engine",
+                        "order",
+                        order_ref,
+                        "--broker",
+                        broker,
+                        "--account",
+                        account_label,
+                    ],
+                )
+                if longport_cli_isolation
+                else run_step_with_env(
+                    broker_env,
+                    "order",
+                    run_order,
                     order_ref=order_ref,
                     account=account_label,
                     broker=broker,
-                ),
+                )
             )
         )
     else:
         print("\n== order ==\nNo tracked broker order found after rebalance")
 
     steps.append(
-        run_step(
-            "reconcile",
-            run_reconcile(
+        (
+            run_cli_subprocess_step(
+                broker_env,
+                "reconcile",
+                [
+                    sys.executable,
+                    "-m",
+                    "quant_execution_engine",
+                    "reconcile",
+                    "--broker",
+                    broker,
+                    "--account",
+                    account_label,
+                ],
+            )
+            if longport_cli_isolation
+            else run_step_with_env(
+                broker_env,
+                "reconcile",
+                run_reconcile,
                 account=account_label,
                 broker=broker,
-            ),
+            )
         )
     )
     steps.append(
-        run_step(
-            "exceptions",
-            run_exceptions(
+        (
+            run_cli_subprocess_step(
+                broker_env,
+                "exceptions",
+                [
+                    sys.executable,
+                    "-m",
+                    "quant_execution_engine",
+                    "exceptions",
+                    "--broker",
+                    broker,
+                    "--account",
+                    account_label,
+                    "--symbol",
+                    args.symbol,
+                ],
+            )
+            if longport_cli_isolation
+            else run_step_with_env(
+                broker_env,
+                "exceptions",
+                run_exceptions,
                 account=account_label,
                 broker=broker,
                 symbol_filter=args.symbol,
-            ),
+            )
         )
     )
 
     if args.cleanup_open_orders:
-        steps.append(
-            run_step(
-                "cancel-all",
-                run_cancel_all(
+        if longport_cli_isolation:
+            steps.append(
+                run_cli_subprocess_step(
+                    broker_env,
+                    "cancel-all",
+                    [
+                        sys.executable,
+                        "-m",
+                        "quant_execution_engine",
+                        "cancel-all",
+                        "--broker",
+                        broker,
+                        "--account",
+                        account_label,
+                    ],
+                )
+            )
+        else:
+            steps.append(
+                run_step_with_env(
+                    broker_env,
+                    "cancel-all",
+                    run_cancel_all,
                     account=account_label,
                     broker=broker,
-                ),
+                )
             )
-        )
 
     write_evidence(
         args=args,

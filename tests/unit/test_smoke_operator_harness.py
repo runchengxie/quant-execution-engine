@@ -280,6 +280,135 @@ def test_run_operator_smoke_workflow_accepts_longport_paper_as_paper_backend(
     assert called == ["config", "account", "quote"]
 
 
+def test_run_operator_smoke_workflow_reapplies_longport_env_between_steps(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = load_smoke_operator_module()
+    seen: list[tuple[str, str | None, str | None]] = []
+
+    monkeypatch.setenv("LONGPORT_REGION", "cn")
+    monkeypatch.setenv("LONGPORT_ENABLE_OVERNIGHT", "true")
+    monkeypatch.setenv("LONGPORT_ACCESS_TOKEN_TEST", "paper-token")
+
+    def ok(name: str, *, mutate_region: str | None = None):
+        def _inner(*args, **kwargs):
+            seen.append(
+                (
+                    name,
+                    module.os.getenv("LONGPORT_REGION"),
+                    module.os.getenv("LONGPORT_ENABLE_OVERNIGHT"),
+                )
+            )
+            if mutate_region is not None:
+                module.os.environ["LONGPORT_REGION"] = mutate_region
+            return SimpleNamespace(exit_code=0, stdout=f"{name} ok", stderr=None)
+
+        return _inner
+
+    monkeypatch.setattr(module, "run_config", ok("config", mutate_region="hk"))
+    monkeypatch.setattr(module, "run_account", ok("account", mutate_region="us"))
+    monkeypatch.setattr(module, "run_quote", ok("quote"))
+    monkeypatch.setattr(module, "get_broker_adapter", lambda broker_name=None: DummyLongPortPaperAdapter())
+
+    args = argparse.Namespace(
+        broker="longport-paper",
+        account="main",
+        symbol="AAPL",
+        market="US",
+        output=str(tmp_path / "smoke-operator.json"),
+        execute=False,
+        preflight_only=True,
+        cleanup_open_orders=False,
+        allow_non_paper=False,
+    )
+
+    result = module.run_operator_smoke_workflow(args)
+
+    assert result == 0
+    assert seen == [
+        ("config", "cn", "true"),
+        ("account", "cn", "true"),
+        ("quote", "cn", "true"),
+    ]
+
+
+def test_run_operator_smoke_workflow_uses_subprocess_cleanup_for_longport(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = load_smoke_operator_module()
+    called: list[str] = []
+    subprocess_calls: list[list[str]] = []
+
+    def ok(name: str):
+        def _inner(*args, **kwargs):
+            called.append(name)
+            return SimpleNamespace(exit_code=0, stdout=f"{name} ok", stderr=None)
+
+        return _inner
+
+    def fake_subprocess_run(argv, **kwargs):
+        subprocess_calls.append(list(argv))
+        return SimpleNamespace(returncode=0, stdout="cancel-all ok\n", stderr="")
+
+    monkeypatch.setattr(module, "run_config", ok("config"))
+    monkeypatch.setattr(module, "run_account", ok("account"))
+    monkeypatch.setattr(module, "run_quote", ok("quote"))
+    monkeypatch.setattr(module, "run_rebalance", lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("run_rebalance should not be called for longport execute path")))
+    monkeypatch.setattr(module, "run_orders", lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("run_orders should not be called for longport execute path")))
+    monkeypatch.setattr(module, "run_order", lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("run_order should not be called for longport execute path")))
+    monkeypatch.setattr(module, "run_reconcile", lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("run_reconcile should not be called for longport execute path")))
+    monkeypatch.setattr(module, "run_exceptions", lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("run_exceptions should not be called for longport execute path")))
+    monkeypatch.setattr(module, "run_cancel_all", lambda **kwargs: (_ for _ in ()).throw(AssertionError("run_cancel_all should not be called for longport cleanup")))
+    monkeypatch.setattr(module.subprocess, "run", fake_subprocess_run)
+    monkeypatch.setattr(module, "get_broker_adapter", lambda broker_name=None: DummyLongPortPaperAdapter())
+    monkeypatch.setattr(
+        module,
+        "get_account_snapshot",
+        lambda **kwargs: AccountSnapshot(
+            env="paper",
+            cash_usd=1000.0,
+            positions=[],
+        ),
+    )
+    monkeypatch.setattr(module, "latest_tracked_order_ref", lambda **kwargs: "broker-msft-1")
+
+    args = argparse.Namespace(
+        broker="longport-paper",
+        account="main",
+        symbol="MSFT",
+        market="US",
+        output=str(tmp_path / "smoke-operator.json"),
+        execute=True,
+        preflight_only=False,
+        cleanup_open_orders=True,
+        allow_non_paper=False,
+        evidence_output=None,
+    )
+
+    result = module.run_operator_smoke_workflow(args)
+
+    assert result == 0
+    assert called == ["config", "account", "quote"]
+    assert len(subprocess_calls) == 6
+    assert subprocess_calls[0][-6:] == [
+        str(tmp_path / "smoke-operator.json"),
+        "--broker",
+        "longport-paper",
+        "--account",
+        "main",
+        "--execute",
+    ]
+    assert subprocess_calls[-1][-5:] == [
+        "cancel-all",
+        "--broker",
+        "longport-paper",
+        "--account",
+        "main",
+    ]
+
+
 def test_run_operator_smoke_workflow_writes_evidence_json(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
