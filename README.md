@@ -1,10 +1,8 @@
 # Quant Execution Engine
 
-该项目为量化投资执行模块，聚焦券商后台自动化下单、对账、恢复和必要的人工介入运维
-
-当前默认支持长桥 LongPort 模拟盘/实盘，以及 Alpaca 模拟盘验证路径，并提供 `longport-paper` 与 `alpaca-paper` 两条模拟盘验证路径。
-
-为降低开发维护复杂度，该项目不承担策略研究 / 回测 / 股票原始数据处理，如有需要请结合研究前台项目使用
+该项目为量化投资执行模块，聚焦券商后台自动化下单、对账、恢复和必要的人工介入运维\
+当前默认支持长桥 LongPort 模拟盘/实盘，以及 Alpaca 模拟盘验证路径\
+为降低开发维护复杂度，该项目不承担策略研究 / 回测 / 股票原始数据处理，如有需要请结合研究前台项目使用\
 
 ## 当前能力
 
@@ -15,7 +13,7 @@
 - 通过券商适应层来执行 `submit / query / cancel / reconcile`
 - 查看查看本地跟踪订单、异常队列和单笔订单生命周期详情
 - 对部分成交执行 `cancel-rest` / `resume-remaining` / `accept-partial`
-- 运行正式 `preflight` 检查
+- 运行正式预检查（`preflight`）检查
 - 维护本地状态：`state-doctor` / `state-prune` / `state-repair`
 - 写出调仓审计日志到 `outputs/orders/*.jsonl`
 - 持久化执行状态到 `outputs/state/*.json`
@@ -23,13 +21,13 @@
 
 ## 成熟度与证明边界
 
-- 当前已经落地 broker-backed `submit / query / cancel / reconcile` 代码路径的，是 LongPort real、`longport-paper` 和 `alpaca-paper`。
+- 当前已经落地 broker-backed `submit / query / cancel / reconcile` 代码路径的，是长桥 LongPort real、`longport-paper` 和 `alpaca-paper`。
 - `longport-paper` 依赖 `LONGPORT_ACCESS_TOKEN_TEST`；当前已经通过 operator-supervised paper smoke 跑通过 `submit / query / reconcile / cancel` 最小闭环。
-- 截至 2026-04-15，LongPort real 已经通过 operator-supervised read-only 验证跑通 `config / preflight / account / quote`，并确认 live guard 与用户私有配置路由生效。
-- LongPort real 的 `rebalance --execute` 仍不应被视为“默认自动化已经跑实”的能力；成熟度判断仍要看最小实盘 smoke、审计日志和可复查 evidence。
-- Alpaca 当前按 paper-only 验证路径使用，仍然适合作为更便宜、更稳定的重复冒烟 / 回归测试基线。
-- `orders` / `exceptions` / `order` 展示的是本地执行状态中已跟踪的订单，不是券商全量订单视图。
-- `--account` 当前是显式 label 解析与 fail-fast 校验；LongPort real、`longport-paper` 和 `alpaca-paper` 都仍按单账户语义运行。
+- 长桥 LongPort 实盘账户已通过人工监督只读模式验证跑通 `config / preflight / account / quote`，并确认 live guard 与用户私有配置路由生效。
+- 长桥 LongPort 的 `rebalance --execute` 仍不应被视为默认自动化已经跑实的能力；成熟度判断仍要看最小实盘冒烟测试、审计日志和可复查信息。
+- Alpaca 当前按模拟盘验证路径使用，仍然适合作为更直观、更稳定的重复冒烟 / 回归测试基线。
+- `orders` / `exceptions` / `order` 展示的是本地执行状态中已跟踪的订单，暂不反映券商全量订单视图。
+- `--account` 当前是显式 label 解析与 fail-fast 校验，长桥 LongPort 模拟盘 / 实盘 和 Alpaca 模拟盘都仍按单账户语义运行。
 
 ## 快速开始
 

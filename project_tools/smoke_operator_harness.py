@@ -50,6 +50,44 @@ LONGPORT_SMOKE_ENV_KEYS = (
     "LONGBRIDGE_ENABLE_OVERNIGHT",
 )
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
+WORKFLOW_FAILURE_METADATA: dict[str, tuple[str, str]] = {
+    "config": (
+        "CONFIG_CHECK_FAILED",
+        "Inspect resolved config and credential sources before retrying the smoke workflow.",
+    ),
+    "account": (
+        "ACCOUNT_CHECK_FAILED",
+        "Run `qexec account` directly and confirm the resolved account/profile is reachable.",
+    ),
+    "quote": (
+        "QUOTE_CHECK_FAILED",
+        "Retry `qexec quote` and confirm market-data entitlements, symbol mapping, and broker connectivity.",
+    ),
+    "rebalance": (
+        "REBALANCE_EXECUTION_FAILED",
+        "Inspect the rebalance stderr, audit log, and local state before retrying the mutation step.",
+    ),
+    "orders": (
+        "OPEN_ORDER_QUERY_FAILED",
+        "Run `qexec reconcile` or inspect the local tracked state before relying on open-order output.",
+    ),
+    "order": (
+        "TRACKED_ORDER_QUERY_FAILED",
+        "Inspect the tracked order reference in local state, then rerun `qexec order` or `qexec reconcile`.",
+    ),
+    "reconcile": (
+        "RECONCILE_FAILED",
+        "Rerun `qexec reconcile` after checking broker/API health; inspect the state file if tracked status may be stale.",
+    ),
+    "exceptions": (
+        "EXCEPTION_VIEW_FAILED",
+        "Inspect the local tracked state and rerun `qexec exceptions` after reconcile if needed.",
+    ),
+    "cancel-all": (
+        "BULK_CANCEL_FAILED",
+        "Inspect remaining tracked open orders, then rerun `qexec cancel-all` or `qexec reconcile`.",
+    ),
+}
 
 
 class SmokeWorkflowStepError(RuntimeError):
@@ -208,6 +246,70 @@ def run_step(name: str, result: object) -> dict[str, object]:
     return payload
 
 
+def planned_workflow_steps(args: argparse.Namespace) -> list[str]:
+    steps = ["config", "account", "quote"]
+    if args.preflight_only:
+        return steps
+    steps.append("rebalance")
+    if not args.execute:
+        return steps
+    steps.extend(["orders", "order", "reconcile", "exceptions"])
+    if args.cleanup_open_orders:
+        steps.append("cancel-all")
+    return steps
+
+
+def classify_failed_step(step_name: str | None) -> tuple[str | None, str | None]:
+    if not step_name:
+        return None, None
+    return WORKFLOW_FAILURE_METADATA.get(
+        str(step_name),
+        (
+            "WORKFLOW_STEP_FAILED",
+            "Inspect the failed step stderr and the local state before retrying the workflow.",
+        ),
+    )
+
+
+def append_skipped_step(
+    skipped_steps: list[dict[str, str]],
+    *,
+    name: str,
+    reason: str,
+) -> None:
+    existing = {item["name"] for item in skipped_steps}
+    if name in existing:
+        return
+    skipped_steps.append({"name": name, "reason": reason})
+
+
+def finalize_skipped_steps(
+    *,
+    args: argparse.Namespace,
+    steps: list[dict[str, object]],
+    skipped_steps: list[dict[str, str]],
+    failed_step: str | None = None,
+) -> list[dict[str, str]]:
+    finalized = list(skipped_steps)
+    if not failed_step:
+        return finalized
+    planned_steps = planned_workflow_steps(args)
+    if failed_step not in planned_steps:
+        return finalized
+    seen_steps = {str(step.get("name")) for step in steps}
+    recorded_steps = {item["name"] for item in finalized}
+    failed_index = planned_steps.index(failed_step)
+    for name in planned_steps[failed_index + 1 :]:
+        if name in seen_steps or name in recorded_steps:
+            continue
+        append_skipped_step(
+            finalized,
+            name=name,
+            reason=f"workflow stopped after failed step '{failed_step}'",
+        )
+    return finalized
+
+
 def write_evidence(
     *,
     args: argparse.Namespace,
@@ -220,6 +322,9 @@ def write_evidence(
     success: bool = True,
     failure_message: str | None = None,
     failed_step: str | None = None,
+    failure_category: str | None = None,
+    next_step_hint: str | None = None,
+    skipped_steps: list[dict[str, str]] | None = None,
 ) -> Path | None:
     evidence_output = getattr(args, "evidence_output", None)
     if not evidence_output:
@@ -241,6 +346,9 @@ def write_evidence(
         "success": bool(success),
         "failure_message": failure_message,
         "failed_step": failed_step,
+        "failure_category": failure_category,
+        "next_step_hint": next_step_hint,
+        "skipped_steps": list(skipped_steps or []),
         "steps": steps,
     }
     evidence_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -271,6 +379,7 @@ def run_operator_smoke_workflow(args: argparse.Namespace) -> int:
     broker_env = capture_broker_env(broker)
     longport_cli_isolation = str(broker).startswith("longport") and bool(args.execute)
     steps: list[dict[str, object]] = []
+    skipped_steps: list[dict[str, str]] = []
     output_path = Path(args.output)
     order_ref: str | None = None
     try:
@@ -296,6 +405,7 @@ def run_operator_smoke_workflow(args: argparse.Namespace) -> int:
                 steps=steps,
                 output_path=output_path,
                 latest_order_ref=None,
+                skipped_steps=skipped_steps,
             )
             return 0
 
@@ -436,6 +546,11 @@ def run_operator_smoke_workflow(args: argparse.Namespace) -> int:
             )
         else:
             print("\n== order ==\nNo tracked broker order found after rebalance")
+            append_skipped_step(
+                skipped_steps,
+                name="order",
+                reason="no tracked order reference available after rebalance",
+            )
 
         steps.append(
             (
@@ -530,11 +645,13 @@ def run_operator_smoke_workflow(args: argparse.Namespace) -> int:
             steps=steps,
             output_path=output_path,
             latest_order_ref=order_ref,
+            skipped_steps=skipped_steps,
         )
 
         return 0
     except SmokeWorkflowStepError as exc:
         steps.append(exc.payload)
+        failure_category, next_step_hint = classify_failed_step(str(exc.payload["name"]))
         write_evidence(
             args=args,
             broker=broker,
@@ -546,6 +663,14 @@ def run_operator_smoke_workflow(args: argparse.Namespace) -> int:
             success=False,
             failure_message=str(exc),
             failed_step=str(exc.payload["name"]),
+            failure_category=failure_category,
+            next_step_hint=next_step_hint,
+            skipped_steps=finalize_skipped_steps(
+                args=args,
+                steps=steps,
+                skipped_steps=skipped_steps,
+                failed_step=str(exc.payload["name"]),
+            ),
         )
         print(str(exc), file=sys.stderr)
         return 1

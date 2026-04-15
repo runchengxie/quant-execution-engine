@@ -52,10 +52,10 @@ uv run pytest --cov=src/quant_execution_engine --cov-report=term-missing -m 'not
 ## 当前测试证明了什么
 
 - 默认 `pytest` 能证明快速行为测试通过。
-- lifecycle 相关单测覆盖了 tracked order 的 retry、reprice、reconcile、partial-fill operator action、state doctor/prune/repair。
+- lifecycle 相关单测覆盖了 tracked order 的 retry、reprice、reconcile、partial-fill operator action、pending-cancel、late-fill 恢复，以及 state doctor/prune/repair。
 - CLI 单测覆盖了新旧命令的分发和 live guard 行为。
 - e2e 当前证明了 CLI / harness 的 subprocess smoke 行为，包括 signal/target harness 输出、operator harness 的非 paper 拒绝路径。
-- `smoke_operator_harness.py` 已有单测覆盖固定 workflow、preflight-only 路径和 evidence JSON 输出。
+- `smoke_operator_harness.py` 已有单测覆盖固定 workflow、preflight-only 路径、下游 operator step 失败，以及 evidence JSON 输出。
 - `longport-paper` 已经是正式 broker backend；提供 `LONGPORT_ACCESS_TOKEN_TEST` 后，可以走 paper preflight / rebalance 路径。
 - `longport-paper` 当前已经通过 operator-supervised paper smoke 跑通过 `submit / query / reconcile / cancel` 最小闭环；这是一条可复现的 paper 证据链，但不是默认自动化测试的一部分。
 - 截至 2026-04-15，LongPort real 已经通过 operator-supervised read-only 验证跑通 `config / preflight / account / quote`，并确认用户私有 live 配置路由和 live guard 可工作。
@@ -101,6 +101,9 @@ PYTHONPATH=src python project_tools/smoke_operator_harness.py --broker longport-
 - 已完成步骤
 - 失败步骤名
 - 失败步骤的 exit code / stderr
+- 稳定的 `failure_category`
+- 保守的 `next_step_hint`
+- `skipped_steps`，说明哪些步骤没有继续执行，以及为什么被跳过
 
 默认 workflow 会串起这些步骤：
 

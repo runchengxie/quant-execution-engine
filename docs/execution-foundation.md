@@ -12,20 +12,20 @@
 
 - 这个仓库到底负责执行链路的哪一段
 - 订单生命周期里有哪些核心对象
-- 本地 state、reconcile、risk、kill switch 各自扮演什么角色
+- 本地状态、对账、风控、紧急停单功能各自扮演什么角色
 - 为什么这个仓库刻意不做某些“看起来很平台”的东西
 
 ## 2. execution-only 边界
 
 这个仓库只负责执行域：
 
-- broker adapter 与 capability matrix
+- 券商适配层与功能清单
 - 账户快照与行情读取
-- `targets.json` 驱动的 rebalance / submit / reconcile
-- tracked order 生命周期
+- `targets.json` 驱动的调仓 / 提交订单 / 对账
+- 追踪订单生命周期
 - 订单执行的风控检查
-- operator 恢复与本地状态维护
-- 审计日志与 smoke harness
+- 人工审核的恢复与本地状态维护
+- 审计日志与冒烟测试工装
 
 这个仓库不负责：
 
@@ -39,41 +39,39 @@
 执行链路当前拆成这几层：
 
 1. `OrderIntent`
-   表达想买卖什么、为什么下这笔单，以及它来自哪个 target source / asof / input。
+   表达想买卖什么、为什么下这笔单，以及它来自哪个目标来源 / 截止时点 / 输入来源。
 2. `ParentOrder`
    表达一次执行意图的总体状态，例如请求数量、已成交数量、剩余数量、当前汇总状态。
 3. `ChildOrder`
-   表达一次具体的 broker submit attempt。
+   表达一次具体的券商订单提交尝试。
 4. `BrokerOrderRecord`
-   表达 broker 返回的订单记录和 broker 侧状态。
+   表达券商返回的订单记录和券商侧状态。
 5. `ExecutionFillEvent`
    表达已知成交事件。
 
-这个拆分的意义不是为了抽象好看，而是为了回答真实问题：
+这个拆分的意义是为了回答真实问题：
 
 - submit 前先落 `intent`，怎么防重复下单
-- retry / reprice / resume-remaining 时，怎么保留 attempt 历史
+- 重试 / 改价重提 / 恢复剩余量执行时，怎么保留提交尝试历史
 - 系统重启后，怎么知道哪些订单还要继续跟
-- reconcile 回来的状态和 fill，怎么映射回本地生命周期
+- 对账回来的状态和已成交订单，怎么映射回本地生命周期
 
 ## 4. 本地 state 为什么是基础设施
 
-`outputs/state/*.json` 不是附属缓存，而是执行层的基础面。
+`outputs/state/*.json` 是执行层的基础面。
 
 它承担四个职责：
 
-- 幂等：防止同一执行意图重复 submit
-- 恢复：进程重启后还能找回 tracked order
+- 幂等：防止同一执行意图重复提交
+- 恢复：进程重启后还能找回可追踪订单
 - 运维：`orders` / `exceptions` / `order` / `retry` / `cancel-rest` 等命令都依赖它
-- 对账：broker 状态和 fill 回来后，需要一个本地事实表来合并
+- 对账：券商状态和已成交状态返回后，需要一个本地事实表来合并
 
-也因此，这个仓库优先补的是 state doctor / prune / repair，而不是先上更重的持久层。
+也因此，这个仓库优先补的是订单状态诊断 / 清理 / 修复。
 
 ## 5. reconcile 的角色
 
-`reconcile` 不是“顺手刷新一下”。
-
-它负责把 broker 侧事实重新拉回本地：
+负责把 broker 侧事实重新拉回本地：
 
 - 刷新 tracked open orders
 - 刷新 tracked closed orders

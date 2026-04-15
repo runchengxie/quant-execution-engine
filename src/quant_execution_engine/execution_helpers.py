@@ -3,14 +3,17 @@
 from __future__ import annotations
 
 from collections import Counter
+from dataclasses import dataclass
 from typing import Any
 
-from .broker.base import BrokerOrderRecord
+from .broker.base import BrokerAdapter, BrokerOrderRecord, ResolvedBrokerAccount
 from .execution_state import (
     ChildOrder,
     ExecutionFillEvent,
     ExecutionReconcileDelta,
     ExecutionState,
+    ExecutionStateStore,
+    OPEN_BROKER_STATUSES,
     OrderIntent,
     ParentOrder,
 )
@@ -21,6 +24,16 @@ TrackedOrderResolution = tuple[
     OrderIntent | None,
     BrokerOrderRecord | None,
 ]
+
+
+@dataclass(slots=True)
+class TrackedOrderContext:
+    account: ResolvedBrokerAccount
+    state: ExecutionState
+    child: ChildOrder | None
+    parent: ParentOrder | None
+    intent: OrderIntent | None
+    broker_order: BrokerOrderRecord | None
 
 
 def build_reconcile_deltas(
@@ -60,6 +73,18 @@ def build_reconcile_deltas(
                 )
             )
     return deltas
+
+
+def load_account_state(
+    adapter: BrokerAdapter,
+    state_store: ExecutionStateStore,
+    account_label: str,
+) -> tuple[ResolvedBrokerAccount, ExecutionState]:
+    account = adapter.resolve_account(account_label)
+    state = state_store.load(adapter.backend_name, account.label)
+    state.broker_name = adapter.backend_name
+    state.account_label = account.label
+    return account, state
 
 
 def find_parent_for_child(
@@ -164,6 +189,49 @@ def find_tracked_broker_order(
     return resolved[3]
 
 
+def resolve_tracked_order_context(
+    adapter: BrokerAdapter,
+    state_store: ExecutionStateStore,
+    account_label: str,
+    order_ref: str,
+) -> TrackedOrderContext:
+    account, state = load_account_state(adapter, state_store, account_label)
+    resolved = resolve_tracked_order(state, order_ref)
+    if resolved is None:
+        raise ValueError(
+            f"tracked order not found for ref '{order_ref}' in {adapter.backend_name}/{account.label}"
+        )
+    child, parent, intent, broker_order = resolved
+    return TrackedOrderContext(
+        account=account,
+        state=state,
+        child=child,
+        parent=parent,
+        intent=intent,
+        broker_order=broker_order,
+    )
+
+
+def require_partial_fill_quantities(
+    parent: ParentOrder | None,
+    *,
+    action_name: str,
+) -> tuple[float, float]:
+    if parent is None:
+        raise ValueError(f"tracked order is incomplete and cannot {action_name}")
+    filled_quantity = float(parent.filled_quantity or 0.0)
+    remaining_quantity = float(parent.remaining_quantity or 0.0)
+    if filled_quantity <= 0 or remaining_quantity <= 0:
+        raise ValueError(f"{action_name} only applies to partially filled tracked orders")
+    return filled_quantity, remaining_quantity
+
+
+def broker_order_is_open(broker_order: BrokerOrderRecord | None) -> bool:
+    if broker_order is None:
+        return False
+    return str(broker_order.status).strip().upper() in OPEN_BROKER_STATUSES
+
+
 def find_parent_for_fill(
     state: ExecutionState,
     fill: Any,
@@ -196,11 +264,16 @@ def find_parent_for_fill(
 
 
 __all__ = [
+    "TrackedOrderContext",
     "TrackedOrderResolution",
     "build_reconcile_deltas",
     "find_intent_for_parent",
     "find_parent_for_child",
     "find_parent_for_fill",
     "find_tracked_broker_order",
+    "broker_order_is_open",
+    "load_account_state",
+    "require_partial_fill_quantities",
     "resolve_tracked_order",
+    "resolve_tracked_order_context",
 ]

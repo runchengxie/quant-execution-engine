@@ -458,7 +458,10 @@ def test_run_operator_smoke_workflow_writes_evidence_json(
     assert evidence["broker"] == "alpaca-paper"
     assert evidence["success"] is True
     assert evidence["failed_step"] is None
+    assert evidence["failure_category"] is None
+    assert evidence["next_step_hint"] is None
     assert evidence["latest_tracked_order_ref"] is None
+    assert evidence["skipped_steps"] == []
     assert evidence["targets_output"] == str(output_path)
     assert [step["name"] for step in evidence["steps"]] == ["config", "account", "quote", "rebalance"]
 
@@ -523,7 +526,15 @@ def test_run_operator_smoke_workflow_writes_failure_evidence_for_longport_subpro
     assert evidence["success"] is False
     assert evidence["failed_step"] == "reconcile"
     assert evidence["failure_message"] == "reconcile failed with exit code 7"
+    assert evidence["failure_category"] == "RECONCILE_FAILED"
+    assert "Rerun `qexec reconcile`" in evidence["next_step_hint"]
     assert evidence["latest_tracked_order_ref"] == "broker-aapl-1"
+    assert evidence["skipped_steps"] == [
+        {
+            "name": "exceptions",
+            "reason": "workflow stopped after failed step 'reconcile'",
+        }
+    ]
     assert [step["name"] for step in evidence["steps"]] == [
         "config",
         "account",
@@ -535,3 +546,291 @@ def test_run_operator_smoke_workflow_writes_failure_evidence_for_longport_subpro
     ]
     assert evidence["steps"][-1]["exit_code"] == 7
     assert evidence["steps"][-1]["stderr"] == "reconcile exploded"
+
+
+def test_run_operator_smoke_workflow_writes_failure_evidence_when_rebalance_step_fails(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = load_smoke_operator_module()
+    subprocess_calls: list[list[str]] = []
+
+    def ok(name: str):
+        def _inner(*args, **kwargs):
+            return SimpleNamespace(exit_code=0, stdout=f"{name} ok", stderr=None)
+
+        return _inner
+
+    def fake_subprocess_run(argv, **kwargs):
+        captured = list(argv)
+        subprocess_calls.append(captured)
+        return SimpleNamespace(returncode=9, stdout="", stderr="rebalance blew up\n")
+
+    monkeypatch.setattr(module, "run_config", ok("config"))
+    monkeypatch.setattr(module, "run_account", ok("account"))
+    monkeypatch.setattr(module, "run_quote", ok("quote"))
+    monkeypatch.setattr(module.subprocess, "run", fake_subprocess_run)
+    monkeypatch.setattr(module, "get_broker_adapter", lambda broker_name=None: DummyLongPortPaperAdapter())
+    monkeypatch.setattr(
+        module,
+        "get_account_snapshot",
+        lambda **kwargs: AccountSnapshot(
+            env="paper",
+            cash_usd=1000.0,
+            positions=[],
+        ),
+    )
+    monkeypatch.setattr(
+        module,
+        "latest_tracked_order_ref",
+        lambda **kwargs: (_ for _ in ()).throw(AssertionError("latest_tracked_order_ref should not run")),
+    )
+
+    output_path = tmp_path / "smoke-operator.json"
+    evidence_path = tmp_path / "smoke-rebalance-failure-evidence.json"
+    args = argparse.Namespace(
+        broker="longport-paper",
+        account="main",
+        symbol="AAPL",
+        market="US",
+        output=str(output_path),
+        execute=True,
+        preflight_only=False,
+        cleanup_open_orders=False,
+        allow_non_paper=False,
+        evidence_output=str(evidence_path),
+    )
+
+    result = module.run_operator_smoke_workflow(args)
+    evidence = json.loads(evidence_path.read_text(encoding="utf-8"))
+
+    assert result == 1
+    assert len(subprocess_calls) == 1
+    assert evidence["success"] is False
+    assert evidence["failed_step"] == "rebalance"
+    assert evidence["failure_message"] == "rebalance failed with exit code 9"
+    assert evidence["failure_category"] == "REBALANCE_EXECUTION_FAILED"
+    assert "rebalance stderr" in evidence["next_step_hint"]
+    assert evidence["latest_tracked_order_ref"] is None
+    assert [item["name"] for item in evidence["skipped_steps"]] == [
+        "orders",
+        "order",
+        "reconcile",
+        "exceptions",
+    ]
+    assert [step["name"] for step in evidence["steps"]] == [
+        "config",
+        "account",
+        "quote",
+        "rebalance",
+    ]
+    assert evidence["steps"][-1]["stderr"] == "rebalance blew up"
+
+
+def test_run_operator_smoke_workflow_skips_order_step_when_no_tracked_order_exists(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    module = load_smoke_operator_module()
+    subprocess_calls: list[list[str]] = []
+
+    def ok(name: str):
+        def _inner(*args, **kwargs):
+            return SimpleNamespace(exit_code=0, stdout=f"{name} ok", stderr=None)
+
+        return _inner
+
+    def fake_subprocess_run(argv, **kwargs):
+        captured = list(argv)
+        subprocess_calls.append(captured)
+        step_name = captured[3]
+        return SimpleNamespace(returncode=0, stdout=f"{step_name} ok\n", stderr="")
+
+    monkeypatch.setattr(module, "run_config", ok("config"))
+    monkeypatch.setattr(module, "run_account", ok("account"))
+    monkeypatch.setattr(module, "run_quote", ok("quote"))
+    monkeypatch.setattr(module.subprocess, "run", fake_subprocess_run)
+    monkeypatch.setattr(module, "get_broker_adapter", lambda broker_name=None: DummyLongPortPaperAdapter())
+    monkeypatch.setattr(
+        module,
+        "get_account_snapshot",
+        lambda **kwargs: AccountSnapshot(
+            env="paper",
+            cash_usd=1000.0,
+            positions=[],
+        ),
+    )
+    monkeypatch.setattr(module, "latest_tracked_order_ref", lambda **kwargs: None)
+
+    output_path = tmp_path / "smoke-operator.json"
+    evidence_path = tmp_path / "smoke-no-order-evidence.json"
+    args = argparse.Namespace(
+        broker="longport-paper",
+        account="main",
+        symbol="AAPL",
+        market="US",
+        output=str(output_path),
+        execute=True,
+        preflight_only=False,
+        cleanup_open_orders=False,
+        allow_non_paper=False,
+        evidence_output=str(evidence_path),
+    )
+
+    result = module.run_operator_smoke_workflow(args)
+    output = capsys.readouterr().out
+    evidence = json.loads(evidence_path.read_text(encoding="utf-8"))
+
+    assert result == 0
+    assert [call[3] for call in subprocess_calls] == [
+        "rebalance",
+        "orders",
+        "reconcile",
+        "exceptions",
+    ]
+    assert "No tracked broker order found after rebalance" in output
+    assert evidence["latest_tracked_order_ref"] is None
+    assert evidence["failure_category"] is None
+    assert evidence["next_step_hint"] is None
+    assert evidence["skipped_steps"] == [
+        {
+            "name": "order",
+            "reason": "no tracked order reference available after rebalance",
+        }
+    ]
+    assert [step["name"] for step in evidence["steps"]] == [
+        "config",
+        "account",
+        "quote",
+        "rebalance",
+        "orders",
+        "reconcile",
+        "exceptions",
+    ]
+
+
+@pytest.mark.parametrize(
+    ("failed_step", "cleanup_open_orders", "expected_step_names", "expected_skipped_names", "expected_category"),
+    [
+        (
+            "orders",
+            False,
+            ["config", "account", "quote", "rebalance", "orders"],
+            ["order", "reconcile", "exceptions"],
+            "OPEN_ORDER_QUERY_FAILED",
+        ),
+        (
+            "order",
+            False,
+            ["config", "account", "quote", "rebalance", "orders", "order"],
+            ["reconcile", "exceptions"],
+            "TRACKED_ORDER_QUERY_FAILED",
+        ),
+        (
+            "exceptions",
+            False,
+            ["config", "account", "quote", "rebalance", "orders", "order", "reconcile", "exceptions"],
+            [],
+            "EXCEPTION_VIEW_FAILED",
+        ),
+        (
+            "cancel-all",
+            True,
+            [
+                "config",
+                "account",
+                "quote",
+                "rebalance",
+                "orders",
+                "order",
+                "reconcile",
+                "exceptions",
+                "cancel-all",
+            ],
+            [],
+            "BULK_CANCEL_FAILED",
+        ),
+    ],
+)
+def test_run_operator_smoke_workflow_writes_failure_evidence_for_downstream_steps(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    failed_step: str,
+    cleanup_open_orders: bool,
+    expected_step_names: list[str],
+    expected_skipped_names: list[str],
+    expected_category: str,
+) -> None:
+    module = load_smoke_operator_module()
+
+    def ok(name: str):
+        def _inner(*args, **kwargs):
+            return SimpleNamespace(exit_code=0, stdout=f"{name} ok", stderr=None)
+
+        return _inner
+
+    def fake_subprocess_run(argv, **kwargs):
+        step_name = list(argv)[3]
+        if step_name == failed_step:
+            return SimpleNamespace(
+                returncode=5,
+                stdout="",
+                stderr=f"{failed_step} exploded\n",
+            )
+        return SimpleNamespace(returncode=0, stdout=f"{step_name} ok\n", stderr="")
+
+    monkeypatch.setattr(module, "run_config", ok("config"))
+    monkeypatch.setattr(module, "run_account", ok("account"))
+    monkeypatch.setattr(module, "run_quote", ok("quote"))
+    monkeypatch.setattr(module.subprocess, "run", fake_subprocess_run)
+    monkeypatch.setattr(module, "get_broker_adapter", lambda broker_name=None: DummyLongPortPaperAdapter())
+    monkeypatch.setattr(
+        module,
+        "get_account_snapshot",
+        lambda **kwargs: AccountSnapshot(
+            env="paper",
+            cash_usd=1000.0,
+            positions=[],
+        ),
+    )
+    if failed_step == "orders":
+        monkeypatch.setattr(
+            module,
+            "latest_tracked_order_ref",
+            lambda **kwargs: (_ for _ in ()).throw(
+                AssertionError("latest_tracked_order_ref should not run when orders fails")
+            ),
+        )
+    else:
+        monkeypatch.setattr(module, "latest_tracked_order_ref", lambda **kwargs: "broker-aapl-1")
+
+    evidence_path = tmp_path / f"{failed_step}-failure-evidence.json"
+    args = argparse.Namespace(
+        broker="longport-paper",
+        account="main",
+        symbol="AAPL",
+        market="US",
+        output=str(tmp_path / "smoke-operator.json"),
+        execute=True,
+        preflight_only=False,
+        cleanup_open_orders=cleanup_open_orders,
+        allow_non_paper=False,
+        evidence_output=str(evidence_path),
+    )
+
+    result = module.run_operator_smoke_workflow(args)
+    evidence = json.loads(evidence_path.read_text(encoding="utf-8"))
+
+    assert result == 1
+    assert evidence["success"] is False
+    assert evidence["failed_step"] == failed_step
+    assert evidence["failure_category"] == expected_category
+    assert evidence["failure_message"] == f"{failed_step} failed with exit code 5"
+    assert evidence["next_step_hint"] is not None
+    assert evidence["latest_tracked_order_ref"] == (
+        None if failed_step == "orders" else "broker-aapl-1"
+    )
+    assert [item["name"] for item in evidence["skipped_steps"]] == expected_skipped_names
+    assert [step["name"] for step in evidence["steps"]] == expected_step_names
+    assert evidence["steps"][-1]["stderr"] == f"{failed_step} exploded"

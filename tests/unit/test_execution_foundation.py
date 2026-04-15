@@ -1020,6 +1020,44 @@ class FillLookupErrorAdapter(FakeAdapter):
         raise RuntimeError("fill lookup unavailable")
 
 
+class RefreshLookupErrorAdapter(FakeAdapter):
+    def list_open_orders(
+        self,
+        account: ResolvedBrokerAccount | None = None,
+    ) -> list[BrokerOrderRecord]:
+        return []
+
+    def get_order(
+        self,
+        broker_order_id: str,
+        account: ResolvedBrokerAccount | None = None,
+    ) -> BrokerOrderRecord:
+        raise RuntimeError("order refresh unavailable")
+
+
+class PendingCancelRefreshAdapter(FakeAdapter):
+    def __init__(self) -> None:
+        super().__init__()
+        self.pending_cancel_ids: set[str] = set()
+
+    def cancel_order(
+        self,
+        broker_order_id: str,
+        account: ResolvedBrokerAccount | None = None,
+    ) -> None:
+        self.cancel_calls.append(broker_order_id)
+        self.pending_cancel_ids.add(broker_order_id)
+
+    def get_order(
+        self,
+        broker_order_id: str,
+        account: ResolvedBrokerAccount | None = None,
+    ) -> BrokerOrderRecord:
+        if broker_order_id in self.pending_cancel_ids:
+            raise RuntimeError("cancel refresh unavailable")
+        return super().get_order(broker_order_id, account)
+
+
 def test_manual_reconcile_recovers_fill_for_closed_tracked_order(tmp_path: Path) -> None:
     adapter = ClosedFillAdapter()
     store = ExecutionStateStore(root_dir=tmp_path)
@@ -1054,6 +1092,70 @@ def test_manual_reconcile_recovers_fill_for_closed_tracked_order(tmp_path: Path)
     assert any(order.status == "FILLED" for order in state.broker_orders)
 
 
+def test_manual_reconcile_warns_and_preserves_state_when_tracked_order_refresh_fails(
+    tmp_path: Path,
+) -> None:
+    adapter = RefreshLookupErrorAdapter()
+    store = ExecutionStateStore(root_dir=tmp_path)
+    service = OrderLifecycleService(
+        adapter,
+        state_store=store,
+        risk_chain=RiskGateChain({}),
+    )
+
+    result = service.execute_orders(
+        [Order(symbol="AAPL.US", quantity=10, side="BUY", price=10.0)],
+        account_label="main",
+        dry_run=False,
+        target_source="unit",
+        target_asof="2026-04-14",
+        target_input_path="tests/targets.json",
+    )[0]
+
+    outcome = service.reconcile(account_label="main")
+    state = store.load("fake", "main")
+
+    assert outcome.refreshed_orders == 0
+    assert outcome.new_fill_events == 0
+    assert outcome.report.warnings == [
+        f"failed to refresh tracked order {result.broker_order_id}: order refresh unavailable"
+    ]
+    assert state.broker_orders[0].broker_order_id == result.broker_order_id
+    assert state.child_orders[0].broker_order_id == result.broker_order_id
+
+
+def test_manual_reconcile_warns_and_preserves_state_when_fill_lookup_fails(
+    tmp_path: Path,
+) -> None:
+    adapter = FillLookupErrorAdapter()
+    store = ExecutionStateStore(root_dir=tmp_path)
+    service = OrderLifecycleService(
+        adapter,
+        state_store=store,
+        risk_chain=RiskGateChain({}),
+    )
+
+    result = service.execute_orders(
+        [Order(symbol="AAPL.US", quantity=10, side="BUY", price=10.0)],
+        account_label="main",
+        dry_run=False,
+        target_source="unit",
+        target_asof="2026-04-14",
+        target_input_path="tests/targets.json",
+    )[0]
+
+    outcome = service.reconcile(account_label="main")
+    state = store.load("fake", "main")
+
+    assert outcome.refreshed_orders == 0
+    assert outcome.new_fill_events == 0
+    assert outcome.report.warnings == [
+        f"failed to load fills for tracked order {result.broker_order_id}: fill lookup unavailable"
+    ]
+    assert state.broker_orders[0].broker_order_id == result.broker_order_id
+    assert state.fill_events == []
+
+
 def test_submit_success_survives_fill_lookup_failure(tmp_path: Path) -> None:
     adapter = FillLookupErrorAdapter()
     service = OrderLifecycleService(
@@ -1073,3 +1175,65 @@ def test_submit_success_survives_fill_lookup_failure(tmp_path: Path) -> None:
 
     assert results[0].status == "SUCCESS"
     assert results[0].broker_order_id is not None
+
+
+def test_cancel_order_records_pending_cancel_when_refresh_fails(tmp_path: Path) -> None:
+    adapter = PendingCancelRefreshAdapter()
+    store = ExecutionStateStore(root_dir=tmp_path)
+    service = OrderLifecycleService(
+        adapter,
+        state_store=store,
+        risk_chain=RiskGateChain({}),
+    )
+
+    result = service.execute_orders(
+        [Order(symbol="AAPL.US", quantity=10, side="BUY", price=10.0, order_type="LIMIT")],
+        account_label="main",
+        dry_run=False,
+        target_source="unit",
+        target_asof="2026-04-14",
+        target_input_path="tests/targets.json",
+    )[0]
+
+    outcome = service.cancel_order(
+        account_label="main",
+        order_ref=str(result.broker_order_id),
+    )
+    state = store.load("fake", "main")
+
+    assert outcome.status == "PENDING_CANCEL"
+    assert outcome.warnings == [
+        "cancel submitted but post-cancel refresh failed: cancel refresh unavailable"
+    ]
+    assert state.broker_orders[0].status == "PENDING_CANCEL"
+    assert state.child_orders[0].status == "PENDING_CANCEL"
+
+
+def test_reprice_rejects_pending_cancel_order(tmp_path: Path) -> None:
+    adapter = PendingCancelRefreshAdapter()
+    store = ExecutionStateStore(root_dir=tmp_path)
+    service = OrderLifecycleService(
+        adapter,
+        state_store=store,
+        risk_chain=RiskGateChain({}),
+    )
+
+    result = service.execute_orders(
+        [Order(symbol="AAPL.US", quantity=10, side="BUY", price=10.0, order_type="LIMIT")],
+        account_label="main",
+        dry_run=False,
+        target_source="unit",
+        target_asof="2026-04-14",
+        target_input_path="tests/targets.json",
+    )[0]
+    service.cancel_order(
+        account_label="main",
+        order_ref=str(result.broker_order_id),
+    )
+
+    with pytest.raises(ValueError, match="pending cancel"):
+        service.reprice_order(
+            account_label="main",
+            order_ref=str(result.broker_order_id),
+            limit_price=9.5,
+        )

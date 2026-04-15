@@ -42,10 +42,13 @@ from .execution_state import (
     ParentOrder,
 )
 from .execution_helpers import (
+    broker_order_is_open,
     build_reconcile_deltas,
     find_parent_for_fill,
     find_tracked_broker_order,
-    resolve_tracked_order,
+    load_account_state,
+    require_partial_fill_quantities,
+    resolve_tracked_order_context,
 )
 from .logging import get_logger
 from .models import Order
@@ -318,14 +321,18 @@ class OrderLifecycleService:
     ) -> ExecutionTrackedOrder:
         """Return tracked order details from local execution state."""
 
-        account = self.adapter.resolve_account(account_label)
-        state = self.state_store.load(self.adapter.backend_name, account.label)
-        resolved = resolve_tracked_order(state, order_ref)
-        if resolved is None:
-            raise ValueError(
-                f"tracked order not found for ref '{order_ref}' in {self.adapter.backend_name}/{account.label}"
-            )
-        child, parent, intent, broker_order = resolved
+        context = resolve_tracked_order_context(
+            self.adapter,
+            self.state_store,
+            account_label,
+            order_ref,
+        )
+        account = context.account
+        state = context.state
+        child = context.child
+        parent = context.parent
+        intent = context.intent
+        broker_order = context.broker_order
         fills: list[ExecutionFillEvent] = []
         if broker_order is not None:
             fills.extend(
@@ -490,11 +497,8 @@ class OrderLifecycleService:
         tracked = self.get_tracked_order(account_label=account_label, order_ref=order_ref)
         if tracked.parent is None or tracked.broker_order is None:
             raise ValueError("tracked order is incomplete and cannot cancel the remaining quantity")
-        if float(tracked.parent.filled_quantity or 0.0) <= 0 or float(
-            tracked.parent.remaining_quantity or 0.0
-        ) <= 0:
-            raise ValueError("cancel-rest only applies to partially filled tracked orders")
-        if tracked.broker_order.status not in OPEN_BROKER_STATUSES:
+        require_partial_fill_quantities(tracked.parent, action_name="cancel-rest")
+        if not broker_order_is_open(tracked.broker_order):
             raise ValueError(
                 f"cancel-rest only supports open tracked broker orders, got: {tracked.broker_order.status}"
             )
@@ -508,28 +512,32 @@ class OrderLifecycleService:
     ) -> ExecutionResumeRemainingResult:
         """Submit a new child attempt for the remaining quantity after a partial fill."""
 
-        account = self.adapter.resolve_account(account_label)
-        state = self.state_store.load(self.adapter.backend_name, account.label)
-        state.broker_name = self.adapter.backend_name
-        state.account_label = account.label
-        resolved = resolve_tracked_order(state, order_ref)
-        if resolved is None:
-            raise ValueError(
-                f"tracked order not found for ref '{order_ref}' in {self.adapter.backend_name}/{account.label}"
-            )
-        child, parent, intent, broker_order = resolved
+        context = resolve_tracked_order_context(
+            self.adapter,
+            self.state_store,
+            account_label,
+            order_ref,
+        )
+        account = context.account
+        state = context.state
+        child = context.child
+        parent = context.parent
+        intent = context.intent
+        broker_order = context.broker_order
         if child is None or parent is None or intent is None:
             raise ValueError("tracked order is incomplete and cannot resume remaining quantity")
         if parent.metadata.get("manual_resolution") == "accepted_partial":
             raise ValueError("remaining quantity was already accepted locally; resume is disabled")
-        if float(parent.filled_quantity or 0.0) <= 0 or float(parent.remaining_quantity or 0.0) <= 0:
-            raise ValueError("resume-remaining only applies to partially filled tracked orders")
-        if broker_order is not None and broker_order.status in OPEN_BROKER_STATUSES:
+        _, remaining_quantity = require_partial_fill_quantities(
+            parent,
+            action_name="resume-remaining",
+        )
+        if broker_order_is_open(broker_order):
             raise ValueError(
                 "tracked broker order is still open; cancel the remaining quantity before resubmitting it"
             )
 
-        quantity = float(parent.remaining_quantity or 0.0)
+        quantity = remaining_quantity
         if not quantity.is_integer():
             raise ValueError("resume-remaining currently only supports integer-share tracked orders")
 
@@ -574,27 +582,28 @@ class OrderLifecycleService:
     ) -> ExecutionAcceptPartialResult:
         """Accept a partial fill locally and stop expecting the remaining quantity."""
 
-        account = self.adapter.resolve_account(account_label)
-        state = self.state_store.load(self.adapter.backend_name, account.label)
-        state.broker_name = self.adapter.backend_name
-        state.account_label = account.label
-        resolved = resolve_tracked_order(state, order_ref)
-        if resolved is None:
-            raise ValueError(
-                f"tracked order not found for ref '{order_ref}' in {self.adapter.backend_name}/{account.label}"
-            )
-        child, parent, _intent, broker_order = resolved
+        context = resolve_tracked_order_context(
+            self.adapter,
+            self.state_store,
+            account_label,
+            order_ref,
+        )
+        account = context.account
+        state = context.state
+        child = context.child
+        parent = context.parent
+        broker_order = context.broker_order
         if child is None or parent is None:
             raise ValueError("tracked order is incomplete and cannot accept a partial fill")
-        if float(parent.filled_quantity or 0.0) <= 0 or float(parent.remaining_quantity or 0.0) <= 0:
-            raise ValueError("accept-partial only applies to partially filled tracked orders")
-        if broker_order is not None and broker_order.status in OPEN_BROKER_STATUSES:
+        accepted_filled, abandoned_remaining = require_partial_fill_quantities(
+            parent,
+            action_name="accept-partial",
+        )
+        if broker_order_is_open(broker_order):
             raise ValueError(
                 "tracked broker order is still open; cancel the remaining quantity before accepting the partial fill"
             )
 
-        accepted_filled = float(parent.filled_quantity or 0.0)
-        abandoned_remaining = float(parent.remaining_quantity or 0.0)
         resolved_at = utc_now_iso()
         parent.status = "ACCEPTED_PARTIAL"
         parent.updated_at = resolved_at
@@ -672,16 +681,18 @@ class OrderLifecycleService:
         if limit_price <= 0:
             raise ValueError("limit_price must be greater than 0")
 
-        account = self.adapter.resolve_account(account_label)
-        state = self.state_store.load(self.adapter.backend_name, account.label)
-        state.broker_name = self.adapter.backend_name
-        state.account_label = account.label
-        resolved = resolve_tracked_order(state, order_ref)
-        if resolved is None:
-            raise ValueError(
-                f"tracked order not found for ref '{order_ref}' in {self.adapter.backend_name}/{account.label}"
-            )
-        child, parent, intent, broker_order = resolved
+        context = resolve_tracked_order_context(
+            self.adapter,
+            self.state_store,
+            account_label,
+            order_ref,
+        )
+        account = context.account
+        state = context.state
+        child = context.child
+        parent = context.parent
+        intent = context.intent
+        broker_order = context.broker_order
         if child is None or parent is None or intent is None or broker_order is None:
             raise ValueError("tracked order is incomplete and cannot be repriced")
         if str(intent.order_type).upper() != "LIMIT":
@@ -773,8 +784,11 @@ class OrderLifecycleService:
         if older_than_minutes <= 0:
             raise ValueError("older_than_minutes must be greater than 0")
 
-        account = self.adapter.resolve_account(account_label)
-        state = self.state_store.load(self.adapter.backend_name, account.label)
+        account, state = load_account_state(
+            self.adapter,
+            self.state_store,
+            account_label,
+        )
         cutoff = datetime.now(timezone.utc) - timedelta(minutes=int(older_than_minutes))
         warnings: list[str] = []
         targets = sorted(
