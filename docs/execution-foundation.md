@@ -143,7 +143,23 @@ kill switch 也遵守 execution-only 语义：
 - `longport-paper` 现在已经适合用来做 broker-backed paper evidence
 - `longport` real broker 则应该通过单独的 operator-supervised smoke playbook 来补实盘证据，而不是把 live secret 留在 repo 本地文件里
 
-## 9. 当前设计取舍
+## 9. paper / real 配置隔离为什么也是底座设计
+
+LongPort 的 paper 和 real 不是同一成熟度，也不该共用同一套默认配置入口。
+
+当前底座刻意约束成：
+
+- `longport-paper` 默认优先 repo-local `.env` / `.env.local`
+- `longport` real 默认优先 `~/.config/qexec/longport-live.env`
+- real `--execute` 还要额外通过 `QEXEC_ENABLE_LIVE` 和 repo-local live secret guard
+
+这不是为了“多一层配置系统”，而是为了让：
+
+- paper smoke 尽量可重复
+- real secret 不落进仓库本地文件
+- operator 可以直接通过 `qexec config` 看出当前命中的配置来源
+
+## 10. 当前设计取舍
 
 这套底座的设计取舍：
 

@@ -2,7 +2,7 @@
 
 该项目为量化投资执行模块，聚焦券商后台自动化下单、对账、恢复和必要的人工介入运维
 
-当前默认支持长桥 LongPort 模拟盘/实盘以及Alpaca模拟盘/实盘，并提供 `longport-paper` 与 `alpaca-paper` 两条模拟盘验证路径。
+当前默认支持长桥 LongPort 模拟盘/实盘，以及 Alpaca 模拟盘验证路径，并提供 `longport-paper` 与 `alpaca-paper` 两条模拟盘验证路径。
 
 为降低开发维护复杂度，该项目不承担策略研究 / 回测 / 股票原始数据处理，如有需要请结合研究前台项目使用
 
@@ -23,12 +23,13 @@
 
 ## 成熟度与证明边界
 
-- 长桥 LongPort 以及 Alpaca 的模拟盘 / 实盘 目前已经支持券商后台 `submit / query / cancel / reconcile` 代码路径。
-- 长桥模拟盘功能需要 `LONGPORT_ACCESS_TOKEN_TEST`；当前已经通过 operator-supervised paper smoke 跑通过 `submit / query / reconcile / cancel` 最小闭环。
-- Alpaca 模拟盘功能仍然适合作为更便宜、更稳定的重复冒烟 / 回归测试基线。
-- LongPort 实盘功能路径已经存在，但自动化端到端证据仍然弱于 Alpaca 模拟盘。对实盘交易功能的成熟度判断，以人工监督下的模拟盘冒烟验证和记载下来的证据链为准。
+- 当前已经落地 broker-backed `submit / query / cancel / reconcile` 代码路径的，是 LongPort real、`longport-paper` 和 `alpaca-paper`。
+- `longport-paper` 依赖 `LONGPORT_ACCESS_TOKEN_TEST`；当前已经通过 operator-supervised paper smoke 跑通过 `submit / query / reconcile / cancel` 最小闭环。
+- 截至 2026-04-15，LongPort real 已经通过 operator-supervised read-only 验证跑通 `config / preflight / account / quote`，并确认 live guard 与用户私有配置路由生效。
+- LongPort real 的 `rebalance --execute` 仍不应被视为“默认自动化已经跑实”的能力；成熟度判断仍要看最小实盘 smoke、审计日志和可复查 evidence。
+- Alpaca 当前按 paper-only 验证路径使用，仍然适合作为更便宜、更稳定的重复冒烟 / 回归测试基线。
 - `orders` / `exceptions` / `order` 展示的是本地执行状态中已跟踪的订单，不是券商全量订单视图。
-- `--account` 当前是显式 label 解析与 fail-fast 校验；LongPort 和 Alpaca 模拟盘仍按单账户语义运行。
+- `--account` 当前是显式 label 解析与 fail-fast 校验；LongPort real、`longport-paper` 和 `alpaca-paper` 都仍按单账户语义运行。
 
 ## 快速开始
 
@@ -69,6 +70,7 @@ qexec state-prune --older-than-days 30
 qexec state-repair --clear-kill-switch --dedupe-fills
 qexec rebalance outputs/targets/2026-04-09.json
 qexec rebalance outputs/targets/2026-04-09.json --broker longport-paper --execute
+# LongPort real execute 前先按 docs/longport-real-smoke.md 完成 playbook
 QEXEC_ENABLE_LIVE=1 qexec rebalance outputs/targets/2026-04-09.json --execute
 qexec rebalance outputs/targets/2026-04-09.json --broker alpaca-paper --execute
 ```
@@ -97,6 +99,9 @@ LongPort live token 的注入方式：
 
 - 为了防止git管理不善或者把完整项目打包分享给他人时忘记排除.env文件，该项目在实盘运行时会明确警告并拒绝通过项目根目录 `.env*` / `.envrc*`来读取`LONGPORT_ACCESS_TOKEN`
 - 推荐在当前 shell 显式 `export`，或从项目外外部的私有文件 `source`
+- 推荐的用户级私有文件位置是 `~/.config/qexec/longport-live.env`
+- `longport-paper` 默认优先读取 repo 根目录 `.env` / `.env.local`；`longport` real 默认优先读取 `~/.config/qexec/longport-live.env`
+- `qexec config --broker longport` / `qexec config --broker longport-paper` 会显示 App Key / Secret / Token / Region / Overnight 的命中来源
 - 具体步骤见 [docs/longport-real-smoke.md](docs/longport-real-smoke.md)
 
 LongPort real broker 的 `--execute` 额外要求：

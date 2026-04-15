@@ -83,13 +83,15 @@
 - `[x]` preflight 从 smoke harness 提升为正式 CLI 能力
 - `[x]` reconcile 从纯计数摘要提升为变更视图
 - `[x]` smoke operator harness 可选 evidence 输出
+- `[x]` LongPort paper / real 配置隔离与 source 可见性
+  `longport-paper` 默认优先 repo-local `.env`，`longport` real 默认优先 `~/.config/qexec/longport-live.env`；`qexec config` 会显示命中来源。
 
 ### 5. 当前仍然值得补的功能
 
 - `[x]` `longport-paper` backend 已落地
   当前通过 `LONGPORT_ACCESS_TOKEN_TEST` 走 broker-backed paper submit/query/cancel/reconcile 路径，并已经有 operator-supervised paper smoke 证据链。
 - `[~]` LongPort real broker submit/query/cancel/reconcile 的端到端证据仍不够扎实
-  代码路径已经存在，但成熟度判断仍要看 operator-supervised smoke 和记载下来的证据链。
+  截至 2026-04-15，`config / preflight / account / quote` 已经人工验证通过；下一步仍是补最小实盘 `rebalance --execute` evidence。
 - `[~]` failure-mode regression 还应继续扩
   当前已经补了 live quote skip 逻辑、operator harness refusal/evidence 和部分成交恢复测试，但还缺更多真实失败模式。
 - `[~]` broker-specific rejection taxonomy 仍可继续细化
@@ -125,6 +127,7 @@
 ## 当前建议顺序
 
 1. 继续补 LongPort real broker 的 submit/query/cancel/reconcile 证据链
+   当前 read-only verify 已完成，下一步是最小实盘 smoke 和记载 evidence。
 2. 扩失败模式回归，优先覆盖拒单、迟到 fill、pending cancel、quote/region/network 异常
 3. 视实际需要补 broker-specific rejection taxonomy
 4. 继续把 Alpaca paper 当作稳定 regression / smoke 基线，而不是新的产品中心

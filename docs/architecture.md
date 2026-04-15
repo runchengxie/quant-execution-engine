@@ -74,7 +74,7 @@ project_tools/
 - `broker/longport.py` / `broker/longport_adapter.py` / `broker/alpaca.py`
   分别负责 LongPort SDK wrapper、LongPort real/paper adapter，以及 Alpaca paper adapter 实现。
 - `broker/longport_credentials.py`
-  负责 LongPort real / paper 的凭证解析与 placeholder 回避。
+  负责 LongPort real / paper 的凭证解析、paper/live 配置隔离和 placeholder 回避。
 - `account.py`
   负责通过 adapter 获取账户快照与行情查询。
 - `rebalance.py`
@@ -113,3 +113,4 @@ project_tools/
 - `resume-remaining` 当前只支持整数股剩余量；更复杂的碎股或算法单调度仍不在范围内。
 - risk gate 里的 spread / participation / impact 依赖 broker 可提供的 market data；拿不到时会记录 `BYPASS`，而不是伪造指标。
 - LongPort real broker 路径已经存在，但自动化端到端证据仍弱于 Alpaca paper smoke。
+- `longport-paper` 默认优先 repo-local `.env` / `.env.local`，LongPort real 默认优先 `~/.config/qexec/longport-live.env`；这是为了把 paper smoke 重复性和 real secret 隔离同时保住。

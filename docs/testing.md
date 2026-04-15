@@ -58,12 +58,13 @@ uv run pytest --cov=src/quant_execution_engine --cov-report=term-missing -m 'not
 - `smoke_operator_harness.py` 已有单测覆盖固定 workflow、preflight-only 路径和 evidence JSON 输出。
 - `longport-paper` 已经是正式 broker backend；提供 `LONGPORT_ACCESS_TOKEN_TEST` 后，可以走 paper preflight / rebalance 路径。
 - `longport-paper` 当前已经通过 operator-supervised paper smoke 跑通过 `submit / query / reconcile / cancel` 最小闭环；这是一条可复现的 paper 证据链，但不是默认自动化测试的一部分。
+- 截至 2026-04-15，LongPort real 已经通过 operator-supervised read-only 验证跑通 `config / preflight / account / quote`，并确认用户私有 live 配置路由和 live guard 可工作。
 - LongPort live quote 相关测试现在会把典型的网络 / 区域 / 凭证异常视为 skip，而不是误报失败。
 
 ## 当前测试还没有证明什么
 
 - 这些测试不能单独证明 LongPort real broker 的完整 `submit / query / cancel / reconcile` 已经被自动化端到端跑实。
-- 当前最完整、可重复的 smoke 环境仍然是 Alpaca paper。
+- 当前最便宜、最稳定的回归基线仍然是 Alpaca paper；`longport-paper` 则是已经有 broker-backed 证据链的 LongPort paper 路径。
 - real broker 成熟度判断仍要看 operator-supervised smoke、审计日志和可复现 evidence，而不是只看默认测试绿了。
 
 ## 运行前提

@@ -24,6 +24,9 @@
 
 - `qexec rebalance --execute` 在 LongPort real、`longport-paper` 和 Alpaca paper 上都会走 broker-backed submit/query/cancel/reconcile 路径，但 LongPort real broker 的自动化端到端证据仍弱于 paper smoke；real broker 仍应按 operator-supervised 路径使用。
 - `longport-paper` 依赖 `LONGPORT_ACCESS_TOKEN_TEST`；LongPort real 依赖 `LONGPORT_ACCESS_TOKEN`。
+- `longport-paper` 默认优先读取 repo 根目录 `.env` / `.env.local`；LongPort real 默认优先读取 `~/.config/qexec/longport-live.env`。
+- `QEXEC_ENABLE_LIVE` 会先读当前进程环境变量；如果没设置，再回退到 `~/.config/qexec/longport-live.env`。
+- `qexec config` 会显示 LongPort App Key / Secret / Token / Region / Overnight 的命中来源，便于确认当前到底走的是 paper 还是 user-private live 配置。
 - `qexec rebalance --account` 当前做的是 account/profile label 解析与 fail-fast 校验，不是多账户路由。
 - 当前 adapter 仍按单账户语义运行；unsupported label 会直接报错。
 - `retry` 只支持零成交 terminal tracked order；部分成交要走 `cancel-rest`、`resume-remaining` 或 `accept-partial`。

@@ -31,6 +31,8 @@ qexec config
 qexec config --broker alpaca-paper
 ```
 
+对于 LongPort，`config` 还会显示 App Key / Secret / Access Token / Region / Overnight 的命中来源，方便确认当前到底读到了 repo-local paper 配置还是 user-private live 配置。
+
 ### `preflight`
 
 运行不改 broker 状态的 readiness 检查。
