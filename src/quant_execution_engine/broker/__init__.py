@@ -14,6 +14,7 @@ from .factory import (
     get_account_config,
     get_broker_adapter,
     get_broker_capabilities,
+    is_ibkr_broker,
     is_longport_broker,
     is_paper_broker,
     peek_broker_name,
@@ -30,15 +31,19 @@ __all__ = [
     "BrokerOrderRequest",
     "BrokerValidationError",
     "ResolvedBrokerAccount",
+    "IbkrPaperBrokerAdapter",
     "LongPortBrokerAdapter",
     "LongPortPaperBrokerAdapter",
     "LongPortClient",
+    "probe_ibkr_runtime_config",
+    "resolve_ibkr_runtime_config",
     "_to_lb_symbol",
     "get_account_config",
     "get_broker_adapter",
     "get_broker_capabilities",
     "get_config",
     "getenv_both",
+    "is_ibkr_broker",
     "is_longport_broker",
     "is_paper_broker",
     "peek_broker_name",
@@ -49,13 +54,21 @@ __all__ = [
 
 def __getattr__(name: str):
     if name in {
+        "IbkrPaperBrokerAdapter",
         "LongPortBrokerAdapter",
         "LongPortPaperBrokerAdapter",
         "LongPortClient",
+        "probe_ibkr_runtime_config",
+        "resolve_ibkr_runtime_config",
         "_to_lb_symbol",
         "get_config",
         "getenv_both",
     }:
+        from .ibkr import IbkrPaperBrokerAdapter
+        from .ibkr_runtime import (
+            probe_ibkr_runtime_config,
+            resolve_ibkr_runtime_config,
+        )
         from .longport import (
             LongPortBrokerAdapter,
             LongPortClient,
@@ -66,9 +79,12 @@ def __getattr__(name: str):
         )
 
         exports = {
+            "IbkrPaperBrokerAdapter": IbkrPaperBrokerAdapter,
             "LongPortBrokerAdapter": LongPortBrokerAdapter,
             "LongPortPaperBrokerAdapter": LongPortPaperBrokerAdapter,
             "LongPortClient": LongPortClient,
+            "probe_ibkr_runtime_config": probe_ibkr_runtime_config,
+            "resolve_ibkr_runtime_config": resolve_ibkr_runtime_config,
             "_to_lb_symbol": _to_lb_symbol,
             "get_config": get_config,
             "getenv_both": getenv_both,

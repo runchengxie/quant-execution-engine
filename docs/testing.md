@@ -19,7 +19,7 @@ uv run pytest
 - `tests/unit/`
   快速、隔离的行为测试。这里覆盖 CLI 路由、生命周期、部分成交恢复、`preflight`、本地状态维护和渲染器。
 - `tests/integration/`
-  覆盖适配器 / 生命周期的跨模块行为，例如 `reconcile`、紧急停单、状态恢复，以及在提供凭证时的 LongPort 行情级别验证。
+  覆盖适配器 / 生命周期的跨模块行为，例如 `reconcile`、紧急停单、状态恢复，以及在提供凭证或本地 runtime 时的 LongPort / IBKR broker-backed 验证。
 - `tests/e2e/`
   通过子进程运行 CLI 和冒烟工装的端到端冒烟测试。
 
@@ -57,6 +57,7 @@ uv run pytest --cov=src/quant_execution_engine --cov-report=term-missing -m 'not
 - `e2e` 当前证明了 CLI / 工装的子进程冒烟行为，包括信号 / 目标持仓工装输出、操作员工装的非模拟盘拒绝路径。
 - `smoke_operator_harness.py` 已有单测覆盖固定流程、`preflight-only` 路径、下游操作员步骤失败，以及证据 JSON 输出。
 - `longport-paper` 已经是正式券商后端；提供 `LONGPORT_ACCESS_TOKEN_TEST` 后，可以走模拟盘 `preflight / rebalance` 路径。
+- `ibkr-paper` 已经有单测覆盖 backend 注册、config surfacing、market/account 校验、order/fill 归一化，以及 smoke harness 的 IBKR 环境快照路径。
 - `longport-paper` 当前已经通过人工监督的模拟盘冒烟，跑通 `submit / query / reconcile / cancel` 最小闭环；这是一条可复现的模拟盘证据链，默认自动化测试不包含这一段。
 - 截至 2026-04-15，LongPort 实盘已经通过人工监督只读验证跑通 `config / preflight / account / quote`，并确认用户私有实盘配置路由和实盘保护可工作。
 - LongPort 实盘行情相关测试现在会把典型的网络 / 区域 / 凭证异常记为跳过。
@@ -65,11 +66,13 @@ uv run pytest --cov=src/quant_execution_engine --cov-report=term-missing -m 'not
 
 - 这些测试不能单独证明 LongPort 实盘完整 `submit / query / cancel / reconcile` 已经被自动化端到端跑实。
 - 当前最便宜、最稳定的回归基线仍然是 Alpaca 模拟盘；`longport-paper` 则是已经有券商侧证据链的 LongPort 模拟盘路径。
+- `ibkr-paper` 当前仍缺 operator-supervised paper smoke evidence；现阶段更适合作为本地 Gateway 驱动的增量 backend，而不是主回归基线。
 - 实盘券商成熟度判断以人工监督冒烟、审计日志和可复查证据为准。
 
 ## 运行前提
 
 - `tests/integration/` 的 LongPort 实盘行情用例依赖 `LONGPORT_APP_KEY`、`LONGPORT_APP_SECRET`、`LONGPORT_ACCESS_TOKEN`。
+- `tests/integration/test_ibkr_paper_integration.py` 依赖本地已启动并登录的 IB Gateway，以及显式 opt-in 的 `IBKR_ENABLE_INTEGRATION=1`；涉及提交/撤单的用例还要求 `IBKR_ENABLE_MUTATION_TESTS=1`，fill 路径要求 `IBKR_ENABLE_FILL_TESTS=1`。
 - `tests/e2e/` 大多不需要真实凭证；凭证缺失或网络 / 区域不可达时，实盘行情相关用例会自动跳过。
 - Alpaca 相关路径默认不会在测试里真实联网；需要真实模拟盘验证时，再单独配 `ALPACA_*` 环境变量并显式跑场景。
 
@@ -79,6 +82,7 @@ uv run pytest --cov=src/quant_execution_engine --cov-report=term-missing -m 'not
 
 ```bash
 PYTHONPATH=src python project_tools/smoke_operator_harness.py --broker alpaca-paper --execute
+PYTHONPATH=src python project_tools/smoke_operator_harness.py --broker ibkr-paper --execute --evidence-output outputs/evidence/ibkr-paper-smoke.json
 PYTHONPATH=src python project_tools/smoke_operator_harness.py --broker longport-paper --execute --cleanup-open-orders --evidence-output outputs/evidence/longport-paper-smoke.json
 ```
 
@@ -86,6 +90,7 @@ PYTHONPATH=src python project_tools/smoke_operator_harness.py --broker longport-
 
 ```bash
 PYTHONPATH=src python project_tools/smoke_operator_harness.py --broker alpaca-paper --preflight-only
+PYTHONPATH=src python project_tools/smoke_operator_harness.py --broker ibkr-paper --preflight-only
 PYTHONPATH=src python project_tools/smoke_operator_harness.py --broker longport-paper --preflight-only
 ```
 
@@ -93,6 +98,7 @@ PYTHONPATH=src python project_tools/smoke_operator_harness.py --broker longport-
 
 ```bash
 PYTHONPATH=src python project_tools/smoke_operator_harness.py --broker alpaca-paper --execute --evidence-output outputs/evidence/operator-smoke.json
+PYTHONPATH=src python project_tools/smoke_operator_harness.py --broker ibkr-paper --execute --evidence-output outputs/evidence/ibkr-paper-smoke.json --operator-note "operator supervised paper smoke"
 PYTHONPATH=src python project_tools/smoke_operator_harness.py --broker longport-paper --execute --cleanup-open-orders --evidence-output outputs/evidence/longport-paper-smoke.json
 PYTHONPATH=src python project_tools/smoke_operator_harness.py --broker longport --allow-non-paper --execute --evidence-output outputs/evidence/longport-real-smoke.json --operator-note "operator supervised" --operator-note "cancel not covered"
 ```
@@ -138,6 +144,7 @@ PYTHONPATH=src python project_tools/smoke_operator_harness.py --broker longport-
 
 这个工装默认拒绝非模拟盘券商；如果你明确知道自己要这么做，需要额外传 `--allow-non-paper`。
 
+如果你准备开始做 IBKR 模拟盘的最小验证，先看 [docs/ibkr-paper-smoke.md](ibkr-paper-smoke.md)。
 如果你想系统化重复 `longport-paper` 的操作员失败场景冒烟，可先看 [docs/longport-paper-failure-smoke.md](longport-paper-failure-smoke.md)。
 
 如果你准备开始做 LongPort 实盘的最小验证，先看 [docs/longport-real-smoke.md](longport-real-smoke.md)。

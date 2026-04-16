@@ -50,6 +50,8 @@ src/quant_execution_engine/
     base.py
     factory.py
     alpaca.py
+    ibkr.py
+    ibkr_runtime.py
     _stubs.py
     longport_adapter.py
     longport_credentials.py
@@ -71,8 +73,8 @@ project_tools/
   负责参数解析、券商后端选择、命令分发和错误码收口，包括 `preflight`、操作员恢复命令和本地状态维护命令。
 - `broker/base.py` / `broker/factory.py`
   定义券商生命周期契约、能力矩阵和后端选择逻辑。
-- `broker/longport.py` / `broker/longport_adapter.py` / `broker/alpaca.py`
-  分别负责 LongPort SDK 封装、LongPort 实盘/模拟盘适配器，以及 Alpaca 模拟盘适配器实现。
+- `broker/longport.py` / `broker/longport_adapter.py` / `broker/alpaca.py` / `broker/ibkr.py` / `broker/ibkr_runtime.py`
+  分别负责 LongPort SDK 封装、LongPort 实盘/模拟盘适配器、Alpaca 模拟盘适配器，以及 IBKR paper runtime 和适配器实现。
 - `broker/longport_credentials.py`
   负责 LongPort 实盘/模拟盘的凭证解析、配置隔离和占位值规避。
 - `account.py`
@@ -106,11 +108,13 @@ project_tools/
 - 实盘执行输入边界严格收敛到统一的 `targets.json`。
 - 本地状态是幂等、恢复和操作员处置的基础面。
 - `orders` / `exceptions` / `order` 明确是已跟踪状态视图，不伪装成券商全量订单簿。
+- IBKR 属于本地 broker runtime 依赖型 backend；当前通过本地 IB Gateway over TWS API 接入，而不是把它抽象成纯云端 HTTP broker。
 
 ## 当前限制
 
-- `--account` 已支持显式校验参数，但当前 LongPort 实盘、`longport-paper` 和 Alpaca 模拟盘都按单账户模式运行，不支持真实多账户切换。
+- `--account` 已支持显式校验参数，但当前 LongPort 实盘、`longport-paper`、Alpaca 模拟盘和 `ibkr-paper` 都按单账户模式运行，不支持真实多账户切换。
 - `resume-remaining` 当前只支持整数股剩余量；更复杂的碎股或算法单调度仍不在范围内。
 - 风控门禁里的 spread / participation / impact 依赖券商提供的市场数据；拿不到时会记录 `BYPASS`，不生成伪指标。
 - LongPort 实盘路径已经存在，但自动化端到端证据仍弱于 Alpaca 模拟盘冒烟。
 - `longport-paper` 默认优先读取仓库本地 `.env` / `.env.local`，LongPort 实盘默认优先读取 `~/.config/qexec/longport-live.env`；这是为了同时保住模拟盘冒烟的可重复性和实盘凭证隔离。
+- `ibkr-paper` 当前只覆盖 US equities 最小切片，并依赖本地已登录的 IB Gateway；仓库内还没有自动随附的 operator-supervised evidence 样例。

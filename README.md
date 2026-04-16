@@ -1,7 +1,7 @@
 # Quant Execution Engine（量化执行引擎）
 
 该项目是一个面向量化交易的执行模块，聚焦券商后台自动化下单、对账、恢复，以及必要的人工运维介入。  
-当前默认支持长桥 LongPort 模拟盘与实盘，以及 Alpaca 模拟盘验证路径。  
+当前默认支持长桥 LongPort 模拟盘与实盘、Alpaca 模拟盘验证路径，以及 IBKR 模拟盘最小切片。  
 为控制开发和维护复杂度，本项目不承担策略研究、回测或原始行情数据处理；如有需要，请与研究前台项目配合使用。
 
 ## 当前能力
@@ -26,8 +26,9 @@
 - LongPort 实盘账户已经通过人工监督只读方式验证 `config / preflight / account / quote`，并确认实盘保护和用户私有配置路由生效。
 - LongPort 的 `rebalance --execute` 当前仍按人工监督路径使用。成熟度判断以最小实盘冒烟、审计日志和可复查证据为准。
 - Alpaca 当前按模拟盘验证路径使用，更适合作为便宜、直观、稳定的重复冒烟和回归基线。
+- `ibkr-paper` 当前是本地 IB Gateway over TWS API 依赖型模拟盘后端，支持 `config / preflight / account / quote / rebalance --execute / cancel / reconcile` 的最小代码闭环；截至 2026-04-16，仓库内尚未附带 operator-supervised paper smoke evidence，仍应按人工监督路径验证。
 - `orders` / `exceptions` / `order` 展示的是本地执行状态中已跟踪的订单。券商全量订单视图不在当前范围内。
-- `--account` 当前只做显式标签解析和快速失败校验；LongPort 模拟盘、LongPort 实盘和 Alpaca 模拟盘仍按单账户语义运行。
+- `--account` 当前只做显式标签解析和快速失败校验；LongPort 模拟盘、LongPort 实盘、Alpaca 模拟盘和 `ibkr-paper` 仍按单账户语义运行。
 
 ## 快速开始
 
@@ -49,7 +50,13 @@ uv sync --group dev --extra cli --extra longport
 uv sync --group dev --extra cli --extra alpaca
 ```
 
-如果要同时安装两家券商依赖：
+如果要启用 IBKR 模拟盘：
+
+```bash
+uv sync --group dev --extra cli --extra ibkr
+```
+
+如果要同时安装全部券商依赖：
 
 ```bash
 uv sync --group dev --extra cli --extra full
@@ -62,9 +69,13 @@ uv sync --group dev --extra cli --extra full
 ```bash
 qexec --help
 qexec config --broker longport-paper
+qexec config --broker ibkr-paper
 qexec preflight --broker longport-paper
+qexec preflight --broker ibkr-paper
 qexec account --broker longport-paper --format json
+qexec account --broker ibkr-paper --format json
 qexec quote AAPL 700.HK --broker longport-paper
+qexec quote AAPL --broker ibkr-paper
 qexec orders --broker longport-paper --status open
 qexec exceptions --broker longport-paper --status failure
 qexec order broker-order-id --broker longport-paper
@@ -81,6 +92,7 @@ qexec state-prune --broker longport-paper --older-than-days 30
 qexec state-repair --broker longport-paper --clear-kill-switch --dedupe-fills
 qexec rebalance outputs/targets/2026-04-09.json --broker longport-paper
 qexec rebalance outputs/targets/2026-04-09.json --broker longport-paper --execute
+qexec rebalance outputs/targets/2026-04-09.json --broker ibkr-paper --execute
 # LongPort 实盘执行前，先按 docs/longport-real-smoke.md 完成操作手册
 QEXEC_ENABLE_LIVE=1 qexec rebalance outputs/targets/2026-04-09.json --broker longport --execute
 qexec rebalance outputs/targets/2026-04-09.json --broker alpaca-paper --execute
@@ -125,6 +137,21 @@ Alpaca 模拟盘至少需要：
 - `ALPACA_API_KEY` 或 `APCA_API_KEY_ID`
 - `ALPACA_SECRET_KEY` 或 `APCA_API_SECRET_KEY`
 
+IBKR 模拟盘至少需要：
+
+- 本地已启动并登录的 IB Gateway
+- `IBKR_HOST`，默认 `127.0.0.1`
+- `IBKR_PORT` 或 `IBKR_PORT_PAPER`，默认 `4002`
+- `IBKR_CLIENT_ID`，默认 `1`
+- 可选 `IBKR_ACCOUNT_ID`
+- 可选 `IBKR_CONNECT_TIMEOUT_SECONDS`
+
+说明：
+
+- `ibkr-paper` 当前只支持 US equities 最小切片。
+- 当前后端按本地 `IB Gateway + TWS API` 路线运行，不把 IBKR 当成纯云端 REST broker。
+- 具体步骤见 [docs/ibkr-paper-smoke.md](docs/ibkr-paper-smoke.md)。
+
 更多环境变量、本地 YAML、风控门禁和兼容项见：
 
 - [docs/configuration.md](docs/configuration.md)
@@ -148,7 +175,7 @@ uv run pytest -m integration
 
 - 默认 `pytest` 证明的是快速行为测试通过。
 - `e2e` 证明 CLI / 工装子进程的冒烟行为和输出边界。
-- `integration` 证明跨模块生命周期行为，并在提供凭证时尝试 LongPort 行情级别验证。
+- `integration` 证明跨模块生命周期行为，并在提供凭证或本地 runtime 时尝试 LongPort / IBKR 的 broker-backed 验证。
 - 这些测试仍不能单独证明 LongPort 实盘交易能力已经被自动化完整跑实。
 
 ## 冒烟测试工装
@@ -161,6 +188,8 @@ PYTHONPATH=src python project_tools/smoke_target_harness.py --scenario carry-ove
 PYTHONPATH=src python project_tools/smoke_operator_harness.py --broker alpaca-paper --preflight-only
 PYTHONPATH=src python project_tools/smoke_operator_harness.py --broker alpaca-paper --execute
 PYTHONPATH=src python project_tools/smoke_operator_harness.py --broker alpaca-paper --execute --evidence-output outputs/evidence/operator-smoke.json
+PYTHONPATH=src python project_tools/smoke_operator_harness.py --broker ibkr-paper --preflight-only
+PYTHONPATH=src python project_tools/smoke_operator_harness.py --broker ibkr-paper --execute --evidence-output outputs/evidence/ibkr-paper-smoke.json
 PYTHONPATH=src python project_tools/smoke_operator_harness.py --broker longport-paper --preflight-only
 PYTHONPATH=src python project_tools/smoke_operator_harness.py --broker longport-paper --execute --cleanup-open-orders --evidence-output outputs/evidence/longport-paper-smoke.json
 ```
@@ -204,6 +233,7 @@ PYTHONPATH=src python project_tools/smoke_operator_harness.py --broker longport-
 - [docs/configuration.md](docs/configuration.md)
 - [docs/execution-checklist.md](docs/execution-checklist.md)
 - [docs/execution-foundation.md](docs/execution-foundation.md)
+- [docs/ibkr-paper-smoke.md](docs/ibkr-paper-smoke.md)
 - [docs/longport-paper-failure-smoke.md](docs/longport-paper-failure-smoke.md)
 - [docs/longport-real-smoke.md](docs/longport-real-smoke.md)
 - [docs/testing.md](docs/testing.md)

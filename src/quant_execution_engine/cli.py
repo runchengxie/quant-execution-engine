@@ -15,9 +15,11 @@ from .account import get_account_snapshot, get_quotes
 from .broker import (
     get_broker_adapter,
     get_broker_capabilities,
+    is_ibkr_broker,
     is_longport_broker,
     is_paper_broker,
     peek_broker_name,
+    probe_ibkr_runtime_config,
     resolve_broker_name,
     resolve_default_account_label,
 )
@@ -699,30 +701,6 @@ def run_config(show: bool = True, broker: str | None = None) -> CommandResult:
         kill_switch_cfg = get_kill_switch_config()
         default_account = resolve_default_account_label()
 
-        longport_env_name = "paper" if selected_broker == "longport-paper" else "real"
-        region, region_source = resolve_longport_runtime_value(
-            ("LONGPORT_REGION", "LONGBRIDGE_REGION"),
-            env_name=longport_env_name,
-            default="hk",
-        )
-        overnight, overnight_source = resolve_longport_runtime_value(
-            ("LONGPORT_ENABLE_OVERNIGHT", "LONGBRIDGE_ENABLE_OVERNIGHT"),
-            env_name=longport_env_name,
-            default="false",
-        )
-        max_notional = _getenv_both(
-            "LONGPORT_MAX_NOTIONAL_PER_ORDER", "LONGBRIDGE_MAX_NOTIONAL_PER_ORDER", "0"
-        )
-        max_qty = _getenv_both(
-            "LONGPORT_MAX_QTY_PER_ORDER", "LONGBRIDGE_MAX_QTY_PER_ORDER", "0"
-        )
-        tw_start = _getenv_both(
-            "LONGPORT_TRADING_WINDOW_START", "LONGBRIDGE_TRADING_WINDOW_START", "09:30"
-        )
-        tw_end = _getenv_both(
-            "LONGPORT_TRADING_WINDOW_END", "LONGBRIDGE_TRADING_WINDOW_END", "16:00"
-        )
-
         alpaca_key = os.getenv("ALPACA_API_KEY") or os.getenv("APCA_API_KEY_ID")
         alpaca_secret = os.getenv("ALPACA_SECRET_KEY") or os.getenv("APCA_API_SECRET_KEY")
 
@@ -771,6 +749,31 @@ def run_config(show: bool = True, broker: str | None = None) -> CommandResult:
             ),
         ]
         if is_longport_broker(selected_broker):
+            longport_env_name = "paper" if selected_broker == "longport-paper" else "real"
+            region, region_source = resolve_longport_runtime_value(
+                ("LONGPORT_REGION", "LONGBRIDGE_REGION"),
+                env_name=longport_env_name,
+                default="hk",
+            )
+            overnight, overnight_source = resolve_longport_runtime_value(
+                ("LONGPORT_ENABLE_OVERNIGHT", "LONGBRIDGE_ENABLE_OVERNIGHT"),
+                env_name=longport_env_name,
+                default="false",
+            )
+            max_notional = _getenv_both(
+                "LONGPORT_MAX_NOTIONAL_PER_ORDER",
+                "LONGBRIDGE_MAX_NOTIONAL_PER_ORDER",
+                "0",
+            )
+            max_qty = _getenv_both(
+                "LONGPORT_MAX_QTY_PER_ORDER", "LONGBRIDGE_MAX_QTY_PER_ORDER", "0"
+            )
+            tw_start = _getenv_both(
+                "LONGPORT_TRADING_WINDOW_START", "LONGBRIDGE_TRADING_WINDOW_START", "09:30"
+            )
+            tw_end = _getenv_both(
+                "LONGPORT_TRADING_WINDOW_END", "LONGBRIDGE_TRADING_WINDOW_END", "16:00"
+            )
             credentials = probe_longport_credentials(longport_env_name)
             app_key = credentials.app_key
             app_secret = credentials.app_secret
@@ -796,6 +799,25 @@ def run_config(show: bool = True, broker: str | None = None) -> CommandResult:
                     "- App Secret Source:     " + app_secret_source,
                     "- Access Token:          " + _mask(token),
                     "- Access Token Source:   " + token_source,
+                ]
+            )
+        elif is_ibkr_broker(selected_broker):
+            runtime_cfg = probe_ibkr_runtime_config()
+            lines.extend(
+                [
+                    "- Runtime Stack:         " + runtime_cfg.runtime,
+                    "- Gateway Host:          " + runtime_cfg.host,
+                    "- Gateway Host Source:   " + runtime_cfg.host_source,
+                    "- Paper Port:            " + str(runtime_cfg.port),
+                    "- Paper Port Source:     " + runtime_cfg.port_source,
+                    "- Client ID:             " + str(runtime_cfg.client_id),
+                    "- Client ID Source:      " + runtime_cfg.client_id_source,
+                    "- Account ID:            "
+                    + (runtime_cfg.account_id or "(auto-detect via IB Gateway)"),
+                    "- Account ID Source:     " + runtime_cfg.account_id_source,
+                    "- Connect Timeout (s):   " + str(runtime_cfg.connect_timeout_seconds),
+                    "- Timeout Source:        " + runtime_cfg.connect_timeout_source,
+                    "- Market Scope:          US equities only",
                 ]
             )
         elif selected_broker in {"alpaca", "alpaca-paper"}:

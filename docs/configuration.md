@@ -81,11 +81,33 @@
 - 当前适配器是纯模拟盘验证路径，不提供实盘切换
 - 当前也不提供真实多账户切换
 
+### IBKR 模拟盘
+
+必需：
+
+- 本地已启动并登录的 IB Gateway
+- `IBKR_HOST`，默认 `127.0.0.1`
+- `IBKR_PORT` 或 `IBKR_PORT_PAPER`，默认 `4002`
+- `IBKR_CLIENT_ID`，默认 `1`
+
+可选：
+
+- `IBKR_ACCOUNT_ID`
+- `IBKR_CONNECT_TIMEOUT_SECONDS`，默认 `5`
+
+说明：
+
+- 当前 `ibkr-paper` 后端按本地 `IB Gateway + TWS API` 路线运行。
+- 当前只支持 US equities 最小切片；非 `.US` symbol 会在适配器层快速失败。
+- `qexec config --broker ibkr-paper` 会显示 host / paper port / client ID / account ID / timeout 的有效值和来源。
+- 真实多账户路由不在当前范围内；`--account` 仍只接受 `main`。
+
 ### 安装模型
 
 - 核心安装：`uv sync --group dev --extra cli`
 - LongPort：`uv sync --group dev --extra cli --extra longport`
 - Alpaca：`uv sync --group dev --extra cli --extra alpaca`
+- IBKR：`uv sync --group dev --extra cli --extra ibkr`
 - 全量 broker 依赖：`uv sync --group dev --extra cli --extra full`
 - 当前 CLI 不再假设默认 broker；请在本地 YAML 里显式设置 `broker.backend`，或每次传 `--broker`
 
@@ -168,3 +190,4 @@ fx:
 - `execution.kill_switch.env_var` 和可选 `execution.kill_switch.path` 可以手动停掉新的券商提交。
 - `broker.default_account` 是 CLI 没显式传 `--account` 时的默认标签；如果适配器不支持该标签，会直接报错。
 - `execution.state_dir` 控制幂等与恢复状态文件目录，默认是 `outputs/state`。
+- `ibkr-paper` 当前依赖本地 IB Gateway；当前配置层只暴露 paper runtime 路径，不包含 live broker 切换。

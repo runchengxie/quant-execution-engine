@@ -174,33 +174,62 @@ def run_preflight_checks(
             )
         )
 
-        snapshot = adapter.get_account_snapshot(resolved_account, include_quotes=False)
-        checks.append(
-            PreflightCheck(
-                name="account_snapshot",
-                outcome="PASS",
-                message=(
-                    f"cash={float(snapshot.cash_usd or 0.0):.2f}, "
-                    f"positions={len(snapshot.positions)}, "
-                    f"portfolio_value={float(snapshot.total_portfolio_value or 0.0):.2f}"
-                ),
+        try:
+            snapshot = adapter.get_account_snapshot(resolved_account, include_quotes=False)
+            checks.append(
+                PreflightCheck(
+                    name="account_snapshot",
+                    outcome="PASS",
+                    message=(
+                        f"cash={float(snapshot.cash_usd or 0.0):.2f}, "
+                        f"positions={len(snapshot.positions)}, "
+                        f"portfolio_value={float(snapshot.total_portfolio_value or 0.0):.2f}"
+                    ),
+                )
             )
-        )
+        except Exception as exc:
+            checks.append(
+                PreflightCheck(
+                    name="account_snapshot",
+                    outcome="FAIL",
+                    message=str(exc),
+                )
+            )
+            return PreflightResult(
+                broker_name=selected_broker,
+                account_label=resolved_account_label,
+                env_name=env_name,
+                symbols=requested_symbols,
+                checks=checks,
+            )
 
         risk_chain = RiskGateChain()
         require_depth = risk_chain.needs_market_data()
-        quotes = adapter.get_quotes(requested_symbols, include_depth=require_depth)
-        quote_outcome, quote_message = _quote_market_data_health(
-            quotes, require_depth=require_depth
-        )
-        checks.append(
-            PreflightCheck(
-                name="quotes",
-                outcome=quote_outcome,
-                message=quote_message,
-                details={"requested_symbols": requested_symbols, "returned_symbols": sorted(quotes)},
+        try:
+            quotes = adapter.get_quotes(requested_symbols, include_depth=require_depth)
+            quote_outcome, quote_message = _quote_market_data_health(
+                quotes, require_depth=require_depth
             )
-        )
+            checks.append(
+                PreflightCheck(
+                    name="quotes",
+                    outcome=quote_outcome,
+                    message=quote_message,
+                    details={
+                        "requested_symbols": requested_symbols,
+                        "returned_symbols": sorted(quotes),
+                    },
+                )
+            )
+        except Exception as exc:
+            checks.append(
+                PreflightCheck(
+                    name="quotes",
+                    outcome="FAIL",
+                    message=str(exc),
+                    details={"requested_symbols": requested_symbols},
+                )
+            )
     finally:
         close_fn = getattr(adapter, "close", None)
         if callable(close_fn):

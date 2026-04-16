@@ -50,6 +50,14 @@ LONGPORT_SMOKE_ENV_KEYS = (
     "LONGBRIDGE_REGION",
     "LONGBRIDGE_ENABLE_OVERNIGHT",
 )
+IBKR_SMOKE_ENV_KEYS = (
+    "IBKR_HOST",
+    "IBKR_PORT",
+    "IBKR_PORT_PAPER",
+    "IBKR_CLIENT_ID",
+    "IBKR_ACCOUNT_ID",
+    "IBKR_CONNECT_TIMEOUT_SECONDS",
+)
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW_FAILURE_METADATA: dict[str, tuple[str, str]] = {
     "config": (
@@ -102,9 +110,12 @@ class SmokeWorkflowStepError(RuntimeError):
 
 
 def capture_broker_env(broker: str) -> dict[str, str | None]:
-    if not str(broker).startswith("longport"):
-        return {}
-    return {key: os.getenv(key) for key in LONGPORT_SMOKE_ENV_KEYS}
+    normalized = str(broker).strip().lower()
+    if normalized.startswith("longport"):
+        return {key: os.getenv(key) for key in LONGPORT_SMOKE_ENV_KEYS}
+    if normalized == "ibkr-paper":
+        return {key: os.getenv(key) for key in IBKR_SMOKE_ENV_KEYS}
+    return {}
 
 
 def apply_broker_env(env_snapshot: dict[str, str | None]) -> None:

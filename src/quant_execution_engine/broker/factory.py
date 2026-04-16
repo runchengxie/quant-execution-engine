@@ -9,9 +9,10 @@ from ..config import load_cfg
 from .base import BrokerAdapter, BrokerCapabilityMatrix, BrokerValidationError
 
 
-PAPER_BROKERS = frozenset({"alpaca", "alpaca-paper", "longport-paper"})
+PAPER_BROKERS = frozenset({"alpaca", "alpaca-paper", "ibkr-paper", "longport-paper"})
 LONGPORT_BROKERS = frozenset({"longport", "longport-paper"})
 ALPACA_BROKERS = frozenset({"alpaca", "alpaca-paper"})
+IBKR_BROKERS = frozenset({"ibkr-paper"})
 
 
 def _broker_cfg() -> dict[str, Any]:
@@ -44,6 +45,11 @@ def _load_alpaca_adapter_cls():
     return module.AlpacaPaperBrokerAdapter
 
 
+def _load_ibkr_adapter_cls():
+    module = import_module(".ibkr", __package__)
+    return module.IbkrPaperBrokerAdapter
+
+
 def _load_longport_runtime() -> tuple[type[Any], type[Any], type[Any]]:
     module = import_module(".longport", __package__)
     return (
@@ -63,6 +69,12 @@ def is_longport_broker(broker_name: str | None = None) -> bool:
     """Return whether the selected backend uses the LongPort SDK."""
 
     return resolve_broker_name(broker_name) in LONGPORT_BROKERS
+
+
+def is_ibkr_broker(broker_name: str | None = None) -> bool:
+    """Return whether the selected backend uses the IBKR runtime."""
+
+    return resolve_broker_name(broker_name) in IBKR_BROKERS
 
 
 def resolve_default_account_label(explicit: str | None = None) -> str:
@@ -96,6 +108,9 @@ def get_broker_capabilities(broker_name: str | None = None) -> BrokerCapabilityM
     if backend == "longport-paper":
         _, LongPortPaperBrokerAdapter, _ = _load_longport_runtime()
         return LongPortPaperBrokerAdapter.capabilities
+    if backend in IBKR_BROKERS:
+        IbkrPaperBrokerAdapter = _load_ibkr_adapter_cls()
+        return IbkrPaperBrokerAdapter.capabilities
     if backend in ALPACA_BROKERS:
         AlpacaPaperBrokerAdapter = _load_alpaca_adapter_cls()
         return AlpacaPaperBrokerAdapter.capabilities
@@ -119,10 +134,13 @@ def get_broker_adapter(
     if backend == "longport-paper":
         _, LongPortPaperBrokerAdapter, _ = _load_longport_runtime()
         return LongPortPaperBrokerAdapter(client=client)
+    if backend in IBKR_BROKERS:
+        IbkrPaperBrokerAdapter = _load_ibkr_adapter_cls()
+        return IbkrPaperBrokerAdapter(client=client)
     if backend in ALPACA_BROKERS:
         if client is not None:
             raise BrokerValidationError(
-                "custom broker client injection is only supported for longport backends"
+                "custom broker client injection is only supported for longport and ibkr backends"
             )
         AlpacaPaperBrokerAdapter = _load_alpaca_adapter_cls()
         return AlpacaPaperBrokerAdapter()

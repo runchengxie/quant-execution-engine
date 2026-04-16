@@ -19,10 +19,12 @@ dev = [
 cli = ["rich>=13"]
 longport = ["longport>=0.2.77"]
 alpaca = ["alpaca-py", "pytz"]
+ibkr = ["ib-insync>=0.9.86"]
 full = [
   "longport>=0.2.77",
   "alpaca-py",
   "pytz",
+  "ib-insync>=0.9.86",
 ]
 
 [project.scripts]

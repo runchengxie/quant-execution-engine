@@ -2,7 +2,7 @@
 # Copy to config/config.yaml and adjust as needed.
 
 broker:
-  backend: null  # Set explicitly, e.g. longport, longport-paper, alpaca-paper
+  backend: null  # Set explicitly, e.g. longport, longport-paper, alpaca-paper, ibkr-paper
   default_account: main
   accounts:
     main: {}

@@ -25,6 +25,7 @@ PYTHONPATH=src python -m quant_execution_engine
 ```bash
 uv sync --group dev --extra cli --extra longport
 uv sync --group dev --extra cli --extra alpaca
+uv sync --group dev --extra cli --extra ibkr
 uv sync --group dev --extra cli --extra full
 ```
 
@@ -39,9 +40,12 @@ uv sync --group dev --extra cli --extra full
 ```bash
 qexec config --broker longport-paper
 qexec config --broker alpaca-paper
+qexec config --broker ibkr-paper
 ```
 
 对于 LongPort，`config` 还会显示 App Key / Secret / Access Token / Region / Overnight 的命中来源，方便确认当前到底读到了仓库本地模拟盘配置，还是用户私有实盘配置。
+
+对于 `ibkr-paper`，`config` 会显示 Gateway host / paper port / client ID / account ID / connect timeout，以及当前 runtime 假设：本地 IB Gateway over TWS API。
 
 ### `preflight`
 
@@ -51,7 +55,7 @@ qexec config --broker alpaca-paper
 qexec preflight --broker longport-paper
 qexec preflight AAPL MSFT --broker longport-paper
 qexec preflight --broker alpaca-paper
-qexec preflight --broker longport-paper
+qexec preflight --broker ibkr-paper
 ```
 
 当前会检查：
@@ -64,6 +68,8 @@ qexec preflight --broker longport-paper
 - 账户快照
 - 行情 / 深度 / 成交量可达性
 
+对于 `ibkr-paper`，这些检查会反映本地 IB Gateway 连通性、账户解析和 market-data 可达性；失败时会直接把 Gateway/connectivity 相关错误透传到检查项里。
+
 ### `account`
 
 查看账户概览。
@@ -74,6 +80,7 @@ qexec account --broker longport-paper --format json
 qexec account --broker longport-paper --funds
 qexec account --broker longport-paper --positions
 qexec account --broker alpaca-paper
+qexec account --broker ibkr-paper
 qexec account --account main
 ```
 
@@ -84,7 +91,10 @@ qexec account --account main
 ```bash
 qexec quote AAPL 700.HK --broker longport-paper
 qexec quote AAPL --broker alpaca-paper
+qexec quote AAPL --broker ibkr-paper
 ```
+
+当前 `ibkr-paper` 只支持 US equities 最小切片；例如 `700.HK` 这类 symbol 会直接报校验错误。
 
 ### `orders`
 
@@ -130,6 +140,7 @@ qexec order client-order-id --broker alpaca-paper
 ```bash
 qexec reconcile
 qexec reconcile --broker alpaca-paper
+qexec reconcile --broker ibkr-paper
 qexec reconcile --account main
 ```
 
@@ -271,6 +282,7 @@ qexec state-repair --recompute-parent-aggregates
 qexec rebalance outputs/targets/2026-04-09.json
 qexec rebalance outputs/targets/2026-04-09.json --account main
 qexec rebalance outputs/targets/2026-04-09.json --broker longport-paper --execute
+qexec rebalance outputs/targets/2026-04-09.json --broker ibkr-paper --execute
 QEXEC_ENABLE_LIVE=1 qexec rebalance outputs/targets/2026-04-09.json --execute
 qexec rebalance outputs/targets/2026-04-09.json --broker alpaca-paper --execute
 qexec rebalance outputs/targets/2026-04-09.json --target-gross-exposure 0.9
@@ -292,6 +304,7 @@ qexec rebalance outputs/targets/2026-04-09.json --target-gross-exposure 0.9
 - `cancel-rest`、`resume-remaining`、`accept-partial` 是当前的部分成交人工恢复链路。
 - `rebalance` 每次运行都会把审计日志写到 `outputs/orders/*.jsonl`。
 - 活跃执行状态会持久化到 `outputs/state/*.json`，用于幂等、防重放和重启恢复。
+- `ibkr-paper` 当前依赖本地 IB Gateway over TWS API，并且只支持 US equities 最小切片。
 
 ## 测试运行
 
@@ -301,10 +314,13 @@ qexec rebalance outputs/targets/2026-04-09.json --target-gross-exposure 0.9
 PYTHONPATH=src python project_tools/smoke_signal_harness.py --output outputs/targets/smoke-signal.json
 PYTHONPATH=src python project_tools/smoke_target_harness.py --scenario rebalance --print-json
 PYTHONPATH=src python project_tools/smoke_operator_harness.py --broker alpaca-paper --preflight-only
+PYTHONPATH=src python project_tools/smoke_operator_harness.py --broker ibkr-paper --preflight-only
+PYTHONPATH=src python project_tools/smoke_operator_harness.py --broker ibkr-paper --execute --evidence-output outputs/evidence/ibkr-paper-smoke.json
 PYTHONPATH=src python project_tools/smoke_operator_harness.py --broker longport-paper --preflight-only
 PYTHONPATH=src python project_tools/smoke_operator_harness.py --broker longport-paper --execute --cleanup-open-orders --evidence-output outputs/evidence/longport-paper-smoke.json
 ```
 
 `smoke_operator_harness.py` 是最接近操作员流程的工装；需要留证时可以加 `--evidence-output`。
 
+如果你是第一次跑 IBKR 模拟盘，先看 [ibkr-paper-smoke.md](ibkr-paper-smoke.md)。
 如果你想围绕 `longport-paper` 系统化做操作员失败场景冒烟，建议直接按 [longport-paper-failure-smoke.md](longport-paper-failure-smoke.md) 的场景执行。
