@@ -11,14 +11,18 @@ from typing import Any
 
 from .account import get_quotes
 from .broker.base import BrokerAdapter
-from .broker.factory import get_broker_adapter, resolve_broker_name, resolve_default_account_label
-from .broker.longport import LongPortClient, _to_lb_symbol
+from .broker.factory import (
+    get_broker_adapter,
+    peek_broker_name,
+    resolve_broker_name,
+    resolve_default_account_label,
+)
 from .config import load_cfg
 from .execution import OrderLifecycleService
 from .fees import FeeSchedule, estimate_fees
 from .logging import get_logger, get_run_id
 from .models import AccountSnapshot, Order, Position, RebalanceResult
-from .targets import TargetEntry
+from .targets import KNOWN_MARKETS, TargetEntry
 
 logger = get_logger(__name__)
 
@@ -29,26 +33,29 @@ class RebalanceService:
     def __init__(
         self,
         env: str = "real",
-        client: LongPortClient | BrokerAdapter | None = None,
+        client: Any | BrokerAdapter | None = None,
         *,
         broker_name: str | None = None,
         account_label: str | None = None,
     ):
         self.env = env
         self.client = client
-        self.broker_name = resolve_broker_name(broker_name)
+        self.broker_name = peek_broker_name(broker_name) or ""
         self.account_label = resolve_default_account_label(account_label)
         self._last_reconcile_report = None
+
+    def _resolved_broker_name(self) -> str:
+        return self.broker_name or resolve_broker_name()
 
     def _get_client(self) -> Any:
         """Get client instance"""
         if not self.client:
-            self.client = get_broker_adapter(broker_name=self.broker_name)
+            self.client = get_broker_adapter(broker_name=self._resolved_broker_name())
         return self.client
 
     def _get_adapter(self) -> BrokerAdapter:
         return get_broker_adapter(
-            broker_name=self.broker_name,
+            broker_name=self._resolved_broker_name(),
             client=self._get_client(),
         )
 
@@ -63,8 +70,13 @@ class RebalanceService:
     @staticmethod
     def _coerce_lb_symbol(target: str | TargetEntry) -> str:
         if isinstance(target, TargetEntry):
-            return _to_lb_symbol(target.symbol, market=target.market)
-        return _to_lb_symbol(str(target).upper().strip())
+            return f"{target.symbol}.{target.market}"
+        normalized = str(target).upper().strip()
+        if "." in normalized:
+            base, suffix = normalized.rsplit(".", 1)
+            if base and suffix in KNOWN_MARKETS:
+                return f"{base}.{suffix}"
+        return f"{normalized}.US"
 
     def _fetch_quotes(self, targets: list[str] | list[TargetEntry]) -> dict[str, float]:
         """Fetch quotes for given tickers or canonical targets."""

@@ -4,6 +4,11 @@ from collections.abc import Iterable
 from decimal import Decimal
 from typing import Any
 
+from .base import BrokerImportError
+
+_LONGPORT_SDK_SOURCE = "stub"
+_LONGPORT_SDK_IMPORT_ERROR: ImportError | None = None
+
 # Compatibility import: prefer longport, fallback to longbridge and finally local stubs
 try:  # pragma: no cover - depends on external package
     from longport.openapi import (
@@ -15,7 +20,9 @@ try:  # pragma: no cover - depends on external package
         TimeInForceType,
         TradeContext,
     )
-except ImportError:  # pragma: no cover - executed when longport not available
+    _LONGPORT_SDK_SOURCE = "longport"
+except ImportError as exc:  # pragma: no cover - executed when longport not available
+    _LONGPORT_SDK_IMPORT_ERROR = exc
     try:  # pragma: no cover - depends on optional package
         from longbridge.openapi import (
             Config,
@@ -26,7 +33,10 @@ except ImportError:  # pragma: no cover - executed when longport not available
             TimeInForceType,
             TradeContext,
         )
-    except ImportError:  # pragma: no cover - executed when neither SDK installed
+        _LONGPORT_SDK_SOURCE = "longbridge"
+        _LONGPORT_SDK_IMPORT_ERROR = None
+    except ImportError as fallback_exc:  # pragma: no cover - executed when neither SDK installed
+        _LONGPORT_SDK_IMPORT_ERROR = fallback_exc
         from ._stubs import (
             Config,
             Market,
@@ -67,6 +77,27 @@ from ..models import Quote
 logger = get_logger(__name__)
 
 
+def _ensure_longport_sdk_installed() -> None:
+    """Raise a clear optional-dependency error when the SDK is unavailable."""
+
+    if _LONGPORT_SDK_SOURCE != "stub":
+        return
+    missing = getattr(_LONGPORT_SDK_IMPORT_ERROR, "name", None)
+    if missing and missing not in {
+        "longport",
+        "longport.openapi",
+        "longbridge",
+        "longbridge.openapi",
+    }:
+        raise BrokerImportError(
+            "longport import failed because dependency "
+            f"'{missing}' is missing. Install/update it with: uv sync --extra longport"
+        ) from _LONGPORT_SDK_IMPORT_ERROR
+    raise BrokerImportError(
+        "longport SDK is not installed. Install it with: uv sync --extra longport"
+    ) from _LONGPORT_SDK_IMPORT_ERROR
+
+
 def get_config():
     """Return LongPort configuration based on environment variables.
 
@@ -98,6 +129,7 @@ class LongPortClient:
         Args:
             config: LongPort configuration object, if None then read from environment variables
         """
+        _ensure_longport_sdk_installed()
         requested_env = str(env or "real").strip().lower()
         self.env = Env.PAPER if requested_env == "paper" else Env.REAL
         self.region, _region_source = resolve_longport_runtime_value(

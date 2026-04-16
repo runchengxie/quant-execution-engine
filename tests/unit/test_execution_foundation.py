@@ -8,11 +8,13 @@ from quant_execution_engine.broker.base import (
     BrokerAdapter,
     BrokerCapabilityMatrix,
     BrokerFillRecord,
+    BrokerValidationError,
     BrokerOrderRecord,
     BrokerOrderRequest,
     BrokerReconcileReport,
     ResolvedBrokerAccount,
 )
+import quant_execution_engine.broker.factory as broker_factory
 from quant_execution_engine.broker.factory import get_broker_capabilities
 from quant_execution_engine.execution import (
     ExecutionFillEvent,
@@ -232,6 +234,18 @@ def test_broker_capabilities_include_longport_paper() -> None:
     assert caps.name == "longport-paper"
     assert caps.notes["submit_mode"] == "paper"
     assert caps.supports_cancel is True
+
+
+def test_resolve_broker_name_requires_explicit_or_configured_backend(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(broker_factory, "load_cfg", lambda: {})
+
+    with pytest.raises(
+        BrokerValidationError,
+        match="broker backend is not configured",
+    ):
+        broker_factory.resolve_broker_name()
 
 
 def test_cancel_tracked_order_updates_state(tmp_path: Path) -> None:

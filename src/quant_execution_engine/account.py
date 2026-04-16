@@ -5,10 +5,8 @@ Provides business logic for account snapshots, returning structured data.
 
 from __future__ import annotations
 
-try:
-    from .broker.longport import LongPortClient
-except ImportError:  # pragma: no cover - allow tests without LongPort dependencies
-    LongPortClient = None  # type: ignore
+from typing import Any
+
 from .broker.base import BrokerAdapter
 from .broker.factory import get_broker_adapter, resolve_default_account_label
 from .logging import get_logger
@@ -20,7 +18,7 @@ logger = get_logger(__name__)
 def _resolve_adapter(
     *,
     broker_name: str | None = None,
-    client: LongPortClient | BrokerAdapter | None = None,
+    client: Any | BrokerAdapter | None = None,
 ) -> tuple[BrokerAdapter, bool]:
     created_here = client is None
     adapter = get_broker_adapter(broker_name=broker_name, client=client)
@@ -31,7 +29,7 @@ def get_account_snapshot(
     env: str = "real",
     include_quotes: bool = True,
     pre_quotes: dict[str, tuple[float, str]] | None = None,
-    client: LongPortClient | BrokerAdapter | None = None,
+    client: Any | BrokerAdapter | None = None,
     *,
     broker_name: str | None = None,
     account_label: str | None = None,
@@ -64,7 +62,7 @@ def get_account_snapshot(
         return snapshot
 
     except ImportError as e:  # Surface missing dependency clearly
-        logger.error(f"Failed to import LongPort module: {e}")
+        logger.error(f"Failed to import broker module: {e}")
         raise
     except Exception as e:
         logger.error(f"Failed to get account data: {e}")
@@ -78,7 +76,7 @@ def get_multiple_account_snapshots(envs: list[str]) -> list[AccountSnapshot]:
 
 def get_quotes(
     symbols: list[str],
-    client: LongPortClient | BrokerAdapter | None = None,
+    client: Any | BrokerAdapter | None = None,
     *,
     broker_name: str | None = None,
 ) -> dict[str, Quote]:
@@ -102,7 +100,7 @@ def get_quotes(
         return quote_data
 
     except ImportError as e:  # pragma: no cover - same reason as above
-        logger.error(f"Failed to import LongPort module: {e}")
+        logger.error(f"Failed to import broker module: {e}")
         raise
     except Exception as e:
         logger.error(f"Failed to get quotes: {e}")

@@ -2,16 +2,16 @@
 
 from __future__ import annotations
 
+from importlib import import_module
 from typing import Any
 
 from ..config import load_cfg
-from .alpaca import AlpacaPaperBrokerAdapter
 from .base import BrokerAdapter, BrokerCapabilityMatrix, BrokerValidationError
-from .longport import LongPortBrokerAdapter, LongPortClient, LongPortPaperBrokerAdapter
 
 
 PAPER_BROKERS = frozenset({"alpaca", "alpaca-paper", "longport-paper"})
 LONGPORT_BROKERS = frozenset({"longport", "longport-paper"})
+ALPACA_BROKERS = frozenset({"alpaca", "alpaca-paper"})
 
 
 def _broker_cfg() -> dict[str, Any]:
@@ -20,11 +20,37 @@ def _broker_cfg() -> dict[str, Any]:
     return broker_cfg if isinstance(broker_cfg, dict) else {}
 
 
-def resolve_broker_name(explicit: str | None = None) -> str:
-    """Return the selected broker backend name."""
+def peek_broker_name(explicit: str | None = None) -> str | None:
+    """Return the configured backend name when available."""
 
-    backend = explicit or _broker_cfg().get("backend") or "longport"
-    return str(backend).strip().lower()
+    backend = explicit if explicit is not None else _broker_cfg().get("backend")
+    normalized = str(backend or "").strip().lower()
+    return normalized or None
+
+
+def resolve_broker_name(explicit: str | None = None) -> str:
+    """Return the selected broker backend name or raise when not configured."""
+
+    backend = peek_broker_name(explicit)
+    if backend:
+        return backend
+    raise BrokerValidationError(
+        "broker backend is not configured. Set broker.backend in config.yaml or pass --broker explicitly."
+    )
+
+
+def _load_alpaca_adapter_cls():
+    module = import_module(".alpaca", __package__)
+    return module.AlpacaPaperBrokerAdapter
+
+
+def _load_longport_runtime() -> tuple[type[Any], type[Any], type[Any]]:
+    module = import_module(".longport", __package__)
+    return (
+        module.LongPortBrokerAdapter,
+        module.LongPortPaperBrokerAdapter,
+        module.LongPortClient,
+    )
 
 
 def is_paper_broker(broker_name: str | None = None) -> bool:
@@ -65,10 +91,13 @@ def get_broker_capabilities(broker_name: str | None = None) -> BrokerCapabilityM
 
     backend = resolve_broker_name(broker_name)
     if backend == "longport":
+        LongPortBrokerAdapter, _, _ = _load_longport_runtime()
         return LongPortBrokerAdapter.capabilities
     if backend == "longport-paper":
+        _, LongPortPaperBrokerAdapter, _ = _load_longport_runtime()
         return LongPortPaperBrokerAdapter.capabilities
-    if backend in {"alpaca", "alpaca-paper"}:
+    if backend in ALPACA_BROKERS:
+        AlpacaPaperBrokerAdapter = _load_alpaca_adapter_cls()
         return AlpacaPaperBrokerAdapter.capabilities
     raise BrokerValidationError(f"unsupported broker backend: {backend}")
 
@@ -85,16 +114,17 @@ def get_broker_adapter(
 
     backend = resolve_broker_name(broker_name)
     if backend == "longport":
-        longport_client = client if isinstance(client, LongPortClient) else None
-        return LongPortBrokerAdapter(client=longport_client)
+        LongPortBrokerAdapter, _, _ = _load_longport_runtime()
+        return LongPortBrokerAdapter(client=client)
     if backend == "longport-paper":
-        longport_client = client if isinstance(client, LongPortClient) else None
-        return LongPortPaperBrokerAdapter(client=longport_client)
-    if backend in {"alpaca", "alpaca-paper"}:
+        _, LongPortPaperBrokerAdapter, _ = _load_longport_runtime()
+        return LongPortPaperBrokerAdapter(client=client)
+    if backend in ALPACA_BROKERS:
         if client is not None:
             raise BrokerValidationError(
                 "custom broker client injection is only supported for longport backends"
             )
+        AlpacaPaperBrokerAdapter = _load_alpaca_adapter_cls()
         return AlpacaPaperBrokerAdapter()
 
     raise BrokerValidationError(f"unsupported broker backend: {backend}")

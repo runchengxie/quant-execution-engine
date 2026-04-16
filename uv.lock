@@ -748,7 +748,6 @@ name = "quant-execution-engine"
 version = "0.2.0"
 source = { editable = "." }
 dependencies = [
-    { name = "longport" },
     { name = "pyyaml" },
 ]
 
@@ -759,6 +758,14 @@ alpaca = [
 ]
 cli = [
     { name = "rich" },
+]
+full = [
+    { name = "alpaca-py" },
+    { name = "longport" },
+    { name = "pytz" },
+]
+longport = [
+    { name = "longport" },
 ]
 
 [package.dev-dependencies]
@@ -772,12 +779,15 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "alpaca-py", marker = "extra == 'alpaca'" },
-    { name = "longport", specifier = ">=0.2.77" },
+    { name = "alpaca-py", marker = "extra == 'full'" },
+    { name = "longport", marker = "extra == 'full'", specifier = ">=0.2.77" },
+    { name = "longport", marker = "extra == 'longport'", specifier = ">=0.2.77" },
     { name = "pytz", marker = "extra == 'alpaca'" },
+    { name = "pytz", marker = "extra == 'full'" },
     { name = "pyyaml" },
     { name = "rich", marker = "extra == 'cli'", specifier = ">=13" },
 ]
-provides-extras = ["cli", "alpaca"]
+provides-extras = ["cli", "longport", "alpaca", "full"]
 
 [package.metadata.requires-dev]
 dev = [

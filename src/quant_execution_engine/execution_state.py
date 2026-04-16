@@ -49,7 +49,7 @@ class OrderIntent:
     quantity: float
     order_type: str
     limit_price: float | None = None
-    broker_name: str = "longport"
+    broker_name: str = ""
     account_label: str = "main"
     target_source: str | None = None
     target_asof: str | None = None
@@ -115,7 +115,7 @@ class ExecutionState:
     """Persisted execution state."""
 
     version: int = 1
-    broker_name: str = "longport"
+    broker_name: str = ""
     account_label: str = "main"
     updated_at: str = field(default_factory=utc_now_iso)
     consecutive_failures: int = 0

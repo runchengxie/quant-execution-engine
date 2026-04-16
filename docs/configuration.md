@@ -81,6 +81,14 @@
 - 当前适配器是纯模拟盘验证路径，不提供实盘切换
 - 当前也不提供真实多账户切换
 
+### 安装模型
+
+- 核心安装：`uv sync --group dev --extra cli`
+- LongPort：`uv sync --group dev --extra cli --extra longport`
+- Alpaca：`uv sync --group dev --extra cli --extra alpaca`
+- 全量 broker 依赖：`uv sync --group dev --extra cli --extra full`
+- 当前 CLI 不再假设默认 broker；请在本地 YAML 里显式设置 `broker.backend`，或每次传 `--broker`
+
 ## 本地 YAML
 
 复制模板：
@@ -101,7 +109,7 @@ cp config/template.yaml config/config.yaml
 
 ```yaml
 broker:
-  backend: longport
+  backend: null
   default_account: main
   accounts:
     main: {}

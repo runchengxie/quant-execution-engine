@@ -17,6 +17,7 @@ from .broker import (
     get_broker_capabilities,
     is_longport_broker,
     is_paper_broker,
+    peek_broker_name,
     resolve_broker_name,
     resolve_default_account_label,
 )
@@ -104,15 +105,15 @@ _EXCEPTION_STATUS_GROUPS: dict[str, set[str]] = {
 def create_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="qexec",
-        description="Quant Execution Engine - LongPort account, quote, and rebalance CLI",
+        description="Quant Execution Engine broker execution CLI",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  qexec config
-  qexec account --format json
-  qexec quote AAPL 700.HK
-  qexec rebalance outputs/targets/2026-04-09.json
-  QEXEC_ENABLE_LIVE=1 qexec rebalance outputs/targets/2026-04-09.json --execute
+  qexec config --broker longport-paper
+  qexec account --broker alpaca-paper --format json
+  qexec quote AAPL 700.HK --broker longport-paper
+  qexec rebalance outputs/targets/2026-04-09.json --broker longport-paper
+  QEXEC_ENABLE_LIVE=1 qexec rebalance outputs/targets/2026-04-09.json --broker longport --execute
         """,
     )
     parser.add_argument("--version", action="version", version="%(prog)s 0.2.0")
@@ -179,7 +180,7 @@ Examples:
         help="Output format",
     )
 
-    config_parser = subparsers.add_parser("config", help="Show effective LongPort config")
+    config_parser = subparsers.add_parser("config", help="Show effective broker config")
     config_parser.add_argument("--show", action="store_true", default=True)
     config_parser.add_argument(
         "--broker",
@@ -597,9 +598,10 @@ def run_quote(tickers: list[str], broker: str | None = None) -> CommandResult:
         quotes_dict = get_quotes(tickers, broker_name=broker)
         return CommandResult(exit_code=0, stdout=render_quotes(list(quotes_dict.values())))
     except Exception as exc:
+        requested_broker = peek_broker_name(broker) or "(unconfigured)"
         get_logger(__name__).error(
             "Failed to fetch quotes via broker %s: %s",
-            resolve_broker_name(broker),
+            requested_broker,
             exc,
         )
         return CommandResult(exit_code=1, stderr=str(exc))
@@ -640,7 +642,7 @@ def run_account(
         selected_broker = resolve_broker_name(broker)
         snapshot = get_account_snapshot(
             env="paper" if is_paper_broker(selected_broker) else "real",
-            broker_name=broker,
+            broker_name=selected_broker,
             account_label=account,
         )
         snapshots = [snapshot]
@@ -690,113 +692,122 @@ def run_config(show: bool = True, broker: str | None = None) -> CommandResult:
         except Exception:
             return str(value)
         return f"{value}"
+    try:
+        selected_broker = resolve_broker_name(broker)
+        capabilities = get_broker_capabilities(selected_broker)
+        risk_cfg = get_risk_config()
+        kill_switch_cfg = get_kill_switch_config()
+        default_account = resolve_default_account_label()
 
-    selected_broker = resolve_broker_name(broker)
-    capabilities = get_broker_capabilities(selected_broker)
-    risk_cfg = get_risk_config()
-    kill_switch_cfg = get_kill_switch_config()
-    default_account = resolve_default_account_label()
-
-    longport_env_name = "paper" if selected_broker == "longport-paper" else "real"
-    region, region_source = resolve_longport_runtime_value(
-        ("LONGPORT_REGION", "LONGBRIDGE_REGION"),
-        env_name=longport_env_name,
-        default="hk",
-    )
-    overnight, overnight_source = resolve_longport_runtime_value(
-        ("LONGPORT_ENABLE_OVERNIGHT", "LONGBRIDGE_ENABLE_OVERNIGHT"),
-        env_name=longport_env_name,
-        default="false",
-    )
-    max_notional = _getenv_both(
-        "LONGPORT_MAX_NOTIONAL_PER_ORDER", "LONGBRIDGE_MAX_NOTIONAL_PER_ORDER", "0"
-    )
-    max_qty = _getenv_both("LONGPORT_MAX_QTY_PER_ORDER", "LONGBRIDGE_MAX_QTY_PER_ORDER", "0")
-    tw_start = _getenv_both(
-        "LONGPORT_TRADING_WINDOW_START", "LONGBRIDGE_TRADING_WINDOW_START", "09:30"
-    )
-    tw_end = _getenv_both(
-        "LONGPORT_TRADING_WINDOW_END", "LONGBRIDGE_TRADING_WINDOW_END", "16:00"
-    )
-
-    alpaca_key = os.getenv("ALPACA_API_KEY") or os.getenv("APCA_API_KEY_ID")
-    alpaca_secret = os.getenv("ALPACA_SECRET_KEY") or os.getenv("APCA_API_SECRET_KEY")
-
-    def _mask(value: str | None) -> str:
-        if not value:
-            return "(not set)"
-        if len(value) <= 6:
-            return "***"
-        return value[:3] + "***" + value[-3:]
-
-    lines = [
-        "Execution Engine Effective Configuration:",
-        "- Broker:                " + selected_broker,
-        "- Default Account:       " + default_account,
-        "- Account Selection:     "
-        + ("supported" if capabilities.supports_account_selection else "single-account only"),
-        "- Live Submit:           "
-        + (
-            "paper-only"
-            if is_paper_broker(selected_broker)
-            else "supported"
-            if capabilities.supports_live_submit
-            else "unsupported"
-        ),
-        "- Cancel / Query:        "
-        + ("enabled" if capabilities.supports_cancel and capabilities.supports_order_query else "partial"),
-        "- Supported Order Types: " + ", ".join(capabilities.supported_order_types),
-        "- Supported TIF:         " + ", ".join(capabilities.supported_time_in_force),
-        "- Risk Max Notional:     "
-        + _fmt_unlimited(float(risk_cfg.get("max_notional_per_order", 0.0) or 0.0)),
-        "- Risk Max Quantity:     "
-        + _fmt_unlimited(int(float(risk_cfg.get("max_qty_per_order", 0) or 0))),
-        "- Risk Max Spread (bps): " + str(risk_cfg.get("max_spread_bps", 0) or 0),
-        "- Risk Participation:    "
-        + str(risk_cfg.get("max_participation_rate", 0) or 0),
-        "- Kill Switch Env:       "
-        + str(kill_switch_cfg.get("env_var") or "QEXEC_KILL_SWITCH"),
-        "- Submit Mode:           "
-        + str(capabilities.notes.get("submit_mode") or ("paper" if is_paper_broker(selected_broker) else "real")),
-    ]
-    if is_longport_broker(selected_broker):
-        credentials = probe_longport_credentials(
-            longport_env_name
+        longport_env_name = "paper" if selected_broker == "longport-paper" else "real"
+        region, region_source = resolve_longport_runtime_value(
+            ("LONGPORT_REGION", "LONGBRIDGE_REGION"),
+            env_name=longport_env_name,
+            default="hk",
         )
-        app_key = credentials.app_key
-        app_secret = credentials.app_secret
-        token = credentials.access_token
-        app_key_source = credentials.app_key_source or "(not found)"
-        app_secret_source = credentials.app_secret_source or "(not found)"
-        token_source = credentials.access_token_source or "(not found)"
-        resolved_region_source = region_source or "(default)"
-        resolved_overnight_source = overnight_source or "(default)"
-        lines.extend(
-            [
-                "- Region:                " + region,
-                "- Region Source:         " + resolved_region_source,
-                "- Overnight:             "
-                + ("enabled" if _to_bool(overnight) else "disabled"),
-                "- Overnight Source:      " + resolved_overnight_source,
-                "- Local Max Notional:    " + _fmt_unlimited(_to_float(max_notional, 0.0)),
-                "- Local Max Quantity:    " + _fmt_unlimited(_to_int(max_qty, 0)),
-                "- Trade Window:          " + f"{tw_start} - {tw_end}",
-                "- App Key:               " + _mask(app_key),
-                "- App Key Source:        " + app_key_source,
-                "- App Secret:            " + _mask(app_secret),
-                "- App Secret Source:     " + app_secret_source,
-                "- Access Token:          " + _mask(token),
-                "- Access Token Source:   " + token_source,
-            ]
+        overnight, overnight_source = resolve_longport_runtime_value(
+            ("LONGPORT_ENABLE_OVERNIGHT", "LONGBRIDGE_ENABLE_OVERNIGHT"),
+            env_name=longport_env_name,
+            default="false",
         )
-    elif selected_broker in {"alpaca", "alpaca-paper"}:
-        lines.extend(
-            [
-                "- Alpaca API Key:        " + _mask(alpaca_key),
-                "- Alpaca Secret:         " + _mask(alpaca_secret),
-            ]
+        max_notional = _getenv_both(
+            "LONGPORT_MAX_NOTIONAL_PER_ORDER", "LONGBRIDGE_MAX_NOTIONAL_PER_ORDER", "0"
         )
-    return CommandResult(exit_code=0, stdout="\n".join(lines))
+        max_qty = _getenv_both(
+            "LONGPORT_MAX_QTY_PER_ORDER", "LONGBRIDGE_MAX_QTY_PER_ORDER", "0"
+        )
+        tw_start = _getenv_both(
+            "LONGPORT_TRADING_WINDOW_START", "LONGBRIDGE_TRADING_WINDOW_START", "09:30"
+        )
+        tw_end = _getenv_both(
+            "LONGPORT_TRADING_WINDOW_END", "LONGBRIDGE_TRADING_WINDOW_END", "16:00"
+        )
+
+        alpaca_key = os.getenv("ALPACA_API_KEY") or os.getenv("APCA_API_KEY_ID")
+        alpaca_secret = os.getenv("ALPACA_SECRET_KEY") or os.getenv("APCA_API_SECRET_KEY")
+
+        def _mask(value: str | None) -> str:
+            if not value:
+                return "(not set)"
+            if len(value) <= 6:
+                return "***"
+            return value[:3] + "***" + value[-3:]
+
+        lines = [
+            "Execution Engine Effective Configuration:",
+            "- Broker:                " + selected_broker,
+            "- Default Account:       " + default_account,
+            "- Account Selection:     "
+            + ("supported" if capabilities.supports_account_selection else "single-account only"),
+            "- Live Submit:           "
+            + (
+                "paper-only"
+                if is_paper_broker(selected_broker)
+                else "supported"
+                if capabilities.supports_live_submit
+                else "unsupported"
+            ),
+            "- Cancel / Query:        "
+            + (
+                "enabled"
+                if capabilities.supports_cancel and capabilities.supports_order_query
+                else "partial"
+            ),
+            "- Supported Order Types: " + ", ".join(capabilities.supported_order_types),
+            "- Supported TIF:         " + ", ".join(capabilities.supported_time_in_force),
+            "- Risk Max Notional:     "
+            + _fmt_unlimited(float(risk_cfg.get("max_notional_per_order", 0.0) or 0.0)),
+            "- Risk Max Quantity:     "
+            + _fmt_unlimited(int(float(risk_cfg.get("max_qty_per_order", 0) or 0))),
+            "- Risk Max Spread (bps): " + str(risk_cfg.get("max_spread_bps", 0) or 0),
+            "- Risk Participation:    "
+            + str(risk_cfg.get("max_participation_rate", 0) or 0),
+            "- Kill Switch Env:       "
+            + str(kill_switch_cfg.get("env_var") or "QEXEC_KILL_SWITCH"),
+            "- Submit Mode:           "
+            + str(
+                capabilities.notes.get("submit_mode")
+                or ("paper" if is_paper_broker(selected_broker) else "real")
+            ),
+        ]
+        if is_longport_broker(selected_broker):
+            credentials = probe_longport_credentials(longport_env_name)
+            app_key = credentials.app_key
+            app_secret = credentials.app_secret
+            token = credentials.access_token
+            app_key_source = credentials.app_key_source or "(not found)"
+            app_secret_source = credentials.app_secret_source or "(not found)"
+            token_source = credentials.access_token_source or "(not found)"
+            resolved_region_source = region_source or "(default)"
+            resolved_overnight_source = overnight_source or "(default)"
+            lines.extend(
+                [
+                    "- Region:                " + region,
+                    "- Region Source:         " + resolved_region_source,
+                    "- Overnight:             "
+                    + ("enabled" if _to_bool(overnight) else "disabled"),
+                    "- Overnight Source:      " + resolved_overnight_source,
+                    "- Local Max Notional:    " + _fmt_unlimited(_to_float(max_notional, 0.0)),
+                    "- Local Max Quantity:    " + _fmt_unlimited(_to_int(max_qty, 0)),
+                    "- Trade Window:          " + f"{tw_start} - {tw_end}",
+                    "- App Key:               " + _mask(app_key),
+                    "- App Key Source:        " + app_key_source,
+                    "- App Secret:            " + _mask(app_secret),
+                    "- App Secret Source:     " + app_secret_source,
+                    "- Access Token:          " + _mask(token),
+                    "- Access Token Source:   " + token_source,
+                ]
+            )
+        elif selected_broker in {"alpaca", "alpaca-paper"}:
+            lines.extend(
+                [
+                    "- Alpaca API Key:        " + _mask(alpaca_key),
+                    "- Alpaca Secret:         " + _mask(alpaca_secret),
+                ]
+            )
+        return CommandResult(exit_code=0, stdout="\n".join(lines))
+    except Exception as exc:
+        return CommandResult(exit_code=1, stderr=str(exc))
 
 
 def run_orders(

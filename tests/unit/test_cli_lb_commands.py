@@ -529,11 +529,19 @@ def test_run_quote_import_error() -> None:
         "quant_execution_engine.cli.get_quotes",
         side_effect=ImportError("No module named 'longport'"),
     ):
-        result = cli.run_quote(["AAPL"])
+        result = cli.run_quote(["AAPL"], broker="longport")
 
     assert result.exit_code == 1
     assert result.stderr is not None
     assert "longport" in result.stderr.lower()
+
+
+def test_run_config_requires_explicit_or_configured_broker() -> None:
+    with patch("quant_execution_engine.cli.resolve_broker_name", side_effect=Exception("broker backend is not configured")):
+        result = cli.run_config(True, broker=None)
+
+    assert result.exit_code == 1
+    assert result.stderr == "broker backend is not configured"
 
 
 def test_run_rebalance_file_not_found() -> None:
@@ -564,7 +572,7 @@ def test_run_rebalance_live_requires_explicit_enable(
     monkeypatch.setattr(guards, "resolve_live_enable_value", lambda: None)
 
     with patch.object(cli, "read_targets_json") as mock_read_targets:
-        result = cli.run_rebalance(str(target_file), dry_run=False)
+        result = cli.run_rebalance(str(target_file), dry_run=False, broker="longport")
 
     assert result.exit_code == 1
     assert result.stderr is not None
@@ -586,7 +594,7 @@ def test_run_rebalance_live_rejects_repo_local_longport_secrets(
     monkeypatch.setattr(guards, "PROJECT_ROOT", tmp_path)
 
     with patch.object(cli, "read_targets_json") as mock_read_targets:
-        result = cli.run_rebalance(str(target_file), dry_run=False)
+        result = cli.run_rebalance(str(target_file), dry_run=False, broker="longport")
 
     assert result.exit_code == 1
     assert result.stderr is not None
@@ -611,7 +619,7 @@ def test_run_rebalance_live_ignores_placeholder_repo_env_values(
     monkeypatch.setattr(guards, "PROJECT_ROOT", tmp_path)
 
     with patch.object(cli, "read_targets_json", side_effect=RuntimeError("after-guard")):
-        result = cli.run_rebalance(str(target_file), dry_run=False)
+        result = cli.run_rebalance(str(target_file), dry_run=False, broker="longport")
 
     assert result.exit_code == 1
     assert result.stderr == "after-guard"
@@ -632,7 +640,7 @@ def test_run_rebalance_live_ignores_repo_envrc_secret_references(
     monkeypatch.setattr(guards, "PROJECT_ROOT", tmp_path)
 
     with patch.object(cli, "read_targets_json", side_effect=RuntimeError("after-guard")):
-        result = cli.run_rebalance(str(target_file), dry_run=False)
+        result = cli.run_rebalance(str(target_file), dry_run=False, broker="longport")
 
     assert result.exit_code == 1
     assert result.stderr == "after-guard"

@@ -4,7 +4,6 @@ version = "0.2.0"
 requires-python = ">=3.10, <3.13"
 
 dependencies = [
-  "longport>=0.2.77",
   "pyyaml",
 ]
 
@@ -18,7 +17,13 @@ dev = [
 
 [project.optional-dependencies]
 cli = ["rich>=13"]
+longport = ["longport>=0.2.77"]
 alpaca = ["alpaca-py", "pytz"]
+full = [
+  "longport>=0.2.77",
+  "alpaca-py",
+  "pytz",
+]
 
 [project.scripts]
 stockq = "quant_execution_engine.cli:app"

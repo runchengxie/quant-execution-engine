@@ -20,6 +20,16 @@ stockq
 PYTHONPATH=src python -m quant_execution_engine
 ```
 
+按 broker 安装依赖：
+
+```bash
+uv sync --group dev --extra cli --extra longport
+uv sync --group dev --extra cli --extra alpaca
+uv sync --group dev --extra cli --extra full
+```
+
+如果没有在 `config/config.yaml` 显式设置 `broker.backend`，每次调用都需要传 `--broker`。
+
 ## 子命令
 
 ### `config`
@@ -27,7 +37,7 @@ PYTHONPATH=src python -m quant_execution_engine
 显示当前券商后端、风控门禁、紧急停单和相关凭证摘要。
 
 ```bash
-qexec config
+qexec config --broker longport-paper
 qexec config --broker alpaca-paper
 ```
 
@@ -38,8 +48,8 @@ qexec config --broker alpaca-paper
 运行不会修改券商状态的就绪性检查。
 
 ```bash
-qexec preflight
-qexec preflight AAPL MSFT
+qexec preflight --broker longport-paper
+qexec preflight AAPL MSFT --broker longport-paper
 qexec preflight --broker alpaca-paper
 qexec preflight --broker longport-paper
 ```
@@ -59,10 +69,10 @@ qexec preflight --broker longport-paper
 查看账户概览。
 
 ```bash
-qexec account
-qexec account --format json
-qexec account --funds
-qexec account --positions
+qexec account --broker longport-paper
+qexec account --broker longport-paper --format json
+qexec account --broker longport-paper --funds
+qexec account --broker longport-paper --positions
 qexec account --broker alpaca-paper
 qexec account --account main
 ```
@@ -72,7 +82,7 @@ qexec account --account main
 查询实时行情。
 
 ```bash
-qexec quote AAPL 700.HK
+qexec quote AAPL 700.HK --broker longport-paper
 qexec quote AAPL --broker alpaca-paper
 ```
 
@@ -274,7 +284,7 @@ qexec rebalance outputs/targets/2026-04-09.json --target-gross-exposure 0.9
 - `--execute` 默认关闭；不传时是预演。
 - 实盘券商的 `--execute` 额外要求 `QEXEC_ENABLE_LIVE=1`，并且仓库根目录 `.env*` / `.envrc*` 里不能有 LongPort 实盘凭证。
 - `longport-paper` 是模拟盘后端，依赖 `LONGPORT_ACCESS_TOKEN_TEST`，不要求 `QEXEC_ENABLE_LIVE=1`。
-- `--broker` 默认读取本地配置里的后端；没有配置时默认 `longport`。
+- `--broker` 默认读取本地配置里的后端；没有配置时会明确报错，要求显式设置 `broker.backend` 或传 `--broker`。
 - `--account` 会先走适配器账户 / profile 校验；不支持的标签会快速失败，但当前并不提供真实多账户切换。
 - `orders` / `exceptions` / `order` 读取的是本地执行状态，不会主动扫描券商全量订单。
 - `retry` 当前只支持零成交的终态已跟踪订单。

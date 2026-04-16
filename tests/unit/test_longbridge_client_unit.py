@@ -6,7 +6,24 @@ from unittest.mock import Mock, patch
 
 import pytest
 
+from quant_execution_engine.broker.base import BrokerImportError
+import quant_execution_engine.broker.longport as longport_mod
 from quant_execution_engine.broker.longport import BrokerLimits, LongPortClient
+
+
+@pytest.mark.unit
+def test_longport_client_requires_optional_dependency(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(longport_mod, "_LONGPORT_SDK_SOURCE", "stub")
+    monkeypatch.setattr(
+        longport_mod,
+        "_LONGPORT_SDK_IMPORT_ERROR",
+        ModuleNotFoundError("No module named 'longport'", name="longport"),
+    )
+
+    with pytest.raises(BrokerImportError, match="uv sync --extra longport"):
+        LongPortClient()
 
 
 @pytest.mark.unit

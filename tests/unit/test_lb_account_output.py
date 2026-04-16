@@ -24,7 +24,12 @@ class TestAccountTableOutput:
         snapshot = make_snapshot(1234.56, [("AAPL.US", 10, 199.99)])
 
         with patch("quant_execution_engine.cli.get_account_snapshot", return_value=snapshot):
-            result = cli.run_account(only_funds=False, only_positions=False, fmt="table")
+            result = cli.run_account(
+                only_funds=False,
+                only_positions=False,
+                fmt="table",
+                broker="longport-paper",
+            )
 
         assert result.exit_code == 0
         assert result.stdout is not None
@@ -36,7 +41,12 @@ class TestAccountTableOutput:
         snapshot = make_snapshot(2500.75, [("AAPL.US", 10, 150.0)])
 
         with patch("quant_execution_engine.cli.get_account_snapshot", return_value=snapshot):
-            result = cli.run_account(only_funds=True, only_positions=False, fmt="table")
+            result = cli.run_account(
+                only_funds=True,
+                only_positions=False,
+                fmt="table",
+                broker="longport-paper",
+            )
 
         assert result.exit_code == 0
         assert result.stdout is not None
@@ -47,7 +57,12 @@ class TestAccountTableOutput:
         snapshot = make_snapshot(1000.0, [("GOOGL.US", 2, 2500.0), ("AMZN.US", 1, 3000.0)])
 
         with patch("quant_execution_engine.cli.get_account_snapshot", return_value=snapshot):
-            result = cli.run_account(only_funds=False, only_positions=True, fmt="table")
+            result = cli.run_account(
+                only_funds=False,
+                only_positions=True,
+                fmt="table",
+                broker="longport-paper",
+            )
 
         assert result.exit_code == 0
         assert result.stdout is not None
@@ -59,7 +74,12 @@ class TestAccountTableOutput:
         snapshot = make_snapshot(1000.0, [])
 
         with patch("quant_execution_engine.cli.get_account_snapshot", return_value=snapshot):
-            result = cli.run_account(only_funds=False, only_positions=False, fmt="table")
+            result = cli.run_account(
+                only_funds=False,
+                only_positions=False,
+                fmt="table",
+                broker="longport-paper",
+            )
 
         assert result.exit_code == 0
         assert result.stdout is not None
@@ -72,7 +92,7 @@ class TestAccountJsonOutput:
         snapshot = make_snapshot(1500.5, [("AAPL.US", 10, 150.05)])
 
         with patch("quant_execution_engine.cli.get_account_snapshot", return_value=snapshot):
-            result = cli.run_account(fmt="json")
+            result = cli.run_account(fmt="json", broker="longport-paper")
 
         assert result.exit_code == 0
         assert result.stdout is not None
@@ -90,7 +110,7 @@ class TestAccountErrorHandling:
             "quant_execution_engine.cli.get_account_snapshot",
             side_effect=ImportError("No module named 'longport'"),
         ):
-            result = cli.run_account()
+            result = cli.run_account(broker="longport")
 
         assert result.exit_code == 1
         assert result.stderr is not None
@@ -101,7 +121,7 @@ class TestAccountErrorHandling:
             "quant_execution_engine.cli.get_account_snapshot",
             side_effect=Exception("Connection failed"),
         ):
-            result = cli.run_account(fmt="table")
+            result = cli.run_account(fmt="table", broker="longport-paper")
 
         assert result.exit_code == 1
         assert result.stderr == "Failed to get account overview: Connection failed"
@@ -113,7 +133,7 @@ class TestAccountParameterValidation:
         snapshot = make_snapshot(1000.0, [])
 
         with patch("quant_execution_engine.cli.get_account_snapshot", return_value=snapshot):
-            result = cli.run_account(fmt="xml")
+            result = cli.run_account(fmt="xml", broker="longport-paper")
 
         assert result.exit_code == 0
         assert result.stdout is not None
@@ -128,6 +148,7 @@ class TestAccountParameterValidation:
                 only_funds=True,
                 only_positions=True,
                 fmt="table",
+                broker="longport-paper",
             )
 
         assert result.exit_code == 0

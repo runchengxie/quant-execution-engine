@@ -37,39 +37,52 @@
 uv sync --group dev --extra cli
 ```
 
+如果要启用 LongPort：
+
+```bash
+uv sync --group dev --extra cli --extra longport
+```
+
 如果要启用 Alpaca 模拟盘：
 
 ```bash
 uv sync --group dev --extra cli --extra alpaca
 ```
 
+如果要同时安装两家券商依赖：
+
+```bash
+uv sync --group dev --extra cli --extra full
+```
+
+当前 CLI 不再假设默认 broker；请在 `config/config.yaml` 里显式设置 `broker.backend`，或在命令行传 `--broker`。
+
 运行 CLI：
 
 ```bash
 qexec --help
-qexec config
-qexec preflight
+qexec config --broker longport-paper
 qexec preflight --broker longport-paper
-qexec account --format json
-qexec quote AAPL 700.HK
-qexec orders --status open
-qexec exceptions --status failure
-qexec order broker-order-id
-qexec reconcile
-qexec cancel broker-order-id
-qexec cancel-rest broker-order-id
-qexec resume-remaining broker-order-id
-qexec accept-partial broker-order-id
-qexec retry broker-order-id
-qexec reprice broker-order-id --limit-price 9.50
-qexec retry-stale --older-than-minutes 15
-qexec state-doctor
-qexec state-prune --older-than-days 30
-qexec state-repair --clear-kill-switch --dedupe-fills
-qexec rebalance outputs/targets/2026-04-09.json
+qexec account --broker longport-paper --format json
+qexec quote AAPL 700.HK --broker longport-paper
+qexec orders --broker longport-paper --status open
+qexec exceptions --broker longport-paper --status failure
+qexec order broker-order-id --broker longport-paper
+qexec reconcile --broker longport-paper
+qexec cancel broker-order-id --broker longport-paper
+qexec cancel-rest broker-order-id --broker longport-paper
+qexec resume-remaining broker-order-id --broker longport-paper
+qexec accept-partial broker-order-id --broker longport-paper
+qexec retry broker-order-id --broker longport-paper
+qexec reprice broker-order-id --broker longport-paper --limit-price 9.50
+qexec retry-stale --broker longport-paper --older-than-minutes 15
+qexec state-doctor --broker longport-paper
+qexec state-prune --broker longport-paper --older-than-days 30
+qexec state-repair --broker longport-paper --clear-kill-switch --dedupe-fills
+qexec rebalance outputs/targets/2026-04-09.json --broker longport-paper
 qexec rebalance outputs/targets/2026-04-09.json --broker longport-paper --execute
 # LongPort 实盘执行前，先按 docs/longport-real-smoke.md 完成操作手册
-QEXEC_ENABLE_LIVE=1 qexec rebalance outputs/targets/2026-04-09.json --execute
+QEXEC_ENABLE_LIVE=1 qexec rebalance outputs/targets/2026-04-09.json --broker longport --execute
 qexec rebalance outputs/targets/2026-04-09.json --broker alpaca-paper --execute
 ```
 
