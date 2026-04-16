@@ -100,6 +100,7 @@ class FakeIbkrRuntime:
     def get_account_values(self, account_id: str | None = None):
         assert account_id == "DU123456"
         return [
+            SimpleNamespace(tag="AccountType", value="INDIVIDUAL", currency=""),
             SimpleNamespace(tag="TotalCashValue", value="1000", currency="USD"),
             SimpleNamespace(tag="NetLiquidation", value="1250", currency="USD"),
         ]

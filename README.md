@@ -26,7 +26,7 @@
 - LongPort 实盘账户已经通过人工监督只读方式验证 `config / preflight / account / quote`，并确认实盘保护和用户私有配置路由生效。
 - LongPort 的 `rebalance --execute` 当前仍按人工监督路径使用。成熟度判断以最小实盘冒烟、审计日志和可复查证据为准。
 - Alpaca 当前按模拟盘验证路径使用，更适合作为便宜、直观、稳定的重复冒烟和回归基线。
-- `ibkr-paper` 当前是本地 IB Gateway over TWS API 依赖型模拟盘后端，支持 `config / preflight / account / quote / rebalance --execute / cancel / reconcile` 的最小代码闭环；截至 2026-04-16，仓库内尚未附带 operator-supervised paper smoke evidence，仍应按人工监督路径验证。
+- `ibkr-paper` 当前是本地 IB Gateway over TWS API 依赖型模拟盘后端，支持 `config / preflight / account / quote / rebalance --execute / cancel / reconcile` 的最小代码闭环；截至 2026-04-16，已留下一次 operator-supervised WSL -> Windows Gateway evidence（`outputs/evidence/ibkr-paper-smoke.json`），证明 Gateway/account/reconcile 路径可达，但该次 AAPL 行情因 IBKR competing live session 返回 0，未产生 broker order；提交、成交、撤单证据仍需下一次有有效行情的 paper smoke 补齐。
 - `orders` / `exceptions` / `order` 展示的是本地执行状态中已跟踪的订单。券商全量订单视图不在当前范围内。
 - `--account` 当前只做显式标签解析和快速失败校验；LongPort 模拟盘、LongPort 实盘、Alpaca 模拟盘和 `ibkr-paper` 仍按单账户语义运行。
 

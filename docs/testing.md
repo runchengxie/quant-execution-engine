@@ -59,6 +59,7 @@ uv run pytest --cov=src/quant_execution_engine --cov-report=term-missing -m 'not
 - `longport-paper` 已经是正式券商后端；提供 `LONGPORT_ACCESS_TOKEN_TEST` 后，可以走模拟盘 `preflight / rebalance` 路径。
 - `ibkr-paper` 已经有单测覆盖 backend 注册、config surfacing、market/account 校验、order/fill 归一化，以及 smoke harness 的 IBKR 环境快照路径。
 - `longport-paper` 当前已经通过人工监督的模拟盘冒烟，跑通 `submit / query / reconcile / cancel` 最小闭环；这是一条可复现的模拟盘证据链，默认自动化测试不包含这一段。
+- 截至 2026-04-16，`ibkr-paper` 已有一次人工监督 no-order evidence：WSL 内 CLI 可连 Windows IB Gateway 的 `127.0.0.1:4002`，并跑通 `config / account / quote / rebalance / reconcile / exceptions / cancel-all`，但 AAPL 行情因 IBKR competing live session 返回 0，`audit_order_count=0`。
 - 截至 2026-04-15，LongPort 实盘已经通过人工监督只读验证跑通 `config / preflight / account / quote`，并确认用户私有实盘配置路由和实盘保护可工作。
 - LongPort 实盘行情相关测试现在会把典型的网络 / 区域 / 凭证异常记为跳过。
 
@@ -66,7 +67,7 @@ uv run pytest --cov=src/quant_execution_engine --cov-report=term-missing -m 'not
 
 - 这些测试不能单独证明 LongPort 实盘完整 `submit / query / cancel / reconcile` 已经被自动化端到端跑实。
 - 当前最便宜、最稳定的回归基线仍然是 Alpaca 模拟盘；`longport-paper` 则是已经有券商侧证据链的 LongPort 模拟盘路径。
-- `ibkr-paper` 当前仍缺 operator-supervised paper smoke evidence；现阶段更适合作为本地 Gateway 驱动的增量 backend，而不是主回归基线。
+- `ibkr-paper` 当前仍缺有效行情下的 broker order evidence；现阶段更适合作为本地 Gateway 驱动的增量 backend，而不是主回归基线。
 - 实盘券商成熟度判断以人工监督冒烟、审计日志和可复查证据为准。
 
 ## 运行前提

@@ -13,7 +13,8 @@
 - 只支持模拟盘，不支持实盘
 - 当前只支持 US equities 最小切片
 - 当前仍按单账户语义运行，`--account` 只接受 `main`
-- 仓库内截至 2026-04-16 还没有随附的 operator-supervised evidence 样例；第一次 smoke 应按人工监督路径留证
+- 仓库内截至 2026-04-16 已有一次 operator-supervised WSL -> Windows Gateway evidence 样例：`outputs/evidence/ibkr-paper-smoke.json`
+- 该样例证明 Gateway/account/reconcile 路径可达，但 AAPL 行情因 IBKR competing live session 返回 0，未产生 broker order；提交、成交、撤单证据仍需下一次有有效行情的 paper smoke 补齐
 
 ## 2. 运行前提
 
@@ -50,6 +51,9 @@ export IBKR_CONNECT_TIMEOUT_SECONDS="5"
 - 监听端口与 `IBKR_PORT` / `IBKR_PORT_PAPER` 一致
 - 当前机器可访问该端口，通常是 `127.0.0.1`
 - 当前登录的是 paper 会话，而不是 live
+- 如果代码跑在 WSL、Gateway 跑在 Windows，优先试 `127.0.0.1:4002`；如果 WSL2 NAT 模式下连不上，再把 `IBKR_HOST` 改成 Windows host IP
+- Gateway 不应处于 API read-only mode；否则 IBKR 会弹出写 API 权限提示并拒绝 paper 下单
+- IBKR 需要给当前 API 会话返回有效 market data；如果出现 competing live session 导致价格为 0，`rebalance --execute` 会跳过订单并只留下 no-order evidence
 
 如果 `qexec preflight --broker ibkr-paper` 报 host/port 连不上，先排查 Gateway 是否真的在本机启动并监听。
 
@@ -155,6 +159,7 @@ PYTHONPATH=src python project_tools/smoke_operator_harness.py \
 - `outputs/state/*.json`
 - `outputs/evidence/ibkr-paper-smoke.json`，如果你用了 harness
 - 一段人工备注：运行时间、Gateway host/port、账户、symbol、broker order ID、最终状态、是否覆盖了 cancel / fill
+- 如果行情为 0 或 Gateway 阻止写 API，也要在 evidence/operator note 里写明；这类 evidence 可证明 runtime 可达性，但不能替代提交/成交/撤单证据
 
 ## 9. 成熟度判断
 
@@ -167,4 +172,6 @@ PYTHONPATH=src python project_tools/smoke_operator_harness.py \
 - `orders / order / reconcile / cancel` 在本地状态上可复查
 - 至少有一份 operator-supervised evidence 样例
 
-在拿到第一份样例之前，建议把 `ibkr-paper` 视为“代码闭环已接通，但证据链仍待补齐”的 backend。
+当前已有第一份样例，但它是 no-order evidence：`config / account / quote / rebalance / reconcile / exceptions / cancel-all` 流程跑完，审计日志也写入 `outputs/orders/20260416-181822_paper_live.jsonl`，但 AAPL quote 为 0，`audit_order_count=0`。
+
+因此现阶段建议把 `ibkr-paper` 视为“Gateway 可达、代码闭环已接通，但 broker order 证据链仍待补齐”的 backend。下一次有效行情下的 paper smoke 需要补齐 submit / query / reconcile / cancel 或 fill 证据。

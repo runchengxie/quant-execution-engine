@@ -117,4 +117,4 @@ project_tools/
 - 风控门禁里的 spread / participation / impact 依赖券商提供的市场数据；拿不到时会记录 `BYPASS`，不生成伪指标。
 - LongPort 实盘路径已经存在，但自动化端到端证据仍弱于 Alpaca 模拟盘冒烟。
 - `longport-paper` 默认优先读取仓库本地 `.env` / `.env.local`，LongPort 实盘默认优先读取 `~/.config/qexec/longport-live.env`；这是为了同时保住模拟盘冒烟的可重复性和实盘凭证隔离。
-- `ibkr-paper` 当前只覆盖 US equities 最小切片，并依赖本地已登录的 IB Gateway；仓库内还没有自动随附的 operator-supervised evidence 样例。
+- `ibkr-paper` 当前只覆盖 US equities 最小切片，并依赖本地已登录的 IB Gateway；仓库内已有一次 operator-supervised no-order evidence 样例，证明 WSL -> Windows Gateway/account/reconcile 路径可达，但 broker order 提交、成交、撤单证据仍需有效行情下的下一次 paper smoke 补齐。

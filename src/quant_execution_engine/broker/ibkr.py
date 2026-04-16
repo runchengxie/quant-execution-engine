@@ -180,10 +180,11 @@ class IbkrPaperBrokerAdapter(BrokerAdapter):
         for value in account_values:
             tag = str(getattr(value, "tag", "")).strip()
             currency = str(getattr(value, "currency", "")).strip().upper()
-            raw_value = _as_float(getattr(value, "value", None))
             if tag == "TotalCashValue" and currency in {"", "USD"}:
+                raw_value = _as_float(getattr(value, "value", None))
                 cash_usd = raw_value
             if tag == "NetLiquidation" and currency in {"", "USD"}:
+                raw_value = _as_float(getattr(value, "value", None))
                 total_portfolio_value = raw_value
                 base_currency = currency or base_currency
 

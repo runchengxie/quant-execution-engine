@@ -21,4 +21,4 @@
 - [x] 4.1 Add unit tests for IBKR backend registration, configuration surfacing, account and market-scope validation, normalization, and broker import/runtime error handling.
 - [x] 4.2 Add explicitly selected integration coverage for IBKR paper account, quote, submit, query, cancel, fill, and reconcile behavior against a reachable paper runtime.
 - [x] 4.3 Update `README.md`, `docs/configuration.md`, `docs/architecture.md`, `docs/cli.md`, and `docs/testing.md`, and add `docs/ibkr-paper-smoke.md` with IB Gateway over TWS API prerequisites and smoke steps.
-- [ ] 4.4 Capture at least one operator-supervised `ibkr-paper` evidence sample and document the resulting maturity caveats using the existing repo evidence style.
+- [x] 4.4 Capture at least one operator-supervised `ibkr-paper` evidence sample and document the resulting maturity caveats using the existing repo evidence style.
