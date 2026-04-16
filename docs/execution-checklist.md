@@ -1,6 +1,8 @@
 # 项目功能清单
 
-> 这份 checklist 的目标不是把仓库推成全能平台，而是定义 execution-only 项目的完成线和克制边界。
+> 本项目只是为了做最基础流程跑通和技术测试\
+> 这份项目功能清单的目标是定义该项目的完成线和克制边界\
+> 考虑到市面上已经QuantConnect/LEAN和vnpy这类成熟的量化执行框架，再造车轮是没有必要的\
 
 ## 状态标记
 
@@ -12,9 +14,9 @@
 
 ## 当前目标边界
 
-这份 checklist 默认对应的是下面这个目标：
+这份功能清单默认对应的是下面这个目标：
 
-- execution-only 仓库
+- 量化交易执行仓库
 - 单账户语义优先
 - 低频或半自动执行场景
 - 以 `targets.json` 驱动 broker-backed rebalance / submit / reconcile
@@ -36,7 +38,7 @@
 
 ### 1. 最小执行主路径
 
-- `[x]` canonical schema-v2 `targets.json` 作为唯一 live execution 输入
+- `[x]` 基于指定格式的持仓清单 `targets.json` 作为唯一实盘下单输入
 - `[x]` `qexec config`
 - `[x]` `qexec account`
 - `[x]` `qexec quote`
