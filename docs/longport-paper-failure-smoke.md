@@ -1,19 +1,19 @@
-# 长桥 LongPort 模拟盘 failure smoke
+# 长桥 LongPort 模拟盘失败场景冒烟
 
 这份文档的目标：
 
-- 给 `longport-paper` 提供一套更贴近真实 operator 的 failure smoke playbook
+- 给 `longport-paper` 提供一套更贴近真实操作员的失败场景冒烟操作手册
 - 优先验证“失败后怎么观察、怎么留证、怎么恢复”，而不是继续扩新平台能力
-- 明确哪些场景今天适合手工 paper 复现，哪些场景更适合交给自动化回归证明
+- 明确哪些场景今天适合手工模拟盘复现，哪些场景更适合交给自动化回归证明
 
 这份文档刻意不做两件事：
 
-- 不把仓库推成新的 broker simulator
-- 不为了强造 reject / partial-fill / pending-cancel 去补一套额外测试框架
+- 不把仓库推成新的券商模拟器
+- 不为了硬造拒单、部分成交或 `pending-cancel` 去补一套额外测试框架
 
 ## 1. 什么时候值得跑
 
-当你已经满足下面这些条件时，这份 playbook 才有价值：
+当你已经满足下面这些条件时，这份操作手册才有价值：
 
 - `LONGPORT_ACCESS_TOKEN_TEST` 已经配置好
 - `qexec config --broker longport-paper`
@@ -21,9 +21,9 @@
 - `qexec account --broker longport-paper`
 - `qexec quote AAPL --broker longport-paper`
 
-这些基础检查都能稳定通过
+而且这些基础检查都能稳定通过。
 
-如果连这里都不稳，先不要做 failure smoke；先把 paper readiness 跑顺。
+如果连这里都不稳，先不要做失败场景冒烟；先把模拟盘就绪性跑顺。
 
 ## 2. 先准备一个固定证据目录
 
@@ -36,20 +36,20 @@ mkdir -p outputs/targets
 
 推荐约定：
 
-- baseline happy path evidence：
+- 基线顺利路径证据：  
   `outputs/evidence/longport-paper-baseline.json`
-- local blocked / operator review evidence：
+- 本地阻断 / 操作员复核证据：  
   `outputs/evidence/longport-paper-blocked.json`
 
 如果你需要长期保留，也可以按日期细分子目录，但没必要再为此加一层系统。
 
-## 3. 第一层：手工可复现的 operator failure smoke
+## 3. 第一层：手工可复现的操作员失败场景冒烟
 
 这一层只包含今天就能低成本反复跑的场景。
 
-### 场景 A：baseline operator workflow
+### 场景 A：基线操作员流程
 
-先确认基础 paper workflow 是稳定的，不然 failure smoke 没有对照组。
+先确认基础模拟盘流程是稳定的，不然失败场景冒烟没有对照组。
 
 ```bash
 PYTHONPATH=src python project_tools/smoke_operator_harness.py \
@@ -62,21 +62,21 @@ PYTHONPATH=src python project_tools/smoke_operator_harness.py \
 这一步至少要确认：
 
 - `config -> account -> quote -> rebalance -> orders -> reconcile -> exceptions` 能跑完
-- 如果拿到了 tracked order ref，`order` 也能跑
-- `cancel-all` 能把 paper open order 收尾
-- evidence JSON 里 `success=true`
-- evidence JSON 里 `failed_step=null`
+- 如果拿到了已跟踪订单引用，`order` 也能跑
+- `cancel-all` 能把模拟盘 open order 收尾
+- 证据 JSON 里 `success=true`
+- 证据 JSON 里 `failed_step=null`
 
-如果这一步都不稳，不要继续补更花的 failure smoke。
+如果这一步都不稳，不要继续补更复杂的失败场景冒烟。
 
-### 场景 B：manual kill switch / local block
+### 场景 B：手动紧急停单 / 本地阻断
 
-这个场景的目标不是让 harness 故意崩，而是验证：
+这个场景的目标不是让工装故意崩掉，而是验证：
 
-- 本地 kill switch 会不会按预期拦截 mutation
-- operator 能不能从输出、异常队列和本地 state 看清楚“为什么没下单”
+- 本地紧急停单会不会按预期拦截变更类操作
+- 操作员能不能从输出、异常队列和本地状态里看清楚“为什么没下单”
 
-先准备一个最小 targets 文件，例如：
+先准备一个最小 `targets` 文件，例如：
 
 ```json
 {
@@ -101,7 +101,7 @@ PYTHONPATH=src python project_tools/smoke_operator_harness.py \
 outputs/targets/longport-paper-failure-smoke.json
 ```
 
-然后用 kill switch 跑一次：
+然后用紧急停单跑一次：
 
 ```bash
 QEXEC_KILL_SWITCH=1 qexec rebalance \
@@ -112,9 +112,9 @@ QEXEC_KILL_SWITCH=1 qexec rebalance \
 
 这里要注意一件事：
 
-- 这更像“BLOCKED operator outcome”
+- 这更像“本地阻断的操作员结果”
 - 不一定会让 CLI 返回非零退出码
-- 重点是确认本地 risk / kill-switch block 被记录清楚，而不是强行把它当成 subprocess hard failure
+- 重点是确认本地风控 / 紧急停单阻断被记录清楚，而不是强行把它当成子进程硬失败
 
 随后立刻看：
 
@@ -124,17 +124,17 @@ qexec orders --broker longport-paper --status failure
 qexec state-doctor --broker longport-paper
 ```
 
-你要确认的不是“命令红没红”，而是：
+你要确认的不是“命令有没有变红”，而是：
 
-- block 原因是否可解释
+- 阻断原因是否可解释
 - `exceptions` 能否看到本地 `BLOCKED`
-- state 文件和异常视图能否对上
+- 状态文件和异常视图能否对上
 
-这类场景非常像真实 operator 会遇到的本地拦截，比硬造一个伪 broker reject 值钱得多。
+这类场景很像真实操作员会遇到的本地拦截，比硬造一个伪券商拒单更有价值。
 
-### 场景 C：operator cleanup / refresh
+### 场景 C：操作员清理 / 刷新
 
-如果 baseline 或 blocked smoke 之后你怀疑本地 state 有残留，不要直接删文件，先走运维链路：
+如果基线或阻断场景之后你怀疑本地状态有残留，不要直接删文件，先走运维链路：
 
 ```bash
 qexec reconcile --broker longport-paper
@@ -142,7 +142,7 @@ qexec exceptions --broker longport-paper
 qexec state-doctor --broker longport-paper
 ```
 
-如果 doctor 提示的是安全可修的本地问题，再考虑：
+如果 `doctor` 提示的是安全可修的本地问题，再考虑：
 
 ```bash
 qexec state-repair --broker longport-paper --clear-kill-switch
@@ -151,20 +151,20 @@ qexec state-repair --broker longport-paper --dedupe-fills --drop-orphan-fills
 
 这一步的重点是验证：
 
-- operator 是不是能先看事实，再修本地 state
-- state maintenance 命令是否足够克制，而不是动不动就手工删 `outputs/state/*.json`
+- 操作员是不是能先看事实，再修本地状态
+- 状态维护命令是否足够克制，而不是动不动就手工删 `outputs/state/*.json`
 
-### 场景 D：opportunistic partial-fill / pending-cancel capture
+### 场景 D：机会型记录部分成交 / `pending-cancel`
 
-LongPort paper 不保证你能稳定、便宜、可重复地手工造出：
+LongPort 模拟盘并不保证你能稳定、低成本、可重复地手工造出：
 
 - `PARTIALLY_FILLED`
 - `PENDING_CANCEL`
-- late fill
+- 迟到成交
 
 所以这类场景不要为了“演示一次”去造轮子。
 
-但如果 paper 账户自然撞上了这些状态，就按下面流程留证，不要临场 improvisation：
+但如果模拟盘账户自然撞上了这些状态，就按下面流程留证，不要临场发挥：
 
 ```bash
 qexec orders --broker longport-paper --status open --symbol AAPL
@@ -175,9 +175,9 @@ qexec reconcile --broker longport-paper
 
 然后按状态做最保守处置：
 
-- `PARTIALLY_FILLED`：
+- `PARTIALLY_FILLED`：  
   `cancel-rest` / `resume-remaining` / `accept-partial`
-- `PENDING_CANCEL`：
+- `PENDING_CANCEL`：  
   先 `reconcile`，不要急着 `retry` / `reprice`
 
 对应命令：
@@ -188,15 +188,15 @@ qexec resume-remaining <tracked-order-ref> --broker longport-paper
 qexec accept-partial <tracked-order-ref> --broker longport-paper
 ```
 
-## 4. 第二层：更适合由自动化回归证明的 failure contract
+## 4. 第二层：更适合自动化回归证明的失败契约
 
-下面这些 failure-mode 当前已经有自动化覆盖，但不值得为了手工 paper 重复性去强造：
+下面这些失败场景当前已经有自动化覆盖，但不值得为了手工模拟盘重复性去硬造：
 
-- `rebalance` 步骤失败后，evidence 是否保留 partial transcript
+- `rebalance` 步骤失败后，证据里是否保留部分执行过程
 - `orders` / `order` / `reconcile` / `exceptions` / `cancel-all` 中途失败后，后续步骤是否停止
-- `rebalance` 后没有 tracked order ref 时，`order` 是否会被跳过
-- reconcile 的 `get_order` / `list_fills` 异常 warning 是否能保留
-- partial-fill / pending-cancel / late-fill 的恢复契约
+- `rebalance` 后没有已跟踪订单引用时，`order` 是否会被跳过
+- `reconcile` 的 `get_order` / `list_fills` 异常告警是否能保留
+- 部分成交 / `pending-cancel` / 迟到成交的恢复契约
 
 当前建议直接跑聚焦回归：
 
@@ -205,7 +205,7 @@ UV_CACHE_DIR=/tmp/uv-cache uv run pytest tests/unit/test_smoke_operator_harness.
 UV_CACHE_DIR=/tmp/uv-cache uv run pytest tests/unit/test_execution_foundation.py -q
 ```
 
-这两组测试现在已经锁住了：
+这两组测试当前已经锁住了：
 
 - `success`
 - `failed_step`
@@ -213,16 +213,16 @@ UV_CACHE_DIR=/tmp/uv-cache uv run pytest tests/unit/test_execution_foundation.py
 - `next_step_hint`
 - `skipped_steps`
 
-以及 execution lifecycle 的关键 failure-mode。
+以及执行生命周期的关键失败模式。
 
-这里的意思不是“手工 smoke 不重要”，而是：
+这里的意思不是“手工冒烟不重要”，而是：
 
-- paper 手工 smoke 更适合验证 operator workflow 和证据留存
+- 模拟盘手工冒烟更适合验证操作员流程和证据留存
 - 结构化失败契约更适合交给自动化测试反复兜底
 
-## 5. evidence 怎么看
+## 5. 证据怎么看
 
-`smoke_operator_harness.py --evidence-output ...` 现在至少会保留这些字段：
+`smoke_operator_harness.py --evidence-output ...` 当前至少会保留这些字段：
 
 - `success`
 - `failed_step`
@@ -237,43 +237,3 @@ UV_CACHE_DIR=/tmp/uv-cache uv run pytest tests/unit/test_execution_foundation.py
 - `state_path`
 - `latest_tracked_order_ref`
 - `steps`
-
-如果 evidence 里看到：
-
-- `success=true`
-  说明 workflow 跑完了，不代表每一笔 order 都是 broker success
-- `success=false`
-  说明 harness 在某个步骤边界停下来了
-- `failed_step=reconcile`
-  先看这一步 stderr，再看 `next_step_hint`
-- `operator_outcome_status=BLOCKED`
-  说明 workflow 可能跑完了，但当前 tracked outcome 是本地拦截，不是 broker submit success
-- `skipped_steps`
-  表示后续哪些步骤没有继续跑，以及原因
-
-它现在的定位是 operator evidence，不是单纯 stdout 转存。
-
-## 6. 一次 smoke 至少要留下什么
-
-无论是 baseline 还是 failure smoke，至少保留：
-
-- `targets.json`
-- `outputs/evidence/*.json`
-- `outputs/orders/*.jsonl`
-- `outputs/state/*.json`
-- 一段人工备注：
-  包括运行时间、symbol、最后一个 tracked ref、最终状态、是否发生本地 block、有没有人工 cleanup
-
-## 7. 什么时候可以停
-
-如果下面这些都已经稳定，你就已经把 `longport-paper` 用到了一个很合适的程度：
-
-- baseline operator workflow 稳定
-- local block / kill-switch smoke 可解释
-- `exceptions` / `order` / `reconcile` / `state-doctor` 能支持排障
-- 关键 failure contract 已经有自动化回归
-- 你知道自然出现 partial-fill / pending-cancel 时该怎么处理
-
-到这一步就够像一个成熟的 execution 学习项目了。
-
-再往下如果是为了“更漂亮地造 synthetic broker failure”，大概率已经开始偏离这个仓库最值钱的边界。

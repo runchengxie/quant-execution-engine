@@ -4,12 +4,12 @@
 
 该项目接受 `targets.json` 作为输入。
 
-每个 target 必须包含：
+每个目标项必须包含：
 
 - `symbol`
 - `market`
 
-每个 target 必须二选一：
+每个目标项必须二选一：
 
 - `target_weight`
 - `target_quantity`
@@ -45,9 +45,9 @@
 ## 字段说明
 
 - `schema_version`
-  当前 canonical 版本，live execution 要求为 `2`。
+  当前标准版本；实盘执行要求为 `2`。
 - `asof`
-  目标生成日期，通常来自上游 research repo。
+  目标生成日期，通常来自上游研究仓库。
 - `source`
   产出来源，例如 `research-core`。
 - `target_gross_exposure`
@@ -57,7 +57,7 @@
 - `notes`
   可选备注。
 
-每个 target entry 还支持：
+每个目标项还支持：
 
 - `notes`
   单个标的备注。
@@ -77,6 +77,6 @@
 
 ## 兼容行为
 
-- `write_targets_json()` 仍可接受 legacy ticker list，并自动规范化成 schema-v2。
-- `read_targets_json(require_schema_v2=True)` 会拒绝 legacy 输入。
-- live execution 路径始终使用 `require_schema_v2=True`。
+- `write_targets_json()` 仍可接受旧版 ticker 列表，并自动规范化成 schema-v2。
+- `read_targets_json(require_schema_v2=True)` 会拒绝旧版输入。
+- 实盘执行路径始终使用 `require_schema_v2=True`。

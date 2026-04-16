@@ -1,33 +1,33 @@
-# Quant Execution Engine
+# Quant Execution Engine（量化执行引擎）
 
-该项目为量化投资执行模块，聚焦券商后台自动化下单、对账、恢复和必要的人工介入运维\
-当前默认支持长桥 LongPort 模拟盘/实盘，以及 Alpaca 模拟盘验证路径\
-为降低开发维护复杂度，该项目不承担策略研究 / 回测 / 股票原始数据处理，如有需要请结合研究前台项目使用\
+该项目是一个面向量化交易的执行模块，聚焦券商后台自动化下单、对账、恢复，以及必要的人工运维介入。  
+当前默认支持长桥 LongPort 模拟盘与实盘，以及 Alpaca 模拟盘验证路径。  
+为控制开发和维护复杂度，本项目不承担策略研究、回测或原始行情数据处理；如有需要，请与研究前台项目配合使用。
 
 ## 当前能力
 
-- 查看有效券商 / 风控 / 紧急关停配置
+- 查看当前可用的券商、风控和紧急停单配置
 - 查询账户资金与持仓
 - 拉取实时行情
-- 基于 `targets.json` 生成调仓计划与 diff 预览
-- 通过券商适应层来执行 `submit / query / cancel / reconcile`
-- 查看查看本地跟踪订单、异常队列和单笔订单生命周期详情
+- 基于 `targets.json` 生成调仓计划和差异预览
+- 通过券商适配层执行 `submit / query / cancel / reconcile`
+- 查看本地已跟踪订单、异常队列和单笔订单生命周期详情
 - 对部分成交执行 `cancel-rest` / `resume-remaining` / `accept-partial`
-- 运行正式预检查（`preflight`）检查
+- 运行正式的 `preflight` 预检查
 - 维护本地状态：`state-doctor` / `state-prune` / `state-repair`
-- 写出调仓审计日志到 `outputs/orders/*.jsonl`
-- 持久化执行状态到 `outputs/state/*.json`
-- 提供面向 signal / target / operator 的冒烟测试工装
+- 把调仓审计日志写入 `outputs/orders/*.jsonl`
+- 把执行状态持久化到 `outputs/state/*.json`
+- 提供面向信号、目标持仓和操作员的冒烟测试工装
 
-## 成熟度与证明边界
+## 当前成熟度与证据边界
 
-- 当前已经落地 broker-backed `submit / query / cancel / reconcile` 代码路径的，是长桥 LongPort real、`longport-paper` 和 `alpaca-paper`。
-- `longport-paper` 依赖 `LONGPORT_ACCESS_TOKEN_TEST`；当前已经通过 operator-supervised paper smoke 跑通过 `submit / query / reconcile / cancel` 最小闭环。
-- 长桥 LongPort 实盘账户已通过人工监督只读模式验证跑通 `config / preflight / account / quote`，并确认 live guard 与用户私有配置路由生效。
-- 长桥 LongPort 的 `rebalance --execute` 仍不应被视为默认自动化已经跑实的能力；成熟度判断仍要看最小实盘冒烟测试、审计日志和可复查信息。
-- Alpaca 当前按模拟盘验证路径使用，仍然适合作为更直观、更稳定的重复冒烟 / 回归测试基线。
-- `orders` / `exceptions` / `order` 展示的是本地执行状态中已跟踪的订单，暂不反映券商全量订单视图。
-- `--account` 当前是显式 label 解析与 fail-fast 校验，长桥 LongPort 模拟盘 / 实盘 和 Alpaca 模拟盘都仍按单账户语义运行。
+- 当前已经打通券商侧 `submit / query / cancel / reconcile` 实际路径的，是 LongPort 实盘、`longport-paper` 和 `alpaca-paper`。
+- `longport-paper` 依赖 `LONGPORT_ACCESS_TOKEN_TEST`；目前已经通过人工监督的模拟盘冒烟测试，跑通 `submit / query / reconcile / cancel` 最小闭环。
+- LongPort 实盘账户已经通过人工监督只读方式验证 `config / preflight / account / quote`，并确认实盘保护和用户私有配置路由生效。
+- LongPort 的 `rebalance --execute` 仍不应被视为“默认已经自动化跑实”的能力；成熟度判断仍应以最小实盘冒烟、审计日志和可复查证据为准。
+- Alpaca 当前按模拟盘验证路径使用，更适合作为便宜、直观、稳定的重复冒烟和回归基线。
+- `orders` / `exceptions` / `order` 展示的是本地执行状态中已跟踪的订单，不是券商全量订单视图。
+- `--account` 当前只做显式标签解析和快速失败校验；LongPort 模拟盘、LongPort 实盘和 Alpaca 模拟盘仍按单账户语义运行。
 
 ## 快速开始
 
@@ -37,7 +37,7 @@
 uv sync --group dev --extra cli
 ```
 
-如果要启用 Alpaca paper：
+如果要启用 Alpaca 模拟盘：
 
 ```bash
 uv sync --group dev --extra cli --extra alpaca
@@ -68,12 +68,12 @@ qexec state-prune --older-than-days 30
 qexec state-repair --clear-kill-switch --dedupe-fills
 qexec rebalance outputs/targets/2026-04-09.json
 qexec rebalance outputs/targets/2026-04-09.json --broker longport-paper --execute
-# LongPort real execute 前先按 docs/longport-real-smoke.md 完成 playbook
+# LongPort 实盘执行前，先按 docs/longport-real-smoke.md 完成操作手册
 QEXEC_ENABLE_LIVE=1 qexec rebalance outputs/targets/2026-04-09.json --execute
 qexec rebalance outputs/targets/2026-04-09.json --broker alpaca-paper --execute
 ```
 
-也可以直接用模块入口：
+也可以直接通过模块入口运行：
 
 ```bash
 PYTHONPATH=src python -m quant_execution_engine --help
@@ -83,36 +83,36 @@ PYTHONPATH=src python -m quant_execution_engine --help
 
 ## 配置
 
-LongPort live 至少需要：
+LongPort 实盘至少需要：
 
 - `LONGPORT_APP_KEY`
 - `LONGPORT_APP_SECRET`
 - `LONGPORT_ACCESS_TOKEN`
 
-LongPort paper 额外需要：
+LongPort 模拟盘额外需要：
 
 - `LONGPORT_ACCESS_TOKEN_TEST`
 
-LongPort live token 的注入方式：
+LongPort 实盘凭证的注入方式：
 
-- 为了防止git管理不善或者把完整项目打包分享给他人时忘记排除.env文件，该项目在实盘运行时会明确警告并拒绝通过项目根目录 `.env*` / `.envrc*`来读取`LONGPORT_ACCESS_TOKEN`
-- 推荐在当前 shell 显式 `export`，或从项目外外部的私有文件 `source`
+- 为了避免因 `.env` 被误提交，或整个项目被打包分享时把凭证一并带出，实盘路径会明确警告并拒绝从项目根目录 `.env*` / `.envrc*` 读取 `LONGPORT_ACCESS_TOKEN`
+- 推荐在当前 shell 显式 `export`，或者从仓库外部的私有文件 `source`
 - 推荐的用户级私有文件位置是 `~/.config/qexec/longport-live.env`
-- `longport-paper` 默认优先读取 repo 根目录 `.env` / `.env.local`；`longport` real 默认优先读取 `~/.config/qexec/longport-live.env`
+- `longport-paper` 默认优先读取仓库根目录 `.env` / `.env.local`；LongPort 实盘默认优先读取 `~/.config/qexec/longport-live.env`
 - `qexec config --broker longport` / `qexec config --broker longport-paper` 会显示 App Key / Secret / Token / Region / Overnight 的命中来源
 - 具体步骤见 [docs/longport-real-smoke.md](docs/longport-real-smoke.md)
 
-LongPort real broker 的 `--execute` 额外要求：
+LongPort 实盘的 `--execute` 还额外要求：
 
 - `QEXEC_ENABLE_LIVE=1`
-- repo 根目录下的 `.env*` / `.envrc*` 不得包含 LongPort live 凭证；否则 CLI 会拒绝执行
+- 仓库根目录下的 `.env*` / `.envrc*` 不能包含 LongPort 实盘凭证，否则 CLI 会拒绝执行
 
-Alpaca paper 至少需要：
+Alpaca 模拟盘至少需要：
 
 - `ALPACA_API_KEY` 或 `APCA_API_KEY_ID`
 - `ALPACA_SECRET_KEY` 或 `APCA_API_SECRET_KEY`
 
-更多环境变量、本地 YAML、risk gate 和兼容项见：
+更多环境变量、本地 YAML、风控门禁和兼容项见：
 
 - [docs/configuration.md](docs/configuration.md)
 
@@ -131,16 +131,16 @@ uv run pytest -m e2e
 uv run pytest -m integration
 ```
 
-测试边界要这样理解：
+测试边界应这样理解：
 
 - 默认 `pytest` 证明的是快速行为测试通过。
-- `e2e` 证明 CLI / harness 的子过程冒烟测试行为和输出边界。
-- `integration` 证明跨模块生命周期行为，并在提供凭证时尝试长桥 LongPort 报价级别验证。
-- 这些测试还不能单独证明长桥 LongPort 实盘交易功能的完整执行能力已经被自动化跑实。
+- `e2e` 证明 CLI / 工装子进程的冒烟行为和输出边界。
+- `integration` 证明跨模块生命周期行为，并在提供凭证时尝试 LongPort 行情级别验证。
+- 这些测试仍不能单独证明 LongPort 实盘交易能力已经被自动化完整跑实。
 
 ## 冒烟测试工装
 
-这些工装都放在核心代码外：
+这些工装都放在核心代码之外：
 
 ```bash
 PYTHONPATH=src python project_tools/smoke_signal_harness.py --output outputs/targets/smoke-signal.json
@@ -152,9 +152,9 @@ PYTHONPATH=src python project_tools/smoke_operator_harness.py --broker longport-
 PYTHONPATH=src python project_tools/smoke_operator_harness.py --broker longport-paper --execute --cleanup-open-orders --evidence-output outputs/evidence/longport-paper-smoke.json
 ```
 
-它们的目标是驱动 dry-run / paper / 人工监督验证。
+它们的目标是驱动预演、模拟盘和人工监督验证。
 
-如果你想系统化重复 `longport-paper` 的 operator failure smoke，而不是只跑一次 happy path，先看 [docs/longport-paper-failure-smoke.md](docs/longport-paper-failure-smoke.md)。
+如果你想系统化重复 `longport-paper` 的操作员失败场景冒烟，而不是只跑一次顺利路径，先看 [docs/longport-paper-failure-smoke.md](docs/longport-paper-failure-smoke.md)。
 
 ## 输入与输出
 
