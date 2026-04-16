@@ -22,7 +22,7 @@
 
 ## 当前成熟度与证据边界
 
-按代码路径看，LongPort 实盘、`longport-paper`、`alpaca-paper` 和 `ibkr-paper` 都已经接入 broker-backed submit/query/cancel/reconcile 语义，但它们的证据成熟度不同：
+按代码路径看，长桥证券的实盘，以及长桥证券、Alpaca 和盈透证券的模拟盘都已经接入 broker-backed submit/query/cancel/reconcile 语义，但它们的证据成熟度不同：
 
 - `longport-paper` 依赖 `LONGPORT_ACCESS_TOKEN_TEST`；目前已经通过人工监督的模拟盘冒烟测试，跑通 `submit / query / reconcile / cancel` 最小闭环。
 - LongPort 实盘账户已经通过人工监督只读方式验证 `config / preflight / account / quote`，并确认实盘保护和用户私有配置路由生效；`rebalance --execute` 仍按人工监督路径推进，成熟度判断以最小实盘冒烟、审计日志和可复查证据为准。
