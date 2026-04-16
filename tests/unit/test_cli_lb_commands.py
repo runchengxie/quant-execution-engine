@@ -478,6 +478,7 @@ def test_main_routes_state_repair() -> None:
                 "--dedupe-fills",
                 "--drop-orphan-fills",
                 "--drop-orphan-terminal-broker-orders",
+                "--recompute-parent-aggregates",
             ],
         ):
             result = cli.main()
@@ -488,6 +489,7 @@ def test_main_routes_state_repair() -> None:
         dedupe_fills=True,
         drop_orphan_fills=True,
         drop_orphan_terminal_broker_orders=True,
+        recompute_parent_aggregates=True,
         account="main",
         broker=None,
     )

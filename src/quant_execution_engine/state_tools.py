@@ -8,13 +8,13 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from .execution import (
-    DEFAULT_EXCEPTION_STATUSES,
-    FAILURE_BROKER_STATUSES,
     OPEN_BROKER_STATUSES,
     TERMINAL_BROKER_STATUSES,
     ExecutionState,
     ExecutionStateStore,
 )
+from .broker.base import utc_now_iso
+from .execution_state import ParentOrder
 
 
 TERMINAL_PARENT_STATUSES = TERMINAL_BROKER_STATUSES | {
@@ -70,6 +70,7 @@ class StateRepairResult:
     duplicate_fills_removed: int = 0
     orphan_fills_removed: int = 0
     orphan_terminal_broker_orders_removed: int = 0
+    parent_aggregates_recomputed: int = 0
 
 
 def _parse_timestamp(value: str | None) -> datetime | None:
@@ -87,6 +88,115 @@ def _parse_timestamp(value: str | None) -> datetime | None:
     return parsed.astimezone(timezone.utc)
 
 
+@dataclass(slots=True)
+class _ExpectedParentAggregate:
+    filled_quantity: float
+    remaining_quantity: float
+    status: str
+
+
+def _latest_child_status(
+    *,
+    parent: ParentOrder,
+    child_orders: list,
+    broker_orders_by_id: dict[str, object],
+) -> str:
+    latest_child = max(
+        child_orders,
+        key=lambda child: (
+            child.attempt,
+            child.updated_at or "",
+            child.created_at or "",
+            child.child_order_id,
+        ),
+        default=None,
+    )
+    if latest_child is None:
+        return parent.status
+    if latest_child.broker_order_id and latest_child.broker_order_id in broker_orders_by_id:
+        return str(broker_orders_by_id[latest_child.broker_order_id].status)
+    return str(latest_child.status)
+
+
+def _derive_parent_aggregate(
+    *,
+    state: ExecutionState,
+    parent: ParentOrder,
+    child_orders: list,
+    broker_orders_by_id: dict[str, object],
+) -> _ExpectedParentAggregate:
+    child_broker_order_ids = {
+        child.broker_order_id for child in child_orders if child.broker_order_id
+    }
+    fill_quantity_by_broker_order = Counter()
+    unmatched_parent_fill_quantity = 0.0
+    for fill in state.fill_events:
+        if fill.parent_order_id != parent.parent_order_id:
+            continue
+        if fill.broker_order_id in child_broker_order_ids:
+            fill_quantity_by_broker_order[fill.broker_order_id] += float(fill.quantity or 0.0)
+        else:
+            unmatched_parent_fill_quantity += float(fill.quantity or 0.0)
+
+    total_filled_quantity = float(unmatched_parent_fill_quantity)
+    has_open_child = False
+    for child in child_orders:
+        broker_order = (
+            broker_orders_by_id.get(child.broker_order_id) if child.broker_order_id else None
+        )
+        child_status = (
+            str(broker_order.status)
+            if broker_order is not None
+            else str(child.status or "")
+        ).upper()
+        if child_status in OPEN_BROKER_STATUSES:
+            has_open_child = True
+        broker_filled_quantity = (
+            float(broker_order.filled_quantity or 0.0) if broker_order is not None else 0.0
+        )
+        fill_filled_quantity = (
+            float(fill_quantity_by_broker_order.get(child.broker_order_id, 0.0))
+            if child.broker_order_id
+            else 0.0
+        )
+        total_filled_quantity += max(broker_filled_quantity, fill_filled_quantity)
+
+    requested_quantity = float(parent.requested_quantity or 0.0)
+    remaining_quantity = max(0.0, requested_quantity - total_filled_quantity)
+    manual_resolution = str(parent.metadata.get("manual_resolution") or "").strip().lower()
+    latest_status = _latest_child_status(
+        parent=parent,
+        child_orders=child_orders,
+        broker_orders_by_id=broker_orders_by_id,
+    )
+    if manual_resolution == "accepted_partial":
+        status = "ACCEPTED_PARTIAL"
+    elif requested_quantity > 0 and total_filled_quantity >= requested_quantity:
+        status = "FILLED"
+    elif total_filled_quantity > 0:
+        status = "PARTIALLY_FILLED"
+    elif has_open_child:
+        status = "PENDING"
+    else:
+        status = latest_status or parent.status
+    return _ExpectedParentAggregate(
+        filled_quantity=float(total_filled_quantity),
+        remaining_quantity=float(remaining_quantity),
+        status=str(status),
+    )
+
+
+def _parent_aggregate_mismatch(
+    parent: ParentOrder,
+    expected: _ExpectedParentAggregate,
+) -> bool:
+    return (
+        abs(float(parent.filled_quantity or 0.0) - expected.filled_quantity) > 1e-9
+        or abs(float(parent.remaining_quantity or 0.0) - expected.remaining_quantity) > 1e-9
+        or str(parent.status) != expected.status
+    )
+
+
 class StateMaintenanceService:
     """Inspect and maintain local execution state files."""
 
@@ -101,6 +211,7 @@ class StateMaintenanceService:
         parents_by_id = {parent.parent_order_id: parent for parent in state.parent_orders}
         intents_by_id = {intent.intent_id: intent for intent in state.intents}
         children_by_parent: dict[str, list[str]] = {}
+        child_records_by_parent: dict[str, list] = {}
         referenced_broker_order_ids: set[str] = set()
 
         for child in state.child_orders:
@@ -115,6 +226,7 @@ class StateMaintenanceService:
             if child.broker_order_id:
                 referenced_broker_order_ids.add(child.broker_order_id)
             children_by_parent.setdefault(child.parent_order_id, []).append(child.child_order_id)
+            child_records_by_parent.setdefault(child.parent_order_id, []).append(child)
 
         for parent in state.parent_orders:
             if parent.intent_id not in intents_by_id:
@@ -209,6 +321,41 @@ class StateMaintenanceService:
                         message=(
                             f"broker order {broker_order.broker_order_id} ({broker_order.status}) "
                             "is not referenced by any child order"
+                        ),
+                    )
+                )
+
+        for parent in state.parent_orders:
+            expected = _derive_parent_aggregate(
+                state=state,
+                parent=parent,
+                child_orders=child_records_by_parent.get(parent.parent_order_id, []),
+                broker_orders_by_id=broker_orders_by_id,
+            )
+            if (
+                abs(float(parent.filled_quantity or 0.0) - expected.filled_quantity) > 1e-9
+                or abs(float(parent.remaining_quantity or 0.0) - expected.remaining_quantity) > 1e-9
+            ):
+                issues.append(
+                    StateDoctorIssue(
+                        severity="WARN",
+                        code="PARENT_AGGREGATE_MISMATCH",
+                        message=(
+                            f"parent {parent.parent_order_id} stores filled/remaining "
+                            f"{float(parent.filled_quantity or 0.0):g}/{float(parent.remaining_quantity or 0.0):g} "
+                            f"but local child/fill state implies "
+                            f"{expected.filled_quantity:g}/{expected.remaining_quantity:g}"
+                        ),
+                    )
+                )
+            if str(parent.status) != expected.status:
+                issues.append(
+                    StateDoctorIssue(
+                        severity="WARN",
+                        code="PARENT_STATUS_MISMATCH",
+                        message=(
+                            f"parent {parent.parent_order_id} has status {parent.status} "
+                            f"but local child/fill state implies {expected.status}"
                         ),
                     )
                 )
@@ -357,6 +504,7 @@ class StateMaintenanceService:
         dedupe_fills: bool,
         drop_orphan_fills: bool,
         drop_orphan_terminal_broker_orders: bool,
+        recompute_parent_aggregates: bool,
     ) -> StateRepairResult:
         if not any(
             (
@@ -364,6 +512,7 @@ class StateMaintenanceService:
                 dedupe_fills,
                 drop_orphan_fills,
                 drop_orphan_terminal_broker_orders,
+                recompute_parent_aggregates,
             )
         ):
             raise ValueError("select at least one repair action")
@@ -422,6 +571,30 @@ class StateMaintenanceService:
                 kept.append(broker_order)
             state.broker_orders = kept
             result.orphan_terminal_broker_orders_removed = removed
+
+        if recompute_parent_aggregates:
+            broker_orders_by_id = {
+                broker_order.broker_order_id: broker_order for broker_order in state.broker_orders
+            }
+            child_records_by_parent: dict[str, list] = {}
+            for child in state.child_orders:
+                child_records_by_parent.setdefault(child.parent_order_id, []).append(child)
+            repaired = 0
+            for parent in state.parent_orders:
+                expected = _derive_parent_aggregate(
+                    state=state,
+                    parent=parent,
+                    child_orders=child_records_by_parent.get(parent.parent_order_id, []),
+                    broker_orders_by_id=broker_orders_by_id,
+                )
+                if not _parent_aggregate_mismatch(parent, expected):
+                    continue
+                parent.filled_quantity = expected.filled_quantity
+                parent.remaining_quantity = expected.remaining_quantity
+                parent.status = expected.status
+                parent.updated_at = utc_now_iso()
+                repaired += 1
+            result.parent_aggregates_recomputed = repaired
 
         result.state_path = self.state_store.save(state)
         return result

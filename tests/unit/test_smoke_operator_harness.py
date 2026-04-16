@@ -230,6 +230,111 @@ def test_latest_tracked_order_ref_uses_current_target_input_path_over_stale_symb
     }
 
 
+def test_discover_audit_log_prefers_matching_target_input_path(tmp_path: Path) -> None:
+    module = load_smoke_operator_module()
+    project_root = tmp_path / "project"
+    audit_dir = project_root / "outputs" / "orders"
+    audit_dir.mkdir(parents=True)
+    old_path = audit_dir / "20260416-000000_real_live.jsonl"
+    new_path = audit_dir / "20260416-000001_real_live.jsonl"
+    old_path.write_text(
+        json.dumps(
+            {
+                "record_type": "rebalance_summary",
+                "run_id": "run-old",
+                "target_input_path": "outputs/targets/old.json",
+                "order_count": 1,
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    new_path.write_text(
+        json.dumps(
+            {
+                "record_type": "rebalance_summary",
+                "run_id": "run-new",
+                "target_input_path": "outputs/targets/current.json",
+                "order_count": 2,
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    original_root = module.PROJECT_ROOT
+    module.PROJECT_ROOT = project_root
+    try:
+        chosen_path, summary = module.discover_audit_log(
+            target_input_path="outputs/targets/current.json"
+        )
+    finally:
+        module.PROJECT_ROOT = original_root
+
+    assert chosen_path == new_path
+    assert summary is not None
+    assert summary["run_id"] == "run-new"
+    assert summary["order_count"] == 2
+
+
+def test_write_evidence_includes_audit_summary_and_operator_notes(tmp_path: Path) -> None:
+    module = load_smoke_operator_module()
+    output_path = tmp_path / "smoke-operator.json"
+    evidence_path = tmp_path / "smoke-evidence.json"
+    audit_path = tmp_path / "orders" / "20260416-000001_real_live.jsonl"
+    audit_path.parent.mkdir(parents=True)
+    audit_path.write_text(
+        json.dumps(
+            {
+                "record_type": "rebalance_summary",
+                "run_id": "run-123",
+                "target_input_path": str(output_path),
+                "order_count": 1,
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    args = argparse.Namespace(
+        broker="longport",
+        account="main",
+        symbol="AAPL",
+        market="US",
+        output=str(output_path),
+        execute=True,
+        preflight_only=False,
+        cleanup_open_orders=False,
+        allow_non_paper=True,
+        evidence_output=str(evidence_path),
+        operator_notes=["supervised live smoke", "cancel not covered"],
+    )
+
+    written = module.write_evidence(
+        args=args,
+        broker="longport",
+        account_label="main",
+        canonical="AAPL.US",
+        steps=[{"name": "rebalance", "exit_code": 0, "stdout": "ok", "stderr": None}],
+        output_path=output_path,
+        latest_order_ref="broker-aapl-1",
+        audit_log_path=audit_path,
+        audit_summary={
+            "run_id": "run-123",
+            "order_count": 1,
+            "target_input_path": str(output_path),
+        },
+    )
+    evidence = json.loads(evidence_path.read_text(encoding="utf-8"))
+
+    assert written == evidence_path
+    assert evidence["broker_mode"] == "real"
+    assert evidence["operator_notes"] == ["supervised live smoke", "cancel not covered"]
+    assert evidence["audit_log_path"] == str(audit_path)
+    assert evidence["audit_run_id"] == "run-123"
+    assert evidence["audit_order_count"] == 1
+    assert evidence["audit_target_input_path"] == str(output_path)
+
+
 def test_run_operator_smoke_workflow_executes_fixed_sequence(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

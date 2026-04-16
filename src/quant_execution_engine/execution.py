@@ -47,6 +47,7 @@ from .execution_helpers import (
     find_parent_for_fill,
     find_tracked_broker_order,
     load_account_state,
+    require_latest_child_attempt,
     require_partial_fill_quantities,
     resolve_tracked_order_context,
 )
@@ -441,43 +442,60 @@ class OrderLifecycleService:
     ) -> ExecutionRetryResult:
         """Retry a zero-fill failed or canceled tracked order."""
 
-        tracked = self.get_tracked_order(account_label=account_label, order_ref=order_ref)
-        if tracked.child is None or tracked.parent is None or tracked.intent is None:
+        context = resolve_tracked_order_context(
+            self.adapter,
+            self.state_store,
+            account_label,
+            order_ref,
+        )
+        account = context.account
+        state = context.state
+        child = context.child
+        parent = context.parent
+        intent = context.intent
+        broker_order = context.broker_order
+        if child is None or parent is None or intent is None:
             raise ValueError("tracked order is incomplete and cannot be retried")
+        require_latest_child_attempt(
+            state,
+            parent=parent,
+            child=child,
+            action_name="retry",
+        )
 
-        broker_status = tracked.broker_order.status if tracked.broker_order is not None else tracked.child.status
+        broker_status = broker_order.status if broker_order is not None else child.status
         if broker_status in OPEN_BROKER_STATUSES:
             raise ValueError(f"tracked order is still open: {broker_status}")
-        if tracked.parent.filled_quantity > 0:
+        if parent.filled_quantity > 0:
             raise ValueError("retry for partially filled orders is not supported yet")
-        if broker_status not in FAILURE_BROKER_STATUSES and tracked.child.status != "FAILED":
+        if broker_status not in FAILURE_BROKER_STATUSES and child.status != "FAILED":
             raise ValueError(
                 f"retry only supports failed/canceled/rejected/expired orders, got: {broker_status}"
             )
 
-        quantity = float(tracked.intent.quantity)
+        quantity = float(intent.quantity)
         if not quantity.is_integer():
             raise ValueError("retry currently only supports integer-share tracked orders")
 
         order = Order(
-            symbol=tracked.intent.symbol,
+            symbol=intent.symbol,
             quantity=int(quantity),
-            side=tracked.intent.side,
-            price=tracked.intent.limit_price,
-            order_type=tracked.intent.order_type,
+            side=intent.side,
+            price=intent.limit_price,
+            order_type=intent.order_type,
         )
         retried = self.execute_orders(
             [order],
             account_label=account_label,
             dry_run=False,
-            target_source=tracked.intent.target_source,
-            target_asof=tracked.intent.target_asof,
-            target_input_path=tracked.intent.target_input_path,
+            target_source=intent.target_source,
+            target_asof=intent.target_asof,
+            target_input_path=intent.target_input_path,
         )[0]
-        state_path = self.state_store.path_for(self.adapter.backend_name, tracked.account_label)
+        state_path = self.state_store.path_for(self.adapter.backend_name, account.label)
         return ExecutionRetryResult(
             broker_name=self.adapter.backend_name,
-            account_label=tracked.account_label,
+            account_label=account.label,
             order_ref=order_ref,
             new_child_order_id=str(retried.child_order_id),
             broker_order_id=retried.broker_order_id,
@@ -494,13 +512,27 @@ class OrderLifecycleService:
     ) -> ExecutionCancelResult:
         """Cancel the open remainder of a partially filled tracked order."""
 
-        tracked = self.get_tracked_order(account_label=account_label, order_ref=order_ref)
-        if tracked.parent is None or tracked.broker_order is None:
+        context = resolve_tracked_order_context(
+            self.adapter,
+            self.state_store,
+            account_label,
+            order_ref,
+        )
+        parent = context.parent
+        child = context.child
+        broker_order = context.broker_order
+        if parent is None or broker_order is None:
             raise ValueError("tracked order is incomplete and cannot cancel the remaining quantity")
-        require_partial_fill_quantities(tracked.parent, action_name="cancel-rest")
-        if not broker_order_is_open(tracked.broker_order):
+        require_latest_child_attempt(
+            context.state,
+            parent=parent,
+            child=child,
+            action_name="cancel-rest",
+        )
+        require_partial_fill_quantities(parent, action_name="cancel-rest")
+        if not broker_order_is_open(broker_order):
             raise ValueError(
-                f"cancel-rest only supports open tracked broker orders, got: {tracked.broker_order.status}"
+                f"cancel-rest only supports open tracked broker orders, got: {broker_order.status}"
             )
         return self.cancel_order(account_label=account_label, order_ref=order_ref)
 
@@ -526,6 +558,12 @@ class OrderLifecycleService:
         broker_order = context.broker_order
         if child is None or parent is None or intent is None:
             raise ValueError("tracked order is incomplete and cannot resume remaining quantity")
+        require_latest_child_attempt(
+            state,
+            parent=parent,
+            child=child,
+            action_name="resume-remaining",
+        )
         if parent.metadata.get("manual_resolution") == "accepted_partial":
             raise ValueError("remaining quantity was already accepted locally; resume is disabled")
         _, remaining_quantity = require_partial_fill_quantities(
@@ -595,6 +633,12 @@ class OrderLifecycleService:
         broker_order = context.broker_order
         if child is None or parent is None:
             raise ValueError("tracked order is incomplete and cannot accept a partial fill")
+        require_latest_child_attempt(
+            state,
+            parent=parent,
+            child=child,
+            action_name="accept-partial",
+        )
         accepted_filled, abandoned_remaining = require_partial_fill_quantities(
             parent,
             action_name="accept-partial",
@@ -695,6 +739,12 @@ class OrderLifecycleService:
         broker_order = context.broker_order
         if child is None or parent is None or intent is None or broker_order is None:
             raise ValueError("tracked order is incomplete and cannot be repriced")
+        require_latest_child_attempt(
+            state,
+            parent=parent,
+            child=child,
+            action_name="reprice",
+        )
         if str(intent.order_type).upper() != "LIMIT":
             raise ValueError("reprice only supports tracked LIMIT orders")
         if broker_order.status not in OPEN_BROKER_STATUSES:

@@ -248,6 +248,7 @@ qexec state-prune --older-than-days 90 --apply
 qexec state-repair --clear-kill-switch
 qexec state-repair --dedupe-fills --drop-orphan-fills
 qexec state-repair --drop-orphan-terminal-broker-orders
+qexec state-repair --recompute-parent-aggregates
 ```
 
 至少要选择一个修复动作。

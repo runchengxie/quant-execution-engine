@@ -103,6 +103,29 @@ def find_parent_for_child(
     )
 
 
+def latest_child_for_parent(
+    state: ExecutionState,
+    parent: ParentOrder | None,
+) -> ChildOrder | None:
+    if parent is None:
+        return None
+    children = [
+        child for child in state.child_orders if child.parent_order_id == parent.parent_order_id
+    ]
+    if not children:
+        return None
+    return sorted(
+        children,
+        key=lambda item: (
+            item.attempt,
+            item.updated_at or "",
+            item.created_at or "",
+            item.child_order_id,
+        ),
+        reverse=True,
+    )[0]
+
+
 def find_intent_for_parent(
     state: ExecutionState,
     parent: ParentOrder | None,
@@ -226,6 +249,23 @@ def require_partial_fill_quantities(
     return filled_quantity, remaining_quantity
 
 
+def require_latest_child_attempt(
+    state: ExecutionState,
+    *,
+    parent: ParentOrder | None,
+    child: ChildOrder | None,
+    action_name: str,
+) -> None:
+    if parent is None or child is None:
+        return
+    latest = latest_child_for_parent(state, parent)
+    if latest is None or latest.child_order_id == child.child_order_id:
+        return
+    raise ValueError(
+        f"{action_name} only supports the latest tracked child attempt; newer attempt exists: {latest.child_order_id}"
+    )
+
+
 def broker_order_is_open(broker_order: BrokerOrderRecord | None) -> bool:
     if broker_order is None:
         return False
@@ -268,11 +308,13 @@ __all__ = [
     "TrackedOrderResolution",
     "build_reconcile_deltas",
     "find_intent_for_parent",
+    "latest_child_for_parent",
     "find_parent_for_child",
     "find_parent_for_fill",
     "find_tracked_broker_order",
     "broker_order_is_open",
     "load_account_state",
+    "require_latest_child_attempt",
     "require_partial_fill_quantities",
     "resolve_tracked_order",
     "resolve_tracked_order_context",

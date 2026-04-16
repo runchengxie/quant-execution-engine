@@ -555,6 +555,11 @@ Examples:
         help="Remove terminal broker orders that are not referenced by any child order",
     )
     state_repair_parser.add_argument(
+        "--recompute-parent-aggregates",
+        action="store_true",
+        help="Recompute parent filled/remaining quantities and status from local child, broker, and fill state",
+    )
+    state_repair_parser.add_argument(
         "--broker",
         type=str,
         default=None,
@@ -1194,6 +1199,7 @@ def run_state_repair(
     dedupe_fills: bool,
     drop_orphan_fills: bool,
     drop_orphan_terminal_broker_orders: bool,
+    recompute_parent_aggregates: bool,
     account: str = "main",
     broker: str | None = None,
 ) -> CommandResult:
@@ -1206,6 +1212,7 @@ def run_state_repair(
             dedupe_fills=dedupe_fills,
             drop_orphan_fills=drop_orphan_fills,
             drop_orphan_terminal_broker_orders=drop_orphan_terminal_broker_orders,
+            recompute_parent_aggregates=recompute_parent_aggregates,
         )
         return CommandResult(exit_code=0, stdout=render_state_repair_summary(result))
     except Exception as exc:
@@ -1318,7 +1325,8 @@ def run_rebalance(
             )
             if service._last_reconcile_report is not None:
                 result.reconcile_warnings = list(service._last_reconcile_report.warnings)
-            service.save_audit_log(result, dry_run=dry_run)
+            audit_log_path = service.save_audit_log(result, dry_run=dry_run)
+            result.audit_log_path = str(audit_log_path)
             diff_view = render_rebalance_diff(result, account_snapshot)
             return CommandResult(
                 exit_code=0,
@@ -1562,6 +1570,9 @@ def main() -> int:
                 drop_orphan_fills=getattr(args, "drop_orphan_fills", False),
                 drop_orphan_terminal_broker_orders=getattr(
                     args, "drop_orphan_terminal_broker_orders", False
+                ),
+                recompute_parent_aggregates=getattr(
+                    args, "recompute_parent_aggregates", False
                 ),
                 account=getattr(args, "account", "main"),
                 broker=getattr(args, "broker", None),

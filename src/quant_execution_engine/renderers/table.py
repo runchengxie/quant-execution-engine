@@ -690,6 +690,7 @@ def render_state_repair_summary(result: StateRepairResult) -> str:
             f"- Duplicate Fills Removed: {result.duplicate_fills_removed}",
             f"- Orphan Fills Removed: {result.orphan_fills_removed}",
             f"- Orphan Terminal Broker Orders Removed: {result.orphan_terminal_broker_orders_removed}",
+            f"- Parent Aggregates Recomputed: {result.parent_aggregates_recomputed}",
             f"- State file: {result.state_path}",
         ]
     )

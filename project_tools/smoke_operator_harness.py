@@ -400,6 +400,64 @@ def classify_failed_step(step_name: str | None) -> tuple[str | None, str | None]
     )
 
 
+def audit_log_dir() -> Path:
+    return PROJECT_ROOT / "outputs" / "orders"
+
+
+def list_audit_logs() -> list[Path]:
+    directory = audit_log_dir()
+    if not directory.exists():
+        return []
+    return sorted(path for path in directory.glob("*.jsonl") if path.is_file())
+
+
+def read_audit_summary(path: Path) -> dict[str, object] | None:
+    try:
+        with path.open("r", encoding="utf-8") as handle:
+            first_line = handle.readline().strip()
+    except OSError:
+        return None
+    if not first_line:
+        return None
+    try:
+        payload = json.loads(first_line)
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(payload, dict):
+        return None
+    return payload
+
+
+def discover_audit_log(
+    *,
+    baseline_paths: set[Path] | None = None,
+    target_input_path: str | None = None,
+) -> tuple[Path | None, dict[str, object] | None]:
+    candidates = [path for path in list_audit_logs() if path not in (baseline_paths or set())]
+    if not candidates:
+        return None, None
+
+    normalized_target_input = (
+        None if target_input_path is None else str(target_input_path).strip()
+    )
+    ranked: list[tuple[int, float, str, Path, dict[str, object] | None]] = []
+    for path in candidates:
+        summary = read_audit_summary(path)
+        score = 0
+        if summary is not None and summary.get("record_type") == "rebalance_summary":
+            score += 1
+        if (
+            normalized_target_input is not None
+            and summary is not None
+            and str(summary.get("target_input_path") or "").strip() == normalized_target_input
+        ):
+            score += 2
+        ranked.append((score, path.stat().st_mtime, path.name, path, summary))
+    ranked.sort(reverse=True)
+    _, _, _, chosen_path, chosen_summary = ranked[0]
+    return chosen_path, chosen_summary
+
+
 def append_skipped_step(
     skipped_steps: list[dict[str, str]],
     *,
@@ -455,6 +513,8 @@ def write_evidence(
     next_step_hint: str | None = None,
     skipped_steps: list[dict[str, str]] | None = None,
     operator_outcome: dict[str, object] | None = None,
+    audit_log_path: Path | None = None,
+    audit_summary: dict[str, object] | None = None,
 ) -> Path | None:
     evidence_output = getattr(args, "evidence_output", None)
     if not evidence_output:
@@ -464,14 +524,32 @@ def write_evidence(
     payload = {
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "broker": broker,
+        "broker_mode": "paper" if is_paper_broker(broker) else "real",
         "account_label": account_label,
         "symbol": canonical,
         "execute": bool(args.execute),
         "preflight_only": bool(args.preflight_only),
         "cleanup_open_orders": bool(args.cleanup_open_orders),
         "allow_non_paper": bool(args.allow_non_paper),
+        "operator_notes": list(getattr(args, "operator_notes", []) or []),
         "targets_output": str(output_path),
         "state_path": str(ExecutionStateStore().path_for(broker, account_label)),
+        "audit_log_path": str(audit_log_path) if audit_log_path is not None else None,
+        "audit_run_id": (
+            str(audit_summary.get("run_id"))
+            if audit_summary is not None and audit_summary.get("run_id")
+            else None
+        ),
+        "audit_order_count": (
+            int(audit_summary.get("order_count"))
+            if audit_summary is not None and audit_summary.get("order_count") is not None
+            else None
+        ),
+        "audit_target_input_path": (
+            str(audit_summary.get("target_input_path"))
+            if audit_summary is not None and audit_summary.get("target_input_path")
+            else None
+        ),
         "latest_tracked_order_ref": latest_order_ref,
         "success": bool(success),
         "failure_message": failure_message,
@@ -550,6 +628,9 @@ def run_operator_smoke_workflow(args: argparse.Namespace) -> int:
     output_path = Path(args.output)
     order_ref: str | None = None
     operator_outcome: dict[str, object] | None = None
+    audit_log_baseline = set(list_audit_logs())
+    audit_log_path: Path | None = None
+    audit_summary: dict[str, object] | None = None
     try:
         steps.append(run_step_with_env(broker_env, "config", run_config, True, broker=broker))
         steps.append(
@@ -637,6 +718,10 @@ def run_operator_smoke_workflow(args: argparse.Namespace) -> int:
                 )
             )
         )
+        audit_log_path, audit_summary = discover_audit_log(
+            baseline_paths=audit_log_baseline,
+            target_input_path=str(output_path),
+        )
 
         if not args.execute:
             write_evidence(
@@ -647,6 +732,8 @@ def run_operator_smoke_workflow(args: argparse.Namespace) -> int:
                 steps=steps,
                 output_path=output_path,
                 latest_order_ref=None,
+                audit_log_path=audit_log_path,
+                audit_summary=audit_summary,
             )
             return 0
 
@@ -834,12 +921,19 @@ def run_operator_smoke_workflow(args: argparse.Namespace) -> int:
             latest_order_ref=order_ref,
             skipped_steps=skipped_steps,
             operator_outcome=operator_outcome,
+            audit_log_path=audit_log_path,
+            audit_summary=audit_summary,
         )
 
         return 0
     except SmokeWorkflowStepError as exc:
         steps.append(exc.payload)
         failure_category, next_step_hint = classify_failed_step(str(exc.payload["name"]))
+        if audit_log_path is None:
+            audit_log_path, audit_summary = discover_audit_log(
+                baseline_paths=audit_log_baseline,
+                target_input_path=str(output_path),
+            )
         operator_outcome = latest_operator_outcome(
             broker_name=broker,
             account_label=account_label,
@@ -866,6 +960,8 @@ def run_operator_smoke_workflow(args: argparse.Namespace) -> int:
                 failed_step=str(exc.payload["name"]),
             ),
             operator_outcome=operator_outcome,
+            audit_log_path=audit_log_path,
+            audit_summary=audit_summary,
         )
         print(str(exc), file=sys.stderr)
         return 1
@@ -928,6 +1024,13 @@ def main() -> int:
         "--evidence-output",
         default=None,
         help="Optional JSON file used to persist a reproducible smoke evidence record",
+    )
+    parser.add_argument(
+        "--operator-note",
+        action="append",
+        dest="operator_notes",
+        default=[],
+        help="Optional manual note preserved in evidence JSON; repeat as needed",
     )
     args = parser.parse_args()
     try:

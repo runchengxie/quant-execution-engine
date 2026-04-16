@@ -125,6 +125,7 @@ class RebalanceResult:
     broker_name: str = "longport"
     account_label: str = "main"
     reconcile_warnings: list[str] = field(default_factory=list)
+    audit_log_path: str | None = None
 
     @property
     def order_count(self) -> int:

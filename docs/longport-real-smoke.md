@@ -199,6 +199,25 @@ uv run python -m quant_execution_engine reconcile --broker longport
 - `outputs/state/*.json` 对应的本地执行状态
 - 一段人工备注：包括运行时间、symbol、券商订单 ID、最终状态、是否实际成交、是否覆盖了 `cancel`
 
+如果你想把这些证据一次性沉淀成结构化 JSON，可以直接跑：
+
+```bash
+PYTHONPATH=src python project_tools/smoke_operator_harness.py \
+  --broker longport \
+  --allow-non-paper \
+  --execute \
+  --evidence-output outputs/evidence/longport-real-smoke.json \
+  --operator-note "operator supervised live smoke" \
+  --operator-note "cancel not covered"
+```
+
+这份 evidence 现在会额外保留：
+
+- `audit_log_path` / `audit_run_id`
+- `state_path`
+- `latest_tracked_order_ref`
+- `operator_notes`
+
 ## 8. 判定标准
 
 这次实盘冒烟至少满足下面这些条件，才算“对实盘券商又前进了一步”：

@@ -456,5 +456,6 @@ class RebalanceService:
                 }
                 f.write(json.dumps(reconcile_dict, ensure_ascii=False) + "\n")
 
+        rebalance_result.audit_log_path = str(log_file)
         logger.info("审计日志已保存", extra={"log_file": str(log_file)})
         return log_file

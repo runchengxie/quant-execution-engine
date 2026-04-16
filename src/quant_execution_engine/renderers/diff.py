@@ -125,6 +125,8 @@ def render_rebalance_diff(
     lines.append(
         f"Broker: {getattr(result, 'broker_name', 'longport')}  Account: {getattr(result, 'account_label', 'main')}"
     )
+    if getattr(result, "audit_log_path", None):
+        lines.append(f"Audit Log: {result.audit_log_path}")
     lines.append("--- Totals (Before → After) ---")
 
     summary_rows: list[tuple[str, float, float, float]] = []

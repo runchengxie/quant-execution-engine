@@ -696,6 +696,55 @@ def test_resume_remaining_order_creates_new_child_attempt(tmp_path: Path) -> Non
     assert refreshed.child_orders[-1].quantity == 9.0
 
 
+def test_resume_remaining_rejects_stale_child_reference_when_newer_attempt_exists(
+    tmp_path: Path,
+) -> None:
+    adapter = FakeAdapter()
+    store = ExecutionStateStore(root_dir=tmp_path)
+    service = OrderLifecycleService(
+        adapter,
+        state_store=store,
+        risk_chain=RiskGateChain({}),
+    )
+    base_kwargs = {
+        "account_label": "main",
+        "dry_run": False,
+        "target_source": "unit",
+        "target_asof": "2026-04-14",
+        "target_input_path": "tests/targets.json",
+    }
+
+    result = service.execute_orders(
+        [Order(symbol="AAPL.US", quantity=10, side="BUY", price=10.0)],
+        **base_kwargs,
+    )[0]
+    state = store.load("fake", "main")
+    state.parent_orders[0].filled_quantity = 1.0
+    state.parent_orders[0].remaining_quantity = 9.0
+    state.parent_orders[0].status = "PARTIALLY_FILLED"
+    state.child_orders[0].status = "CANCELED"
+    state.broker_orders[0].filled_quantity = 1.0
+    state.broker_orders[0].remaining_quantity = 9.0
+    state.broker_orders[0].status = "CANCELED"
+    store.save(state)
+    adapter.orders[str(result.broker_order_id)].filled_quantity = 1.0
+    adapter.orders[str(result.broker_order_id)].remaining_quantity = 9.0
+    adapter.orders[str(result.broker_order_id)].status = "CANCELED"
+
+    resumed = service.resume_remaining_order(
+        account_label="main",
+        order_ref=str(result.broker_order_id),
+    )
+
+    with pytest.raises(ValueError, match="latest tracked child attempt"):
+        service.resume_remaining_order(
+            account_label="main",
+            order_ref=str(result.broker_order_id),
+        )
+
+    assert resumed.new_child_order_id.endswith("_2")
+
+
 def test_accept_partial_fill_marks_parent_complete_locally(tmp_path: Path) -> None:
     adapter = FakeAdapter()
     store = ExecutionStateStore(root_dir=tmp_path)
@@ -792,6 +841,46 @@ def test_state_doctor_reports_duplicate_fill_and_orphan_broker_order(tmp_path: P
     assert "ORPHAN_FILL_EVENT" in codes
 
 
+def test_state_doctor_reports_parent_aggregate_mismatch(tmp_path: Path) -> None:
+    adapter = FakeAdapter()
+    store = ExecutionStateStore(root_dir=tmp_path)
+    service = OrderLifecycleService(
+        adapter,
+        state_store=store,
+        risk_chain=RiskGateChain({}),
+    )
+
+    result = service.execute_orders(
+        [Order(symbol="AAPL.US", quantity=10, side="BUY", price=10.0)],
+        account_label="main",
+        dry_run=False,
+        target_source="unit",
+        target_asof="2026-04-14",
+        target_input_path="tests/targets.json",
+    )[0]
+    state = store.load("fake", "main")
+    state.parent_orders[0].filled_quantity = 0.0
+    state.parent_orders[0].remaining_quantity = 10.0
+    state.parent_orders[0].status = "PENDING"
+    state.broker_orders[0].filled_quantity = 4.0
+    state.broker_orders[0].remaining_quantity = 6.0
+    state.broker_orders[0].status = "PARTIALLY_FILLED"
+    state.child_orders[0].status = "PARTIALLY_FILLED"
+    store.save(state)
+    adapter.orders[str(result.broker_order_id)].filled_quantity = 4.0
+    adapter.orders[str(result.broker_order_id)].remaining_quantity = 6.0
+    adapter.orders[str(result.broker_order_id)].status = "PARTIALLY_FILLED"
+
+    diagnosis = StateMaintenanceService(state_store=store).doctor(
+        broker_name="fake",
+        account_label="main",
+    )
+
+    codes = {issue.code for issue in diagnosis.issues}
+    assert "PARENT_AGGREGATE_MISMATCH" in codes
+    assert "PARENT_STATUS_MISMATCH" in codes
+
+
 def test_state_prune_previews_and_applies_old_terminal_records(tmp_path: Path) -> None:
     adapter = FakeAdapter()
     store = ExecutionStateStore(root_dir=tmp_path)
@@ -883,6 +972,7 @@ def test_state_repair_clears_kill_switch_and_dedupes_fills(tmp_path: Path) -> No
         dedupe_fills=True,
         drop_orphan_fills=True,
         drop_orphan_terminal_broker_orders=True,
+        recompute_parent_aggregates=False,
     )
     refreshed = store.load("fake", "main")
 
@@ -893,6 +983,53 @@ def test_state_repair_clears_kill_switch_and_dedupes_fills(tmp_path: Path) -> No
     assert refreshed.kill_switch_active is False
     assert refreshed.fill_events == []
     assert refreshed.broker_orders == []
+
+
+def test_state_repair_recomputes_parent_aggregates(tmp_path: Path) -> None:
+    adapter = FakeAdapter()
+    store = ExecutionStateStore(root_dir=tmp_path)
+    service = OrderLifecycleService(
+        adapter,
+        state_store=store,
+        risk_chain=RiskGateChain({}),
+    )
+
+    result = service.execute_orders(
+        [Order(symbol="AAPL.US", quantity=10, side="BUY", price=10.0)],
+        account_label="main",
+        dry_run=False,
+        target_source="unit",
+        target_asof="2026-04-14",
+        target_input_path="tests/targets.json",
+    )[0]
+    state = store.load("fake", "main")
+    state.parent_orders[0].filled_quantity = 0.0
+    state.parent_orders[0].remaining_quantity = 10.0
+    state.parent_orders[0].status = "PENDING"
+    state.broker_orders[0].filled_quantity = 4.0
+    state.broker_orders[0].remaining_quantity = 6.0
+    state.broker_orders[0].status = "PARTIALLY_FILLED"
+    state.child_orders[0].status = "PARTIALLY_FILLED"
+    store.save(state)
+    adapter.orders[str(result.broker_order_id)].filled_quantity = 4.0
+    adapter.orders[str(result.broker_order_id)].remaining_quantity = 6.0
+    adapter.orders[str(result.broker_order_id)].status = "PARTIALLY_FILLED"
+
+    repaired = StateMaintenanceService(state_store=store).repair(
+        broker_name="fake",
+        account_label="main",
+        clear_kill_switch=False,
+        dedupe_fills=False,
+        drop_orphan_fills=False,
+        drop_orphan_terminal_broker_orders=False,
+        recompute_parent_aggregates=True,
+    )
+    refreshed = store.load("fake", "main")
+
+    assert repaired.parent_aggregates_recomputed == 1
+    assert refreshed.parent_orders[0].filled_quantity == 4.0
+    assert refreshed.parent_orders[0].remaining_quantity == 6.0
+    assert refreshed.parent_orders[0].status == "PARTIALLY_FILLED"
 
 
 def test_list_exception_orders_includes_local_blocked_and_failed(tmp_path: Path) -> None:

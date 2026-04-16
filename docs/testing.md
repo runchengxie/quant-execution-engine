@@ -94,6 +94,7 @@ PYTHONPATH=src python project_tools/smoke_operator_harness.py --broker longport-
 ```bash
 PYTHONPATH=src python project_tools/smoke_operator_harness.py --broker alpaca-paper --execute --evidence-output outputs/evidence/operator-smoke.json
 PYTHONPATH=src python project_tools/smoke_operator_harness.py --broker longport-paper --execute --cleanup-open-orders --evidence-output outputs/evidence/longport-paper-smoke.json
+PYTHONPATH=src python project_tools/smoke_operator_harness.py --broker longport --allow-non-paper --execute --evidence-output outputs/evidence/longport-real-smoke.json --operator-note "operator supervised" --operator-note "cancel not covered"
 ```
 
 如果流程中途某一步失败，`--evidence-output` 现在也会保留部分证据，包括：
@@ -112,6 +113,8 @@ PYTHONPATH=src python project_tools/smoke_operator_harness.py --broker longport-
 - `operator_outcome_message`
 - `operator_outcome_category`
 - `operator_next_step_hint`
+- `audit_log_path` / `audit_run_id`
+- `operator_notes`
 
 默认流程会串起这些步骤：
 
