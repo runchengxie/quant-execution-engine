@@ -229,6 +229,11 @@ UV_CACHE_DIR=/tmp/uv-cache uv run pytest tests/unit/test_execution_foundation.py
 - `failure_category`
 - `next_step_hint`
 - `skipped_steps`
+- `operator_outcome_status`
+- `operator_outcome_source`
+- `operator_outcome_message`
+- `operator_outcome_category`
+- `operator_next_step_hint`
 - `state_path`
 - `latest_tracked_order_ref`
 - `steps`
@@ -241,6 +246,8 @@ UV_CACHE_DIR=/tmp/uv-cache uv run pytest tests/unit/test_execution_foundation.py
   说明 harness 在某个步骤边界停下来了
 - `failed_step=reconcile`
   先看这一步 stderr，再看 `next_step_hint`
+- `operator_outcome_status=BLOCKED`
+  说明 workflow 可能跑完了，但当前 tracked outcome 是本地拦截，不是 broker submit success
 - `skipped_steps`
   表示后续哪些步骤没有继续跑，以及原因
 

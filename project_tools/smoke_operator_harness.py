@@ -29,6 +29,7 @@ from quant_execution_engine.cli import (
     run_rebalance,
     run_reconcile,
 )
+from quant_execution_engine.diagnostics import diagnose_order_issue
 from quant_execution_engine.execution import ExecutionStateStore
 from quant_execution_engine.targets import write_targets_json
 
@@ -201,8 +202,21 @@ def latest_tracked_order_ref(
     broker_name: str,
     account_label: str,
     symbol_filter: str | None = None,
+    target_input_path: str | None = None,
     state_store: ExecutionStateStore | None = None,
 ) -> str | None:
+    if target_input_path is not None:
+        outcome = latest_operator_outcome(
+            broker_name=broker_name,
+            account_label=account_label,
+            symbol_filter=symbol_filter,
+            target_input_path=target_input_path,
+            state_store=state_store,
+        )
+        if outcome is not None:
+            broker_order_id = outcome.get("broker_order_id")
+            return str(broker_order_id) if broker_order_id else None
+
     store = state_store or ExecutionStateStore()
     state = store.load(broker_name, account_label)
     allowed = None if not symbol_filter else {str(symbol_filter).strip().upper()}
@@ -216,6 +230,121 @@ def latest_tracked_order_ref(
             continue
         return record.broker_order_id
     return None
+
+
+def latest_operator_outcome(
+    *,
+    broker_name: str,
+    account_label: str,
+    symbol_filter: str | None = None,
+    target_input_path: str | None = None,
+    state_store: ExecutionStateStore | None = None,
+) -> dict[str, object] | None:
+    store = state_store or ExecutionStateStore()
+    state = store.load(broker_name, account_label)
+    allowed = None if not symbol_filter else {str(symbol_filter).strip().upper()}
+    normalized_target_input = (
+        None if target_input_path is None else str(target_input_path).strip()
+    )
+
+    intents = [
+        intent
+        for intent in state.intents
+        if (normalized_target_input is None or intent.target_input_path == normalized_target_input)
+        and symbol_matches(intent.symbol, allowed)
+    ]
+    if not intents:
+        return None
+
+    intent_ids = {intent.intent_id for intent in intents}
+    parents = [
+        parent
+        for parent in state.parent_orders
+        if parent.intent_id in intent_ids and symbol_matches(parent.symbol, allowed)
+    ]
+    if not parents:
+        return None
+
+    parent = sorted(
+        parents,
+        key=lambda item: (
+            item.updated_at or "",
+            item.created_at or "",
+            item.parent_order_id,
+        ),
+        reverse=True,
+    )[0]
+    children = [
+        child
+        for child in state.child_orders
+        if child.parent_order_id == parent.parent_order_id
+    ]
+    child = (
+        sorted(
+            children,
+            key=lambda item: (
+                item.attempt,
+                item.updated_at or "",
+                item.created_at or "",
+                item.child_order_id,
+            ),
+            reverse=True,
+        )[0]
+        if children
+        else None
+    )
+    broker_order = None
+    if child is not None and child.broker_order_id:
+        broker_order = next(
+            (
+                record
+                for record in state.broker_orders
+                if record.broker_order_id == child.broker_order_id
+            ),
+            None,
+        )
+
+    record = broker_order or child or parent
+    diagnostic = diagnose_order_issue(record)
+    status = (
+        broker_order.status
+        if broker_order is not None
+        else child.status
+        if child is not None
+        else parent.status
+    )
+    message = (
+        broker_order.message
+        if broker_order is not None
+        else child.message
+        if child is not None
+        else None
+    )
+    broker_order_id = (
+        broker_order.broker_order_id
+        if broker_order is not None
+        else child.broker_order_id
+        if child is not None
+        else None
+    )
+    client_order_id = (
+        broker_order.client_order_id
+        if broker_order is not None
+        else child.client_order_id
+        if child is not None
+        else None
+    )
+    return {
+        "status": status,
+        "source": "broker" if broker_order is not None else "local",
+        "message": message,
+        "category": diagnostic.code if diagnostic is not None else None,
+        "next_step_hint": diagnostic.action_hint if diagnostic is not None else None,
+        "parent_order_id": parent.parent_order_id,
+        "child_order_id": child.child_order_id if child is not None else None,
+        "broker_order_id": broker_order_id,
+        "client_order_id": client_order_id,
+    }
 
 
 def symbol_matches(symbol: str, allowed: set[str] | None) -> bool:
@@ -325,6 +454,7 @@ def write_evidence(
     failure_category: str | None = None,
     next_step_hint: str | None = None,
     skipped_steps: list[dict[str, str]] | None = None,
+    operator_outcome: dict[str, object] | None = None,
 ) -> Path | None:
     evidence_output = getattr(args, "evidence_output", None)
     if not evidence_output:
@@ -349,6 +479,43 @@ def write_evidence(
         "failure_category": failure_category,
         "next_step_hint": next_step_hint,
         "skipped_steps": list(skipped_steps or []),
+        "operator_outcome_status": (
+            operator_outcome.get("status") if operator_outcome is not None else None
+        ),
+        "operator_outcome_source": (
+            operator_outcome.get("source") if operator_outcome is not None else None
+        ),
+        "operator_outcome_message": (
+            operator_outcome.get("message") if operator_outcome is not None else None
+        ),
+        "operator_outcome_category": (
+            operator_outcome.get("category") if operator_outcome is not None else None
+        ),
+        "operator_next_step_hint": (
+            operator_outcome.get("next_step_hint")
+            if operator_outcome is not None
+            else None
+        ),
+        "operator_outcome_parent_order_id": (
+            operator_outcome.get("parent_order_id")
+            if operator_outcome is not None
+            else None
+        ),
+        "operator_outcome_child_order_id": (
+            operator_outcome.get("child_order_id")
+            if operator_outcome is not None
+            else None
+        ),
+        "operator_outcome_broker_order_id": (
+            operator_outcome.get("broker_order_id")
+            if operator_outcome is not None
+            else None
+        ),
+        "operator_outcome_client_order_id": (
+            operator_outcome.get("client_order_id")
+            if operator_outcome is not None
+            else None
+        ),
         "steps": steps,
     }
     evidence_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -382,6 +549,7 @@ def run_operator_smoke_workflow(args: argparse.Namespace) -> int:
     skipped_steps: list[dict[str, str]] = []
     output_path = Path(args.output)
     order_ref: str | None = None
+    operator_outcome: dict[str, object] | None = None
     try:
         steps.append(run_step_with_env(broker_env, "config", run_config, True, broker=broker))
         steps.append(
@@ -406,6 +574,7 @@ def run_operator_smoke_workflow(args: argparse.Namespace) -> int:
                 output_path=output_path,
                 latest_order_ref=None,
                 skipped_steps=skipped_steps,
+                operator_outcome=None,
             )
             return 0
 
@@ -508,12 +677,19 @@ def run_operator_smoke_workflow(args: argparse.Namespace) -> int:
                     broker=broker,
                     symbol_filter=args.symbol,
                 )
-            )
+        )
+        )
+        operator_outcome = latest_operator_outcome(
+            broker_name=broker,
+            account_label=account_label,
+            symbol_filter=args.symbol,
+            target_input_path=str(output_path),
         )
         order_ref = latest_tracked_order_ref(
             broker_name=broker,
             account_label=account_label,
             symbol_filter=args.symbol,
+            target_input_path=str(output_path),
         )
         if order_ref:
             steps.append(
@@ -546,10 +722,15 @@ def run_operator_smoke_workflow(args: argparse.Namespace) -> int:
             )
         else:
             print("\n== order ==\nNo tracked broker order found after rebalance")
+            skip_reason = "no tracked order reference available after rebalance"
+            if operator_outcome is not None and operator_outcome.get("status") == "BLOCKED":
+                skip_reason = (
+                    "latest tracked outcome is BLOCKED and has no broker order reference"
+                )
             append_skipped_step(
                 skipped_steps,
                 name="order",
-                reason="no tracked order reference available after rebalance",
+                reason=skip_reason,
             )
 
         steps.append(
@@ -637,6 +818,12 @@ def run_operator_smoke_workflow(args: argparse.Namespace) -> int:
                     )
                 )
 
+        operator_outcome = latest_operator_outcome(
+            broker_name=broker,
+            account_label=account_label,
+            symbol_filter=args.symbol,
+            target_input_path=str(output_path),
+        )
         write_evidence(
             args=args,
             broker=broker,
@@ -646,12 +833,19 @@ def run_operator_smoke_workflow(args: argparse.Namespace) -> int:
             output_path=output_path,
             latest_order_ref=order_ref,
             skipped_steps=skipped_steps,
+            operator_outcome=operator_outcome,
         )
 
         return 0
     except SmokeWorkflowStepError as exc:
         steps.append(exc.payload)
         failure_category, next_step_hint = classify_failed_step(str(exc.payload["name"]))
+        operator_outcome = latest_operator_outcome(
+            broker_name=broker,
+            account_label=account_label,
+            symbol_filter=args.symbol,
+            target_input_path=str(output_path),
+        )
         write_evidence(
             args=args,
             broker=broker,
@@ -671,6 +865,7 @@ def run_operator_smoke_workflow(args: argparse.Namespace) -> int:
                 skipped_steps=skipped_steps,
                 failed_step=str(exc.payload["name"]),
             ),
+            operator_outcome=operator_outcome,
         )
         print(str(exc), file=sys.stderr)
         return 1

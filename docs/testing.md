@@ -105,6 +105,14 @@ PYTHONPATH=src python project_tools/smoke_operator_harness.py --broker longport-
 - 保守的 `next_step_hint`
 - `skipped_steps`，说明哪些步骤没有继续执行，以及为什么被跳过
 
+如果 workflow 本身跑完了，但当前 tracked outcome 是本地 `BLOCKED` 或其他需要 operator 继续判断的状态，evidence 还会额外保留：
+
+- `operator_outcome_status`
+- `operator_outcome_source`
+- `operator_outcome_message`
+- `operator_outcome_category`
+- `operator_next_step_hint`
+
 默认 workflow 会串起这些步骤：
 
 1. `config`

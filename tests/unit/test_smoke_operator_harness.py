@@ -9,7 +9,13 @@ from types import SimpleNamespace
 import pytest
 
 from quant_execution_engine.broker.base import BrokerAdapter, BrokerOrderRecord, ResolvedBrokerAccount
-from quant_execution_engine.execution import ExecutionState, ExecutionStateStore
+from quant_execution_engine.execution import (
+    ChildOrder,
+    ExecutionState,
+    ExecutionStateStore,
+    OrderIntent,
+    ParentOrder,
+)
 from quant_execution_engine.models import AccountSnapshot, Position
 
 
@@ -104,6 +110,124 @@ def test_latest_tracked_order_ref_prefers_latest_matching_symbol(tmp_path: Path)
     )
 
     assert order_ref == "aapl-new"
+
+
+def test_latest_tracked_order_ref_uses_current_target_input_path_over_stale_symbol_match(
+    tmp_path: Path,
+) -> None:
+    module = load_smoke_operator_module()
+    store = ExecutionStateStore(root_dir=tmp_path)
+    target_input_path = str(tmp_path / "smoke-operator.json")
+    state = ExecutionState(broker_name="longport-paper", account_label="main")
+    state.intents = [
+        OrderIntent(
+            intent_id="old-intent",
+            symbol="AAPL.US",
+            side="BUY",
+            quantity=1.0,
+            order_type="MARKET",
+            broker_name="longport-paper",
+            account_label="main",
+            target_input_path="outputs/targets/old-smoke.json",
+        ),
+        OrderIntent(
+            intent_id="current-intent",
+            symbol="AAPL.US",
+            side="BUY",
+            quantity=1.0,
+            order_type="MARKET",
+            broker_name="longport-paper",
+            account_label="main",
+            target_input_path=target_input_path,
+        ),
+    ]
+    state.parent_orders = [
+        ParentOrder(
+            parent_order_id="parent-old",
+            intent_id="old-intent",
+            symbol="AAPL.US",
+            side="BUY",
+            requested_quantity=1.0,
+            remaining_quantity=1.0,
+            status="CANCELED",
+            updated_at="2026-04-14T00:00:00+00:00",
+        ),
+        ParentOrder(
+            parent_order_id="parent-current",
+            intent_id="current-intent",
+            symbol="AAPL.US",
+            side="BUY",
+            requested_quantity=1.0,
+            remaining_quantity=1.0,
+            status="BLOCKED",
+            updated_at="2026-04-14T00:05:00+00:00",
+        ),
+    ]
+    state.child_orders = [
+        ChildOrder(
+            child_order_id="child-old_1",
+            parent_order_id="parent-old",
+            intent_id="old-intent",
+            quantity=1.0,
+            attempt=1,
+            broker_order_id="broker-old",
+            client_order_id="child-old_1",
+            status="CANCELED",
+            updated_at="2026-04-14T00:00:00+00:00",
+        ),
+        ChildOrder(
+            child_order_id="child-current_1",
+            parent_order_id="parent-current",
+            intent_id="current-intent",
+            quantity=1.0,
+            attempt=1,
+            status="BLOCKED",
+            message="QEXEC_KILL_SWITCH=true",
+            updated_at="2026-04-14T00:05:00+00:00",
+        ),
+    ]
+    state.broker_orders = [
+        BrokerOrderRecord(
+            broker_order_id="broker-old",
+            symbol="AAPL.US",
+            side="BUY",
+            quantity=1,
+            status="CANCELED",
+            broker_name="longport-paper",
+            account_label="main",
+            client_order_id="child-old_1",
+            updated_at="2026-04-14T00:00:00+00:00",
+        )
+    ]
+    store.save(state)
+
+    order_ref = module.latest_tracked_order_ref(
+        broker_name="longport-paper",
+        account_label="main",
+        symbol_filter="AAPL",
+        target_input_path=target_input_path,
+        state_store=store,
+    )
+    outcome = module.latest_operator_outcome(
+        broker_name="longport-paper",
+        account_label="main",
+        symbol_filter="AAPL",
+        target_input_path=target_input_path,
+        state_store=store,
+    )
+
+    assert order_ref is None
+    assert outcome == {
+        "status": "BLOCKED",
+        "source": "local",
+        "message": "QEXEC_KILL_SWITCH=true",
+        "category": "RISK_BLOCKED",
+        "next_step_hint": "Adjust size, price, spread/impact thresholds, or clear the kill switch before retrying.",
+        "parent_order_id": "parent-current",
+        "child_order_id": "child-current_1",
+        "broker_order_id": None,
+        "client_order_id": None,
+    }
 
 
 def test_run_operator_smoke_workflow_executes_fixed_sequence(
@@ -462,6 +586,10 @@ def test_run_operator_smoke_workflow_writes_evidence_json(
     assert evidence["next_step_hint"] is None
     assert evidence["latest_tracked_order_ref"] is None
     assert evidence["skipped_steps"] == []
+    assert evidence["operator_outcome_status"] is None
+    assert evidence["operator_outcome_source"] is None
+    assert evidence["operator_outcome_category"] is None
+    assert evidence["operator_next_step_hint"] is None
     assert evidence["targets_output"] == str(output_path)
     assert [step["name"] for step in evidence["steps"]] == ["config", "account", "quote", "rebalance"]
 
@@ -697,6 +825,174 @@ def test_run_operator_smoke_workflow_skips_order_step_when_no_tracked_order_exis
         {
             "name": "order",
             "reason": "no tracked order reference available after rebalance",
+        }
+    ]
+    assert [step["name"] for step in evidence["steps"]] == [
+        "config",
+        "account",
+        "quote",
+        "rebalance",
+        "orders",
+        "reconcile",
+        "exceptions",
+    ]
+
+
+def test_run_operator_smoke_workflow_writes_blocked_operator_outcome_evidence(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = load_smoke_operator_module()
+    real_store_cls = ExecutionStateStore
+    store = real_store_cls(root_dir=tmp_path)
+    output_path = tmp_path / "smoke-operator.json"
+    target_input_path = str(output_path)
+    state = ExecutionState(broker_name="longport-paper", account_label="main")
+    state.intents = [
+        OrderIntent(
+            intent_id="old-intent",
+            symbol="AAPL.US",
+            side="BUY",
+            quantity=1.0,
+            order_type="MARKET",
+            broker_name="longport-paper",
+            account_label="main",
+            target_input_path="outputs/targets/old-smoke.json",
+        ),
+        OrderIntent(
+            intent_id="current-intent",
+            symbol="AAPL.US",
+            side="BUY",
+            quantity=1.0,
+            order_type="MARKET",
+            broker_name="longport-paper",
+            account_label="main",
+            target_input_path=target_input_path,
+        ),
+    ]
+    state.parent_orders = [
+        ParentOrder(
+            parent_order_id="parent-old",
+            intent_id="old-intent",
+            symbol="AAPL.US",
+            side="BUY",
+            requested_quantity=1.0,
+            remaining_quantity=1.0,
+            status="CANCELED",
+            updated_at="2026-04-14T00:00:00+00:00",
+        ),
+        ParentOrder(
+            parent_order_id="parent-current",
+            intent_id="current-intent",
+            symbol="AAPL.US",
+            side="BUY",
+            requested_quantity=1.0,
+            remaining_quantity=1.0,
+            status="BLOCKED",
+            updated_at="2026-04-14T00:05:00+00:00",
+        ),
+    ]
+    state.child_orders = [
+        ChildOrder(
+            child_order_id="child-old_1",
+            parent_order_id="parent-old",
+            intent_id="old-intent",
+            quantity=1.0,
+            attempt=1,
+            broker_order_id="broker-old",
+            client_order_id="child-old_1",
+            status="CANCELED",
+            updated_at="2026-04-14T00:00:00+00:00",
+        ),
+        ChildOrder(
+            child_order_id="child-current_1",
+            parent_order_id="parent-current",
+            intent_id="current-intent",
+            quantity=1.0,
+            attempt=1,
+            status="BLOCKED",
+            message="QEXEC_KILL_SWITCH=true",
+            updated_at="2026-04-14T00:05:00+00:00",
+        ),
+    ]
+    state.broker_orders = [
+        BrokerOrderRecord(
+            broker_order_id="broker-old",
+            symbol="AAPL.US",
+            side="BUY",
+            quantity=1,
+            status="CANCELED",
+            broker_name="longport-paper",
+            account_label="main",
+            client_order_id="child-old_1",
+            updated_at="2026-04-14T00:00:00+00:00",
+        )
+    ]
+    store.save(state)
+
+    def store_factory(*args, **kwargs):
+        return real_store_cls(root_dir=tmp_path)
+
+    def ok(name: str):
+        def _inner(*args, **kwargs):
+            return SimpleNamespace(exit_code=0, stdout=f"{name} ok", stderr=None)
+
+        return _inner
+
+    def fake_subprocess_run(argv, **kwargs):
+        step_name = list(argv)[3]
+        return SimpleNamespace(returncode=0, stdout=f"{step_name} ok\n", stderr="")
+
+    monkeypatch.setattr(module, "ExecutionStateStore", store_factory)
+    monkeypatch.setattr(module, "run_config", ok("config"))
+    monkeypatch.setattr(module, "run_account", ok("account"))
+    monkeypatch.setattr(module, "run_quote", ok("quote"))
+    monkeypatch.setattr(module.subprocess, "run", fake_subprocess_run)
+    monkeypatch.setattr(module, "get_broker_adapter", lambda broker_name=None: DummyLongPortPaperAdapter())
+    monkeypatch.setattr(
+        module,
+        "get_account_snapshot",
+        lambda **kwargs: AccountSnapshot(
+            env="paper",
+            cash_usd=1000.0,
+            positions=[],
+        ),
+    )
+
+    evidence_path = tmp_path / "smoke-blocked-evidence.json"
+    args = argparse.Namespace(
+        broker="longport-paper",
+        account="main",
+        symbol="AAPL",
+        market="US",
+        output=str(output_path),
+        execute=True,
+        preflight_only=False,
+        cleanup_open_orders=False,
+        allow_non_paper=False,
+        evidence_output=str(evidence_path),
+    )
+
+    result = module.run_operator_smoke_workflow(args)
+    evidence = json.loads(evidence_path.read_text(encoding="utf-8"))
+
+    assert result == 0
+    assert evidence["success"] is True
+    assert evidence["failed_step"] is None
+    assert evidence["latest_tracked_order_ref"] is None
+    assert evidence["operator_outcome_status"] == "BLOCKED"
+    assert evidence["operator_outcome_source"] == "local"
+    assert evidence["operator_outcome_message"] == "QEXEC_KILL_SWITCH=true"
+    assert evidence["operator_outcome_category"] == "RISK_BLOCKED"
+    assert "clear the kill switch" in evidence["operator_next_step_hint"]
+    assert evidence["operator_outcome_parent_order_id"] == "parent-current"
+    assert evidence["operator_outcome_child_order_id"] == "child-current_1"
+    assert evidence["operator_outcome_broker_order_id"] is None
+    assert evidence["operator_outcome_client_order_id"] is None
+    assert evidence["skipped_steps"] == [
+        {
+            "name": "order",
+            "reason": "latest tracked outcome is BLOCKED and has no broker order reference",
         }
     ]
     assert [step["name"] for step in evidence["steps"]] == [
