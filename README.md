@@ -12,6 +12,7 @@
 - 基于 `targets.json` 生成调仓计划和差异预览
 - 通过券商适配层执行 `submit / query / cancel / reconcile`
 - 查看本地已跟踪订单、异常队列和单笔订单生命周期详情
+- 对已跟踪订单执行 `cancel` / `cancel-all` / `retry` / `reprice` / `retry-stale`
 - 对部分成交执行 `cancel-rest` / `resume-remaining` / `accept-partial`
 - 运行正式的 `preflight` 预检查
 - 维护本地状态：`state-doctor` / `state-prune` / `state-repair`
@@ -21,12 +22,12 @@
 
 ## 当前成熟度与证据边界
 
-- 当前已经打通券商侧 `submit / query / cancel / reconcile` 实际路径的，是 LongPort 实盘、`longport-paper` 和 `alpaca-paper`。
+按代码路径看，LongPort 实盘、`longport-paper`、`alpaca-paper` 和 `ibkr-paper` 都已经接入 broker-backed submit/query/cancel/reconcile 语义，但它们的证据成熟度不同：
+
 - `longport-paper` 依赖 `LONGPORT_ACCESS_TOKEN_TEST`；目前已经通过人工监督的模拟盘冒烟测试，跑通 `submit / query / reconcile / cancel` 最小闭环。
-- LongPort 实盘账户已经通过人工监督只读方式验证 `config / preflight / account / quote`，并确认实盘保护和用户私有配置路由生效。
-- LongPort 的 `rebalance --execute` 当前仍按人工监督路径使用。成熟度判断以最小实盘冒烟、审计日志和可复查证据为准。
+- LongPort 实盘账户已经通过人工监督只读方式验证 `config / preflight / account / quote`，并确认实盘保护和用户私有配置路由生效；`rebalance --execute` 仍按人工监督路径推进，成熟度判断以最小实盘冒烟、审计日志和可复查证据为准。
 - Alpaca 当前按模拟盘验证路径使用，更适合作为便宜、直观、稳定的重复冒烟和回归基线。
-- `ibkr-paper` 当前是本地 IB Gateway over TWS API 依赖型模拟盘后端，支持 `config / preflight / account / quote / rebalance --execute / cancel / reconcile` 的最小代码闭环；截至 2026-04-16，已留下一次 operator-supervised WSL -> Windows Gateway evidence（`outputs/evidence/ibkr-paper-smoke.json`），证明 Gateway/account/reconcile 路径可达，但该次 AAPL 行情因 IBKR competing live session 返回 0，未产生 broker order；提交、成交、撤单证据仍需下一次有有效行情的 paper smoke 补齐。
+- `ibkr-paper` 当前是本地 IB Gateway over TWS API 依赖型模拟盘后端，支持 `config / preflight / account / quote / rebalance --execute / cancel / reconcile` 的最小代码闭环；截至 2026-04-16，已有一次本地 operator-supervised WSL -> Windows Gateway evidence（`outputs/evidence/ibkr-paper-smoke.json`），证明 Gateway/account/reconcile 路径可达，但该次 AAPL 行情因 IBKR competing live session 返回 0，未产生 broker order；提交、成交、撤单证据仍需下一次有有效行情的 paper smoke 补齐。
 - `orders` / `exceptions` / `order` 展示的是本地执行状态中已跟踪的订单。券商全量订单视图不在当前范围内。
 - `--account` 当前只做显式标签解析和快速失败校验；LongPort 模拟盘、LongPort 实盘、Alpaca 模拟盘和 `ibkr-paper` 仍按单账户语义运行。
 
@@ -177,6 +178,7 @@ uv run pytest -m integration
 - `e2e` 证明 CLI / 工装子进程的冒烟行为和输出边界。
 - `integration` 证明跨模块生命周期行为，并在提供凭证或本地 runtime 时尝试 LongPort / IBKR 的 broker-backed 验证。
 - 这些测试仍不能单独证明 LongPort 实盘交易能力已经被自动化完整跑实。
+- `ibkr-paper` 的有效 broker order 证据仍依赖本地 Gateway 和有效行情下的 opt-in paper smoke。
 
 ## 冒烟测试工装
 

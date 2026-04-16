@@ -9,6 +9,8 @@ dotenv_if_exists .env.local
 #   --group dev --extra cli
 # Optional local override examples:
 #   UV_SYNC_ARGS="--group dev --extra cli --extra alpaca"
+#   UV_SYNC_ARGS="--group dev --extra cli --extra longport"
+#   UV_SYNC_ARGS="--group dev --extra cli --extra ibkr"
 #   NO_DEV=1
 
 # Re-run this script when dependency manifests change
@@ -43,15 +45,26 @@ if has_cmd uv; then
   # Default to the repo's standard dev environment; override locally via UV_SYNC_ARGS.
   UV_SYNC_ARGS="${UV_SYNC_ARGS:---group dev --extra cli}"
   [ -n "$NO_DEV" ] && UV_SYNC_ARGS="${UV_SYNC_ARGS/--group dev/}"
-  case " $UV_SYNC_ARGS " in
-    *" --extra alpaca "*)
-      ;;
-    *)
-      if [ -n "${ALPACA_API_KEY:-}" ] || [ -n "${APCA_API_KEY_ID:-}" ] || [ -n "${ALPACA_SECRET_KEY:-}" ] || [ -n "${APCA_API_SECRET_KEY:-}" ]; then
-        UV_SYNC_ARGS="$UV_SYNC_ARGS --extra alpaca"
-      fi
-      ;;
-  esac
+
+  add_uv_extra_if_missing() {
+    case " $UV_SYNC_ARGS " in
+      *" --extra $1 "*)
+        ;;
+      *)
+        UV_SYNC_ARGS="$UV_SYNC_ARGS --extra $1"
+        ;;
+    esac
+  }
+
+  if [ -n "${ALPACA_API_KEY:-}" ] || [ -n "${APCA_API_KEY_ID:-}" ] || [ -n "${ALPACA_SECRET_KEY:-}" ] || [ -n "${APCA_API_SECRET_KEY:-}" ]; then
+    add_uv_extra_if_missing alpaca
+  fi
+  if [ -n "${LONGPORT_APP_KEY:-}" ] || [ -n "${LONGPORT_APP_SECRET:-}" ] || [ -n "${LONGPORT_ACCESS_TOKEN_TEST:-}" ] || [ -n "${LONGPORT_ACCESS_TOKEN:-}" ] || [ -n "${LONGBRIDGE_APP_KEY:-}" ] || [ -n "${LONGBRIDGE_APP_SECRET:-}" ] || [ -n "${LONGBRIDGE_ACCESS_TOKEN:-}" ]; then
+    add_uv_extra_if_missing longport
+  fi
+  if [ -n "${IBKR_HOST:-}" ] || [ -n "${IBKR_PORT:-}" ] || [ -n "${IBKR_PORT_PAPER:-}" ] || [ -n "${IBKR_CLIENT_ID:-}" ] || [ -n "${IBKR_ACCOUNT_ID:-}" ]; then
+    add_uv_extra_if_missing ibkr
+  fi
 
   # Prefer using uv if available
   if ensure_venv_uv; then

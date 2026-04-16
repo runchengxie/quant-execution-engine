@@ -21,7 +21,7 @@
 - 低频或半自动执行场景
 - 以 `targets.json` 驱动券商侧调仓 / 提交 / 对账
 - 人工可介入的运维链路
-- 先把 LongPort 实盘、`longport-paper` 和 Alpaca 模拟盘跑稳，再考虑更广的券商支持
+- 已覆盖 LongPort 实盘、`longport-paper`、Alpaca 模拟盘和 `ibkr-paper`；不同券商成熟度和证据链可以不一致
 
 如果未来目标变成“研究 + 回测 + 实盘”一体化平台，或者跨券商多账户统一中台，这份清单就不再适用。
 
@@ -94,6 +94,8 @@
   当前通过 `LONGPORT_ACCESS_TOKEN_TEST` 走券商侧模拟盘 `submit/query/cancel/reconcile` 路径，并已经有人工监督的模拟盘冒烟证据链。
 - `[~]` LongPort 实盘 `submit/query/cancel/reconcile` 的端到端证据仍不够扎实  
   截至 2026-04-15，`config / preflight / account / quote` 已人工验证通过；下一步仍是补最小实盘 `rebalance --execute` 证据。
+- `[~]` `ibkr-paper` 后端已落地，但 broker order 证据链仍待补齐
+  当前按本地 `IB Gateway + TWS API` 路线运行，支持 US equities 最小切片和 `config / preflight / account / quote / rebalance --execute / cancel / reconcile` 代码闭环；截至 2026-04-16 已有一次 no-order evidence，证明 Gateway/account/reconcile 路径可达，但有效行情下的 submit/query/cancel/fill 证据仍需要下一次 paper smoke 补齐。
 - `[~]` 失败场景回归还应继续扩  
   当前已经补了实盘行情跳过逻辑、操作员工装拒绝路径 / 证据输出，以及部分成交恢复测试，但还缺更多真实失败场景。
 - `[~]` 券商特定拒单分类仍可继续细化  
@@ -102,7 +104,7 @@
 ### 6. 有骨架，但还没到“完成”的项目
 
 - `[~]` 多券商支持  
-  当前 LongPort 和 Alpaca 模拟盘已有基础；未来可以加 IBKR，但不要求三家同成熟度。
+  当前 LongPort 实盘、`longport-paper`、Alpaca 模拟盘和 `ibkr-paper` 都已有基础；不要求各家券商同成熟度毕业。
 - `[~]` 子订单尝试管理  
   当前已经有 `retry`、`reprice`、`resume-remaining`；完整调度器仍未展开。
 - `[~]` 本地状态恢复  
@@ -110,7 +112,7 @@
 
 ## 暂缓项
 
-- `[-]` IBKR 适配器最小垂直切片
+- `[-]` IBKR 实盘路径和更广资产 / 订单类型覆盖
 - `[-]` SQLite 状态存储
 - `[-]` 券商事件流
 - `[-]` 更细的指标 / 告警
@@ -130,10 +132,10 @@
 
 1. 继续补 LongPort 实盘 `submit/query/cancel/reconcile` 证据链  
    当前只读验证已完成，下一步是最小实盘冒烟和证据留档。
-2. 扩失败场景回归，优先覆盖拒单、迟到成交、`pending cancel`、行情 / 区域 / 网络异常
-3. 视实际需要补券商特定拒单分类
-4. 继续把 Alpaca 模拟盘定位为稳定的回归 / 冒烟基线
-5. 之后再考虑 IBKR 最小切片
+2. 补 `ibkr-paper` 有效行情下的 submit/query/cancel/fill paper smoke 证据
+3. 扩失败场景回归，优先覆盖拒单、迟到成交、`pending cancel`、行情 / 区域 / 网络异常
+4. 视实际需要补券商特定拒单分类
+5. 继续把 Alpaca 模拟盘定位为稳定的回归 / 冒烟基线
 
 ## 维护原则
 

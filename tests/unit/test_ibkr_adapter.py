@@ -17,6 +17,7 @@ from quant_execution_engine.broker.base import (
 )
 from quant_execution_engine.broker.ibkr import IbkrPaperBrokerAdapter
 from quant_execution_engine.broker.ibkr_runtime import (
+    IbkrRuntime,
     IbkrRuntimeConfig,
     resolve_ibkr_runtime_config,
 )
@@ -257,6 +258,68 @@ def test_ibkr_get_quotes_normalizes_market_data() -> None:
     quotes = adapter.get_quotes(["AAPL"], include_depth=True)
 
     assert set(quotes) == {"AAPL.US"}
+    assert quotes["AAPL.US"].price == 185.25
+    assert quotes["AAPL.US"].bid == 185.2
+    assert quotes["AAPL.US"].ask == 185.3
+
+
+def test_ibkr_runtime_falls_back_to_delayed_market_data(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class FakeStock:
+        def __init__(self, symbol: str, exchange: str, currency: str) -> None:
+            self.symbol = symbol
+            self.exchange = exchange
+            self.currency = currency
+            self.secType = "STK"
+
+    class FakeIb:
+        def __init__(self) -> None:
+            self.current_market_data_type = 1
+            self.requested_market_data_types: list[int] = []
+            self.ticker_requests = 0
+
+        def qualifyContracts(self, contract):
+            return [contract]
+
+        def reqMarketDataType(self, market_data_type: int) -> None:
+            self.current_market_data_type = market_data_type
+            self.requested_market_data_types.append(market_data_type)
+
+        def reqTickers(self, *contracts):
+            self.ticker_requests += 1
+            if self.current_market_data_type == 3:
+                return [
+                    SimpleNamespace(
+                        marketPrice=lambda: 185.25,
+                        bid=185.2,
+                        ask=185.3,
+                        volume=1000000,
+                        time=datetime(2026, 4, 16, 0, 0, tzinfo=timezone.utc),
+                    )
+                ]
+            return [
+                SimpleNamespace(
+                    marketPrice=lambda: float("nan"),
+                    bid=float("nan"),
+                    ask=float("nan"),
+                    last=float("nan"),
+                    close=float("nan"),
+                )
+            ]
+
+    monkeypatch.setattr(
+        ibkr_runtime_mod,
+        "_ibkr_import",
+        lambda path: FakeStock if path == "ib_insync.Stock" else None,
+    )
+    fake_ib = FakeIb()
+    adapter = IbkrPaperBrokerAdapter(client=IbkrRuntime(ib_client=fake_ib))
+
+    quotes = adapter.get_quotes(["AAPL"], include_depth=True)
+
+    assert fake_ib.requested_market_data_types == [3]
+    assert fake_ib.ticker_requests == 2
     assert quotes["AAPL.US"].price == 185.25
     assert quotes["AAPL.US"].bid == 185.2
     assert quotes["AAPL.US"].ask == 185.3

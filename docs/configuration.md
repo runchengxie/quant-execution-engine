@@ -111,6 +111,26 @@
 - 全量 broker 依赖：`uv sync --group dev --extra cli --extra full`
 - 当前 CLI 不再假设默认 broker；请在本地 YAML 里显式设置 `broker.backend`，或每次传 `--broker`
 
+### `.envrc.example`
+
+仓库里的 `.envrc.example` 仍然默认使用：
+
+```bash
+uv sync --group dev --extra cli
+```
+
+如果 `.env` / `.env.local` 或当前 shell 里已经有对应 broker 的环境变量，它会自动追加相关可选依赖：
+
+- Alpaca 变量命中时追加 `--extra alpaca`
+- LongPort / LongBridge 变量命中时追加 `--extra longport`
+- IBKR 变量命中时追加 `--extra ibkr`
+
+也可以通过 `UV_SYNC_ARGS` 显式覆盖，例如：
+
+```bash
+UV_SYNC_ARGS="--group dev --extra cli --extra longport --extra ibkr"
+```
+
 ## 本地 YAML
 
 复制模板：

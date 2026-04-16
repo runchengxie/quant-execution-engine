@@ -49,6 +49,17 @@ uv run pytest -m integration
 uv run pytest --cov=src/quant_execution_engine --cov-report=term-missing -m 'not integration and not e2e and not slow'
 ```
 
+## Broker 测试 / 证据矩阵
+
+| broker | 默认自动化覆盖 | 显式 opt-in 覆盖 | operator smoke | 当前证据缺口 |
+| --- | --- | --- | --- | --- |
+| `alpaca-paper` | 单测覆盖适配器归一化、CLI 路由和执行生命周期；默认不真实联网 | 无默认真实联网集成；需要模拟盘凭证时按场景手工跑 | 可作为便宜、稳定的模拟盘回归 / 冒烟基线 | 不覆盖实盘路径 |
+| `longport-paper` | 单测覆盖凭证解析、LongPort paper runtime 优先级、CLI 和操作员工装契约 | 提供 `LONGPORT_ACCESS_TOKEN_TEST` 后可跑模拟盘 `preflight / rebalance` 路径 | 已有人工监督模拟盘证据，跑通 `submit / query / reconcile / cancel` | 仍应继续补真实失败场景证据 |
+| `longport` | 单测覆盖实盘保护、仓库本地密钥拒绝和配置来源 | LongPort 实盘行情相关 integration 依赖 `LONGPORT_APP_KEY` / `LONGPORT_APP_SECRET` / `LONGPORT_ACCESS_TOKEN`，异常时会跳过 | 需要 `--allow-non-paper`，按 [longport-real-smoke.md](longport-real-smoke.md) 人工监督执行 | 完整实盘 `submit / query / cancel / reconcile` 仍未被自动化端到端跑实 |
+| `ibkr-paper` | 单测覆盖 backend 注册、runtime 配置、US equities 校验、order/fill 归一化和 smoke harness 环境快照 | `IBKR_ENABLE_INTEGRATION=1` 跑只读；`IBKR_ENABLE_MUTATION_TESTS=1` 跑提交/撤单；`IBKR_ENABLE_FILL_TESTS=1` 跑 fill | 已有一次本地 no-order evidence；路径见 [ibkr-paper-smoke.md](ibkr-paper-smoke.md) | 有效行情下的 broker order / cancel / fill evidence 仍待补齐 |
+
+`outputs/` 默认被 git 忽略；上表里的 evidence 指的是本地可复查证据，不是随仓库版本化提交的固定测试夹具。
+
 ## 当前测试证明了什么
 
 - 默认 `pytest` 能证明快速行为测试通过。

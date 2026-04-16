@@ -142,6 +142,12 @@
 - `longport-paper` 的操作员失败场景冒烟，优先通过单独操作手册重复
 - LongPort 实盘通过单独的人工监督冒烟操作手册补实盘证据，实盘密钥保留在仓库外部私有环境
 
+对于 IBKR：
+
+- `ibkr-paper` 当前是本地 IB Gateway over TWS API 依赖型模拟盘后端
+- 它已经接入最小执行代码闭环，但已有证据仍是 no-order evidence
+- 下一步证据重点是有效行情下的 paper submit / query / cancel / fill
+
 ## 9. 为什么模拟盘 / 实盘配置隔离也是底座设计
 
 LongPort 的模拟盘和实盘成熟度不同，当前分别使用不同的默认配置入口。

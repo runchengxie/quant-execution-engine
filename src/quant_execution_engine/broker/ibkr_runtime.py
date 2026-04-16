@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib
+import math
 import os
 import time
 from dataclasses import dataclass
@@ -100,6 +101,25 @@ def probe_ibkr_runtime_config() -> IbkrRuntimeConfig:
     """Return effective runtime configuration for operator-facing commands."""
 
     return resolve_ibkr_runtime_config()
+
+
+def _ticker_has_valid_price(ticker: Any) -> bool:
+    market_price = getattr(ticker, "marketPrice", None)
+    if callable(market_price):
+        try:
+            price = float(market_price())
+            if math.isfinite(price) and price > 0:
+                return True
+        except Exception:
+            pass
+    for attr in ("last", "close", "bid", "ask"):
+        try:
+            price = float(getattr(ticker, attr, 0) or 0)
+        except Exception:
+            continue
+        if math.isfinite(price) and price > 0:
+            return True
+    return False
 
 
 class IbkrRuntime:
@@ -264,7 +284,19 @@ class IbkrRuntime:
         if not resolved:
             return {}
         contracts = [contract for _, contract in resolved]
-        tickers = list(self._get_ib().reqTickers(*contracts) or [])
+        ib = self._get_ib()
+        tickers = list(ib.reqTickers(*contracts) or [])
+        if len(tickers) < len(contracts) or any(
+            not _ticker_has_valid_price(ticker) for ticker in tickers
+        ):
+            market_data_type = getattr(ib, "reqMarketDataType", None)
+            if callable(market_data_type):
+                market_data_type(3)
+                delayed_tickers = list(ib.reqTickers(*contracts) or [])
+                if any(
+                    _ticker_has_valid_price(ticker) for ticker in delayed_tickers
+                ):
+                    tickers = delayed_tickers
         results: dict[str, Any] = {}
         for (canonical, _contract), ticker in zip(resolved, tickers):
             results[canonical] = ticker

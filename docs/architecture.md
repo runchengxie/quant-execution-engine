@@ -55,6 +55,7 @@ src/quant_execution_engine/
     _stubs.py
     longport_adapter.py
     longport_credentials.py
+    longport_support.py
     longport.py
   renderers/
     __init__.py
@@ -62,6 +63,7 @@ src/quant_execution_engine/
     jsonout.py
     table.py
 project_tools/
+  export_repo_source.py
   smoke_signal_harness.py
   smoke_target_harness.py
   smoke_operator_harness.py
@@ -77,6 +79,8 @@ project_tools/
   分别负责 LongPort SDK 封装、LongPort 实盘/模拟盘适配器、Alpaca 模拟盘适配器，以及 IBKR paper runtime 和适配器实现。
 - `broker/longport_credentials.py`
   负责 LongPort 实盘/模拟盘的凭证解析、配置隔离和占位值规避。
+- `broker/longport_support.py`
+  放置 LongPort 运行期支持函数，避免把 SDK 适配细节继续塞进 CLI。
 - `account.py`
   负责通过适配器获取账户快照与行情查询。
 - `rebalance.py`
@@ -100,7 +104,7 @@ project_tools/
 - `renderers/`
   负责表格、JSON、差异视图和操作员摘要输出。
 - `project_tools/`
-  放置信号驱动、目标持仓驱动和操作员冒烟工装，作为验证工装，与策略层保持分离。
+  放置信号驱动、目标持仓驱动、操作员冒烟工装和仓库导出辅助脚本，作为验证 / 辅助工装，与策略层保持分离。
 
 ## 设计取向
 

@@ -13,7 +13,7 @@
 - 只支持模拟盘，不支持实盘
 - 当前只支持 US equities 最小切片
 - 当前仍按单账户语义运行，`--account` 只接受 `main`
-- 仓库内截至 2026-04-16 已有一次 operator-supervised WSL -> Windows Gateway evidence 样例：`outputs/evidence/ibkr-paper-smoke.json`
+- 当前工作区截至 2026-04-16 已有一次 operator-supervised WSL -> Windows Gateway evidence 样例：`outputs/evidence/ibkr-paper-smoke.json`
 - 该样例证明 Gateway/account/reconcile 路径可达，但 AAPL 行情因 IBKR competing live session 返回 0，未产生 broker order；提交、成交、撤单证据仍需下一次有有效行情的 paper smoke 补齐
 
 ## 2. 运行前提
@@ -160,6 +160,7 @@ PYTHONPATH=src python project_tools/smoke_operator_harness.py \
 - `outputs/evidence/ibkr-paper-smoke.json`，如果你用了 harness
 - 一段人工备注：运行时间、Gateway host/port、账户、symbol、broker order ID、最终状态、是否覆盖了 cancel / fill
 - 如果行情为 0 或 Gateway 阻止写 API，也要在 evidence/operator note 里写明；这类 evidence 可证明 runtime 可达性，但不能替代提交/成交/撤单证据
+- `outputs/` 默认被 git 忽略；这里的 evidence 是本地可复查记录，不是随仓库版本化提交的测试夹具。
 
 ## 9. 成熟度判断
 
