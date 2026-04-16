@@ -98,7 +98,7 @@ project_tools/
 - `renderers/`
   负责表格、JSON、差异视图和操作员摘要输出。
 - `project_tools/`
-  放置信号驱动、目标持仓驱动和操作员冒烟工装，用于验证，不是策略框架。
+  放置信号驱动、目标持仓驱动和操作员冒烟工装，作为验证工装，与策略层保持分离。
 
 ## 设计取向
 
@@ -111,6 +111,6 @@ project_tools/
 
 - `--account` 已支持显式校验参数，但当前 LongPort 实盘、`longport-paper` 和 Alpaca 模拟盘都按单账户模式运行，不支持真实多账户切换。
 - `resume-remaining` 当前只支持整数股剩余量；更复杂的碎股或算法单调度仍不在范围内。
-- 风控门禁里的 spread / participation / impact 依赖券商提供的市场数据；拿不到时会记录 `BYPASS`，而不是伪造指标。
+- 风控门禁里的 spread / participation / impact 依赖券商提供的市场数据；拿不到时会记录 `BYPASS`，不生成伪指标。
 - LongPort 实盘路径已经存在，但自动化端到端证据仍弱于 Alpaca 模拟盘冒烟。
 - `longport-paper` 默认优先读取仓库本地 `.env` / `.env.local`，LongPort 实盘默认优先读取 `~/.config/qexec/longport-live.env`；这是为了同时保住模拟盘冒烟的可重复性和实盘凭证隔离。

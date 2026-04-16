@@ -156,7 +156,7 @@ fx:
 
 - `execution.risk.*` 是当前 CLI 主执行路径的主要本地风控来源。
 - `LONGPORT_TRADING_WINDOW_START/END` 只是会话 API 不可用时的本地降级判断。
-- `LONGPORT_MAX_QTY_PER_ORDER` 和 `LONGPORT_MAX_NOTIONAL_PER_ORDER` 更偏兼容层 / 遗留客户端语义，不应该替代 `execution.risk.*`。
+- `LONGPORT_MAX_QTY_PER_ORDER` 和 `LONGPORT_MAX_NOTIONAL_PER_ORDER` 更偏兼容层 / 遗留客户端语义。当前主执行路径仍以 `execution.risk.*` 作为主要风控来源。
 - `execution.kill_switch.env_var` 和可选 `execution.kill_switch.path` 可以手动停掉新的券商提交。
 - `broker.default_account` 是 CLI 没显式传 `--account` 时的默认标签；如果适配器不支持该标签，会直接报错。
 - `execution.state_dir` 控制幂等与恢复状态文件目录，默认是 `outputs/state`。

@@ -206,7 +206,7 @@ qexec reprice 1234567890 --limit-price 9.50
 qexec reprice client-order-id --limit-price 9.40 --broker alpaca-paper
 ```
 
-`reprice` 不是券商原生 replace；它走的是保守的撤单后重提。
+`reprice` 采用保守的撤单后重提方式，不使用券商原生 replace。
 
 ### `retry-stale`
 
@@ -296,4 +296,4 @@ PYTHONPATH=src python project_tools/smoke_operator_harness.py --broker longport-
 
 `smoke_operator_harness.py` 是最接近操作员流程的工装；需要留证时可以加 `--evidence-output`。
 
-如果你想围绕 `longport-paper` 系统化做操作员失败场景冒烟，建议直接按 [longport-paper-failure-smoke.md](longport-paper-failure-smoke.md) 的场景执行，而不是临时拼命令。
+如果你想围绕 `longport-paper` 系统化做操作员失败场景冒烟，建议直接按 [longport-paper-failure-smoke.md](longport-paper-failure-smoke.md) 的场景执行。

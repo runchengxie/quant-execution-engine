@@ -57,15 +57,15 @@ uv run pytest --cov=src/quant_execution_engine --cov-report=term-missing -m 'not
 - `e2e` 当前证明了 CLI / 工装的子进程冒烟行为，包括信号 / 目标持仓工装输出、操作员工装的非模拟盘拒绝路径。
 - `smoke_operator_harness.py` 已有单测覆盖固定流程、`preflight-only` 路径、下游操作员步骤失败，以及证据 JSON 输出。
 - `longport-paper` 已经是正式券商后端；提供 `LONGPORT_ACCESS_TOKEN_TEST` 后，可以走模拟盘 `preflight / rebalance` 路径。
-- `longport-paper` 当前已经通过人工监督的模拟盘冒烟，跑通 `submit / query / reconcile / cancel` 最小闭环；这是一条可复现的模拟盘证据链，但不是默认自动化测试的一部分。
+- `longport-paper` 当前已经通过人工监督的模拟盘冒烟，跑通 `submit / query / reconcile / cancel` 最小闭环；这是一条可复现的模拟盘证据链，默认自动化测试不包含这一段。
 - 截至 2026-04-15，LongPort 实盘已经通过人工监督只读验证跑通 `config / preflight / account / quote`，并确认用户私有实盘配置路由和实盘保护可工作。
-- LongPort 实盘行情相关测试现在会把典型的网络 / 区域 / 凭证异常视为跳过，而不是误报失败。
+- LongPort 实盘行情相关测试现在会把典型的网络 / 区域 / 凭证异常记为跳过。
 
 ## 当前测试还没有证明什么
 
 - 这些测试不能单独证明 LongPort 实盘完整 `submit / query / cancel / reconcile` 已经被自动化端到端跑实。
 - 当前最便宜、最稳定的回归基线仍然是 Alpaca 模拟盘；`longport-paper` 则是已经有券商侧证据链的 LongPort 模拟盘路径。
-- 实盘券商成熟度判断仍要看人工监督冒烟、审计日志和可复查证据，而不是只看默认测试是否全绿。
+- 实盘券商成熟度判断以人工监督冒烟、审计日志和可复查证据为准。
 
 ## 运行前提
 
@@ -135,6 +135,6 @@ PYTHONPATH=src python project_tools/smoke_operator_harness.py --broker longport-
 
 这个工装默认拒绝非模拟盘券商；如果你明确知道自己要这么做，需要额外传 `--allow-non-paper`。
 
-如果你想系统化重复 `longport-paper` 的操作员失败场景冒烟，而不是只跑一次基线顺利路径，先看 [docs/longport-paper-failure-smoke.md](longport-paper-failure-smoke.md)。
+如果你想系统化重复 `longport-paper` 的操作员失败场景冒烟，可先看 [docs/longport-paper-failure-smoke.md](longport-paper-failure-smoke.md)。
 
 如果你准备开始做 LongPort 实盘的最小验证，先看 [docs/longport-real-smoke.md](longport-real-smoke.md)。

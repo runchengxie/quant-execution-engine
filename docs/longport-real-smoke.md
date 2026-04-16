@@ -18,7 +18,7 @@
 
 ## 2. 实盘 token 怎么放
 
-不要把实盘凭证写进仓库根目录这些文件：
+实盘凭证只放在当前 shell 或仓库外部私有文件中。仓库根目录下这些文件不作为实盘凭证存放位置：
 
 - `.env`
 - `.env.local`
@@ -93,14 +93,14 @@ uv run python -m quant_execution_engine account --broker longport
 uv run python -m quant_execution_engine quote AAPL --broker longport
 ```
 
-如果这里没过，不要继续做实盘 `--execute`。
+这里只读检查通过后，再继续实盘 `--execute`。
 
 `config --broker longport` 现在会直接显示：
 
 - App Key / Secret / Access Token 的来源
 - Region / Overnight 的来源
 
-如果你想确认实盘路径是不是确实走了 `~/.config/qexec/longport-live.env`，先看这个输出就够了。
+确认实盘路径是否走了 `~/.config/qexec/longport-live.env`，直接看这段输出即可。
 
 ## 4. 最小 `targets` 文件
 
@@ -186,7 +186,7 @@ uv run python -m quant_execution_engine reconcile --broker longport
 - 这次运行只把 `submit / query / reconcile / fill recovery` 记为已覆盖
 - `cancel` 留到下一次能稳定挂单的场景再补证据
 
-不要为了“证明 `cancel`”而强行把这个仓库推向更复杂的 limit / algo 提交框架。
+`cancel` 证据可以留到下一次更适合挂单的场景补齐。当前范围不扩展到更复杂的 limit / algo 提交框架。
 
 ## 7. 这次冒烟至少要保留什么证据
 
@@ -221,11 +221,11 @@ uv run python -m quant_execution_engine reconcile --broker longport
 Alpaca 模拟盘仍然有价值，但角色应该很明确：
 
 - 它是更稳定、更便宜的回归 / 冒烟基线
-- 它不是这个仓库的产品中心
+- 它在当前仓库里承担回归和冒烟基线角色
 
 也就是说：
 
 - 用 Alpaca 模拟盘练操作员流程、回归工装、验证状态恢复，很合理
-- 但不该因为 Alpaca 更易自动化，就把仓库推向 Alpaca-first 的高级算法交易平台
+- 仓库当前也不扩展到 Alpaca-first 的高级算法交易平台方向
 
 当前最值钱的，仍然是把 LongPort 实盘的最小证据链补齐。

@@ -24,9 +24,9 @@
 - 当前已经打通券商侧 `submit / query / cancel / reconcile` 实际路径的，是 LongPort 实盘、`longport-paper` 和 `alpaca-paper`。
 - `longport-paper` 依赖 `LONGPORT_ACCESS_TOKEN_TEST`；目前已经通过人工监督的模拟盘冒烟测试，跑通 `submit / query / reconcile / cancel` 最小闭环。
 - LongPort 实盘账户已经通过人工监督只读方式验证 `config / preflight / account / quote`，并确认实盘保护和用户私有配置路由生效。
-- LongPort 的 `rebalance --execute` 仍不应被视为“默认已经自动化跑实”的能力；成熟度判断仍应以最小实盘冒烟、审计日志和可复查证据为准。
+- LongPort 的 `rebalance --execute` 当前仍按人工监督路径使用。成熟度判断以最小实盘冒烟、审计日志和可复查证据为准。
 - Alpaca 当前按模拟盘验证路径使用，更适合作为便宜、直观、稳定的重复冒烟和回归基线。
-- `orders` / `exceptions` / `order` 展示的是本地执行状态中已跟踪的订单，不是券商全量订单视图。
+- `orders` / `exceptions` / `order` 展示的是本地执行状态中已跟踪的订单。券商全量订单视图不在当前范围内。
 - `--account` 当前只做显式标签解析和快速失败校验；LongPort 模拟盘、LongPort 实盘和 Alpaca 模拟盘仍按单账户语义运行。
 
 ## 快速开始
@@ -79,7 +79,7 @@ qexec rebalance outputs/targets/2026-04-09.json --broker alpaca-paper --execute
 PYTHONPATH=src python -m quant_execution_engine --help
 ```
 
-`stockq` 仍保留为兼容别名，但文档统一使用 `qexec`。
+`stockq` 仍保留为兼容别名；文档统一使用 `qexec`。
 
 ## 配置
 
@@ -154,7 +154,7 @@ PYTHONPATH=src python project_tools/smoke_operator_harness.py --broker longport-
 
 它们的目标是驱动预演、模拟盘和人工监督验证。
 
-如果你想系统化重复 `longport-paper` 的操作员失败场景冒烟，而不是只跑一次顺利路径，先看 [docs/longport-paper-failure-smoke.md](docs/longport-paper-failure-smoke.md)。
+如果你想系统化重复 `longport-paper` 的操作员失败场景冒烟，可先看 [docs/longport-paper-failure-smoke.md](docs/longport-paper-failure-smoke.md)。
 
 ## 输入与输出
 
