@@ -127,6 +127,48 @@ def test_main_routes_config() -> None:
     mock_run.assert_called_once_with(True, broker=None)
 
 
+def test_main_routes_evidence_maturity() -> None:
+    with patch.object(
+        cli,
+        "run_evidence_maturity",
+        return_value=cli.CommandResult(exit_code=0),
+    ) as mock_run:
+        with patch.object(sys, "argv", ["qexec", "evidence-maturity", "--format", "json"]):
+            result = cli.main()
+
+    assert result == 0
+    mock_run.assert_called_once_with(fmt="json")
+
+
+def test_main_routes_evidence_pack() -> None:
+    with patch.object(
+        cli,
+        "run_evidence_pack",
+        return_value=cli.CommandResult(exit_code=0),
+    ) as mock_run:
+        with patch.object(
+            sys,
+            "argv",
+            [
+                "qexec",
+                "evidence-pack",
+                "run-1",
+                "--output-dir",
+                "outputs/review",
+                "--operator-note",
+                "checked by operator",
+            ],
+        ):
+            result = cli.main()
+
+    assert result == 0
+    mock_run.assert_called_once_with(
+        run_id="run-1",
+        output_dir="outputs/review",
+        operator_notes=["checked by operator"],
+    )
+
+
 def test_run_config_longport_reports_credential_sources(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

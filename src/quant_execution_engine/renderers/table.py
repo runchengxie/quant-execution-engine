@@ -3,8 +3,8 @@
 Provides table format data rendering functionality.
 """
 
-from ..diagnostics import diagnose_order_issue, diagnose_warning_message
 from ..broker.base import BrokerOrderRecord, BrokerReconcileReport
+from ..diagnostics import diagnose_order_issue, diagnose_warning_message
 from ..execution import (
     ExecutionAcceptPartialResult,
     ExecutionBulkCancelResult,
@@ -241,6 +241,13 @@ def render_broker_orders(records: list[BrokerOrderRecord]) -> str:
             f"{record.status[:16]:16s} | "
             f"{client_order_id[:18]}"
         )
+        diagnostic = diagnose_order_issue(record)
+        if record.message:
+            lines.append(f"  -> {record.message}")
+        if diagnostic is not None:
+            lines.append(f"  -> [{diagnostic.code}] {diagnostic.summary}")
+            if diagnostic.action_hint:
+                lines.append(f"  -> Next: {diagnostic.action_hint}")
 
     return "\n".join(lines)
 
@@ -557,7 +564,10 @@ def render_stale_retry_summary(outcome: ExecutionStaleRetryResult) -> str:
         for result in outcome.cancel_results:
             lines.append(f"  * {result.broker_order_id} -> {result.status}")
             for warning in result.warnings:
-                lines.append(f"    warning: {warning}")
+                diagnostic = diagnose_warning_message(warning)
+                lines.append(f"    warning: [{diagnostic.code}] {diagnostic.summary}")
+                if diagnostic.action_hint:
+                    lines.append(f"    next: {diagnostic.action_hint}")
     if outcome.retry_results:
         lines.append("- Retry results:")
         for result in outcome.retry_results:

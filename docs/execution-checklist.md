@@ -48,6 +48,8 @@
 - `[x]` 执行状态输出到 `outputs/state/*.json`
 - `[x]` 券商适配器能力矩阵
 - `[x]` 正式 `qexec preflight`
+- `[x]` `qexec evidence-maturity` 区分代码路径状态和证据成熟度
+- `[x]` `qexec evidence-pack <run-id>` 收拢一次执行的复查证据
 
 ### 2. 订单生命周期与本地状态
 
@@ -87,13 +89,19 @@
 - `[x]` 冒烟操作员工装支持可选证据输出
 - `[x]` LongPort 模拟盘 / 实盘配置隔离与来源可见性  
   `longport-paper` 默认优先仓库本地 `.env`，LongPort 实盘默认优先 `~/.config/qexec/longport-live.env`；`qexec config` 会显示命中来源。
+- `[x]` broker evidence maturity 报告  
+  `qexec evidence-maturity` 会列出 LongPort 实盘、`longport-paper`、Alpaca paper 和 `ibkr-paper` 的代码路径状态、最新 evidence、缺口和下一步 smoke 建议。
+- `[x]` evidence bundle 打包  
+  `qexec evidence-pack <run-id>` 会按审计 `run_id` 收拢 audit JSONL、targets、本地 state、smoke evidence 和 operator note，并写出 manifest。
+- `[x]` 风控降级显式化  
+  `preflight` 会提示已配置但可能因 bid/ask 或 daily volume 缺失而 `BYPASS` 的市场数据风控项；`rebalance` 输出和审计日志会保留 bypass 计数与原因。
 
 ### 5. 当前仍值得继续补的功能
 
 - `[x]` `longport-paper` 后端已落地  
   当前通过 `LONGPORT_ACCESS_TOKEN_TEST` 走券商侧模拟盘 `submit/query/cancel/reconcile` 路径，并已经有人工监督的模拟盘冒烟证据链。
 - `[~]` LongPort 实盘 `submit/query/cancel/reconcile` 的端到端证据仍不够扎实  
-  截至 2026-04-15，`config / preflight / account / quote` 已人工验证通过；下一步仍是补最小实盘 `rebalance --execute` 证据。
+  截至 2026-04-15，`config / preflight / account / quote` 已人工验证通过；下一步仍是补最小实盘 `rebalance --execute` 证据。成熟度以 `qexec evidence-maturity` 和本地 evidence bundle 为准。
 - `[~]` `ibkr-paper` 后端已落地，但 broker order 证据链仍待补齐
   当前按本地 `IB Gateway + TWS API` 路线运行，支持 US equities 最小切片和 `config / preflight / account / quote / rebalance --execute / cancel / reconcile` 代码闭环；截至 2026-04-16 已有一次 no-order evidence，证明 Gateway/account/reconcile 路径可达，但有效行情下的 submit/query/cancel/fill 证据仍需要下一次 paper smoke 补齐。
 - `[~]` 失败场景回归还应继续扩  
@@ -134,8 +142,9 @@
    当前只读验证已完成，下一步是最小实盘冒烟和证据留档。
 2. 补 `ibkr-paper` 有效行情下的 submit/query/cancel/fill paper smoke 证据
 3. 扩失败场景回归，优先覆盖拒单、迟到成交、`pending cancel`、行情 / 区域 / 网络异常
-4. 视实际需要补券商特定拒单分类
-5. 继续把 Alpaca 模拟盘定位为稳定的回归 / 冒烟基线
+4. 对每次关键 smoke 运行执行 `qexec evidence-pack <run-id>`，把审计日志、状态、targets、smoke JSON 和 operator note 收成一份复查包
+5. 视实际需要继续补券商特定拒单分类
+6. 继续把 Alpaca 模拟盘定位为稳定的回归 / 冒烟基线
 
 ## 维护原则
 

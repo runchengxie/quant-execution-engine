@@ -218,6 +218,15 @@ PYTHONPATH=src python project_tools/smoke_operator_harness.py \
 - `latest_tracked_order_ref`
 - `operator_notes`
 
+拿到 `audit_run_id` 后，可以把这次运行的审计、状态、targets、smoke JSON 和 operator note 收成一个本地复查包：
+
+```bash
+qexec evidence-pack <audit-run-id>
+qexec evidence-pack <audit-run-id> --operator-note "terminal output reviewed"
+```
+
+实盘路径是否已经从“代码可达”推进到“证据成熟”，以 `qexec evidence-maturity` 的 LongPort real 行和本地 evidence bundle 为准。
+
 ## 8. 判定标准
 
 这次实盘冒烟至少满足下面这些条件，才算“对实盘券商又前进了一步”：
@@ -227,6 +236,7 @@ PYTHONPATH=src python project_tools/smoke_operator_harness.py \
 - 券商订单能进入已跟踪状态
 - `order` / `reconcile` 至少有一条能查回真实券商状态
 - 终端输出、审计日志和状态文件三者能对上
+- `qexec evidence-pack <audit-run-id>` 能生成 manifest，且关键 artifact 没有缺失
 
 如果还能额外拿到：
 

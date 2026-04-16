@@ -5,6 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from .execution_state import OPEN_BROKER_STATUSES
+
 
 @dataclass(slots=True)
 class BrokerDiagnostic:
@@ -23,7 +25,10 @@ class _MessageDiagnosticTemplate:
     action_hint: str
 
 
-_REJECTION_TEMPLATES: tuple[tuple[tuple[str, ...], _MessageDiagnosticTemplate], ...] = (
+_DiagnosticTemplateMap = tuple[tuple[tuple[str, ...], _MessageDiagnosticTemplate], ...]
+
+
+_REJECTION_TEMPLATES: _DiagnosticTemplateMap = (
     (
         (
             "insufficient funds",
@@ -35,7 +40,10 @@ _REJECTION_TEMPLATES: tuple[tuple[tuple[str, ...], _MessageDiagnosticTemplate], 
         ),
         _MessageDiagnosticTemplate(
             code="BROKER_REJECTED_FUNDS",
-            summary="broker rejected the order because account buying power/cash was insufficient",
+            summary=(
+                "broker rejected the order because account buying power/cash "
+                "was insufficient"
+            ),
             action_hint="Reduce order size, free cash or buying power, then retry.",
         ),
     ),
@@ -52,8 +60,14 @@ _REJECTION_TEMPLATES: tuple[tuple[tuple[str, ...], _MessageDiagnosticTemplate], 
         ),
         _MessageDiagnosticTemplate(
             code="BROKER_REJECTED_SESSION",
-            summary="broker rejected the order because the requested trading session is unavailable",
-            action_hint="Review market session, overnight/extended-hours flags, and time-in-force before retrying.",
+            summary=(
+                "broker rejected the order because the requested trading "
+                "session is unavailable"
+            ),
+            action_hint=(
+                "Review market session, overnight/extended-hours flags, and "
+                "time-in-force before retrying."
+            ),
         ),
     ),
     (
@@ -68,8 +82,14 @@ _REJECTION_TEMPLATES: tuple[tuple[tuple[str, ...], _MessageDiagnosticTemplate], 
         ),
         _MessageDiagnosticTemplate(
             code="BROKER_REJECTED_SYMBOL",
-            summary="broker rejected the order because the symbol or instrument is not tradable",
-            action_hint="Confirm symbol mapping, market suffix, and broker tradability before retrying.",
+            summary=(
+                "broker rejected the order because the symbol or instrument "
+                "is not tradable"
+            ),
+            action_hint=(
+                "Confirm symbol mapping, market suffix, and broker "
+                "tradability before retrying."
+            ),
         ),
     ),
     (
@@ -86,8 +106,14 @@ _REJECTION_TEMPLATES: tuple[tuple[tuple[str, ...], _MessageDiagnosticTemplate], 
         ),
         _MessageDiagnosticTemplate(
             code="BROKER_REJECTED_SIZE_OR_PRICE",
-            summary="broker rejected the order because quantity, lot size, or price rules were violated",
-            action_hint="Adjust quantity/price to the broker's lot-size and price-increment rules, then retry.",
+            summary=(
+                "broker rejected the order because quantity, lot size, or "
+                "price rules were violated"
+            ),
+            action_hint=(
+                "Adjust quantity/price to the broker's lot-size and "
+                "price-increment rules, then retry."
+            ),
         ),
     ),
     (
@@ -103,8 +129,14 @@ _REJECTION_TEMPLATES: tuple[tuple[tuple[str, ...], _MessageDiagnosticTemplate], 
         ),
         _MessageDiagnosticTemplate(
             code="BROKER_REJECTED_PERMISSION",
-            summary="broker rejected the order because the account or region is not permitted to place it",
-            action_hint="Check account permissions, region/session settings, and broker-side restrictions before retrying.",
+            summary=(
+                "broker rejected the order because the account or region is "
+                "not permitted to place it"
+            ),
+            action_hint=(
+                "Check account permissions, region/session settings, and "
+                "broker-side restrictions before retrying."
+            ),
         ),
     ),
     (
@@ -116,13 +148,19 @@ _REJECTION_TEMPLATES: tuple[tuple[tuple[str, ...], _MessageDiagnosticTemplate], 
         ),
         _MessageDiagnosticTemplate(
             code="BROKER_REJECTED_SHORT_LOCATE",
-            summary="broker rejected the order because short inventory or locate requirements were not satisfied",
-            action_hint="Confirm short-selling eligibility or switch to a non-short order before retrying.",
+            summary=(
+                "broker rejected the order because short inventory or locate "
+                "requirements were not satisfied"
+            ),
+            action_hint=(
+                "Confirm short-selling eligibility or switch to a non-short "
+                "order before retrying."
+            ),
         ),
     ),
 )
 
-_GENERIC_WARNING_TEMPLATES: tuple[tuple[tuple[str, ...], _MessageDiagnosticTemplate], ...] = (
+_GENERIC_WARNING_TEMPLATES: _DiagnosticTemplateMap = (
     (
         (
             "timed out",
@@ -139,8 +177,14 @@ _GENERIC_WARNING_TEMPLATES: tuple[tuple[tuple[str, ...], _MessageDiagnosticTempl
         ),
         _MessageDiagnosticTemplate(
             code="BROKER_NETWORK_WARNING",
-            summary="broker/API communication failed because of a network or transient connectivity issue",
-            action_hint="Retry after confirming network reachability and broker/API health.",
+            summary=(
+                "broker/API communication failed because of a network or "
+                "transient connectivity issue"
+            ),
+            action_hint=(
+                "Retry after confirming network reachability and broker/API "
+                "health."
+            ),
         ),
     ),
     (
@@ -168,8 +212,14 @@ _GENERIC_WARNING_TEMPLATES: tuple[tuple[tuple[str, ...], _MessageDiagnosticTempl
         ),
         _MessageDiagnosticTemplate(
             code="BROKER_CONFIGURATION_WARNING",
-            summary="broker/API warning indicates a credential, permission, or regional configuration issue",
-            action_hint="Verify credentials, region, and market-data/account entitlements before retrying.",
+            summary=(
+                "broker/API warning indicates a credential, permission, or "
+                "regional configuration issue"
+            ),
+            action_hint=(
+                "Verify credentials, region, and market-data/account "
+                "entitlements before retrying."
+            ),
         ),
     ),
 )
@@ -185,7 +235,11 @@ def _extract_raw_code(raw: dict[str, Any] | None) -> str | None:
     return None
 
 
-def _message_parts(message: str | None, raw_code: str | None, raw: dict[str, Any] | None) -> list[str]:
+def _message_parts(
+    message: str | None,
+    raw_code: str | None,
+    raw: dict[str, Any] | None,
+) -> list[str]:
     parts: list[str] = []
     for value in (
         message,
@@ -205,7 +259,7 @@ def _message_parts(message: str | None, raw_code: str | None, raw: dict[str, Any
 
 def _diagnostic_from_templates(
     text: str,
-    templates: tuple[tuple[tuple[str, ...], _MessageDiagnosticTemplate], ...],
+    templates: _DiagnosticTemplateMap,
     *,
     severity: str,
     preferred_summary: str | None,
@@ -237,8 +291,9 @@ def diagnose_order_issue(record: Any) -> BrokerDiagnostic | None:
     filled_quantity = float(getattr(record, "filled_quantity", 0.0) or 0.0)
     remaining_quantity = getattr(record, "remaining_quantity", None)
     remaining = None if remaining_quantity is None else float(remaining_quantity)
-    raw_code = _extract_raw_code(raw if isinstance(raw, dict) else None)
-    raw_parts = _message_parts(message, raw_code, raw if isinstance(raw, dict) else None)
+    raw_payload = raw if isinstance(raw, dict) else None
+    raw_code = _extract_raw_code(raw_payload)
+    raw_parts = _message_parts(message, raw_code, raw_payload)
     classification_text = " | ".join(raw_parts)
 
     if status == "BLOCKED":
@@ -246,14 +301,24 @@ def diagnose_order_issue(record: Any) -> BrokerDiagnostic | None:
             severity="ERROR",
             code=raw_code or "RISK_BLOCKED",
             summary=message or "execution risk gate blocked submission",
-            action_hint="Adjust size, price, spread/impact thresholds, or clear the kill switch before retrying.",
+            action_hint=(
+                "Adjust size, price, spread/impact thresholds, or clear the "
+                "kill switch before retrying."
+            ),
         )
     if status == "FAILED":
         return BrokerDiagnostic(
             severity="ERROR",
             code=raw_code or "SUBMIT_FAILED",
-            summary=message or "broker submission failed before an accepted order state was recorded",
-            action_hint="Run reconcile to confirm broker state, then fix the submit error before retrying.",
+            summary=(
+                message
+                or "broker submission failed before an accepted order state "
+                "was recorded"
+            ),
+            action_hint=(
+                "Run reconcile to confirm broker state, then fix the submit "
+                "error before retrying."
+            ),
         )
     if status == "REJECTED":
         rejection = _diagnostic_from_templates(
@@ -268,7 +333,10 @@ def diagnose_order_issue(record: Any) -> BrokerDiagnostic | None:
             severity="ERROR",
             code=raw_code or "BROKER_REJECTED",
             summary=message or "broker rejected the order",
-            action_hint="Inspect broker message/raw payload, correct the order parameters, then retry.",
+            action_hint=(
+                "Inspect broker message/raw payload, correct the order "
+                "parameters, then retry."
+            ),
         )
     if status == "EXPIRED":
         return BrokerDiagnostic(
@@ -282,21 +350,47 @@ def diagnose_order_issue(record: Any) -> BrokerDiagnostic | None:
             severity="WARNING",
             code=raw_code or "CANCEL_PENDING",
             summary=message or "cancel request is pending at the broker",
-            action_hint="Wait for broker acknowledgement or run reconcile before retrying/repricing.",
+            action_hint=(
+                "Wait for broker acknowledgement or run reconcile before "
+                "retrying/repricing."
+            ),
+        )
+    if status in OPEN_BROKER_STATUSES and "stale" in classification_text.lower():
+        return BrokerDiagnostic(
+            severity="WARNING",
+            code=raw_code or "STALE_OPEN_ORDER",
+            summary=message or "tracked open order appears stale",
+            action_hint=(
+                "Run reconcile first; use retry-stale only when the order "
+                "is still open and zero-filled."
+            ),
         )
     if status == "PARTIALLY_FILLED":
         return BrokerDiagnostic(
             severity="WARNING",
             code=raw_code or "PARTIAL_FILL",
-            summary=message or "order is partially filled and still requires operator action",
-            action_hint="Use cancel-rest, resume-remaining, or accept-partial depending on the remaining intent.",
+            summary=(
+                message
+                or "order is partially filled and still requires operator action"
+            ),
+            action_hint=(
+                "Use cancel-rest, resume-remaining, or accept-partial "
+                "depending on the remaining intent."
+            ),
         )
-    if status == "CANCELED" and filled_quantity > 0 and (remaining is None or remaining > 0):
+    if (
+        status == "CANCELED"
+        and filled_quantity > 0
+        and (remaining is None or remaining > 0)
+    ):
         return BrokerDiagnostic(
             severity="WARNING",
             code=raw_code or "PARTIAL_REMAINDER_CANCELED",
             summary=message or "remaining quantity was canceled after a partial fill",
-            action_hint="Use resume-remaining to continue the order, or accept-partial to close it locally.",
+            action_hint=(
+                "Use resume-remaining to continue the order, or "
+                "accept-partial to close it locally."
+            ),
         )
     return None
 
@@ -311,14 +405,20 @@ def diagnose_warning_message(message: str) -> BrokerDiagnostic:
             severity="WARNING",
             code="ORDER_REFRESH_FAILED",
             summary=text,
-            action_hint="Retry reconcile or inspect the broker directly if the order state stays stale.",
+            action_hint=(
+                "Retry reconcile or inspect the broker directly if the order "
+                "state stays stale."
+            ),
         )
     if lowered.startswith("failed to load fills for tracked order"):
         return BrokerDiagnostic(
             severity="WARNING",
             code="FILL_LOOKUP_FAILED",
             summary=text,
-            action_hint="Run reconcile again later; late fills may still be recoverable.",
+            action_hint=(
+                "Run reconcile again later; late fills may still be "
+                "recoverable."
+            ),
         )
     if lowered.startswith("cancel submitted but post-cancel refresh failed"):
         return BrokerDiagnostic(
@@ -332,14 +432,52 @@ def diagnose_warning_message(message: str) -> BrokerDiagnostic:
             severity="INFO",
             code="ALREADY_TERMINAL",
             summary=text,
-            action_hint="No broker mutation is required; inspect tracked order detail if needed.",
+            action_hint=(
+                "No broker mutation is required; inspect tracked order detail "
+                "if needed."
+            ),
         )
     if "skipped stale retry" in lowered:
         return BrokerDiagnostic(
             severity="INFO",
             code="STALE_RETRY_SKIPPED",
             summary=text,
-            action_hint="Inspect the tracked order timestamps/status before retrying manually.",
+            action_hint=(
+                "Inspect the tracked order timestamps/status before retrying "
+                "manually."
+            ),
+        )
+    if "skipped retry because post-cancel status is pending_cancel" in lowered or (
+        "skipped retry because post-cancel status is wait_to_cancel" in lowered
+    ):
+        return BrokerDiagnostic(
+            severity="WARNING",
+            code="CANCEL_PENDING",
+            summary=text,
+            action_hint=(
+                "Run reconcile and wait for broker cancel acknowledgement "
+                "before retrying."
+            ),
+        )
+    if ": cancel failed:" in lowered:
+        return BrokerDiagnostic(
+            severity="WARNING",
+            code="STALE_CANCEL_FAILED",
+            summary=text,
+            action_hint=(
+                "Run reconcile and inspect the broker order before retrying "
+                "or repricing."
+            ),
+        )
+    if ": retry failed:" in lowered:
+        return BrokerDiagnostic(
+            severity="WARNING",
+            code="STALE_RETRY_FAILED",
+            summary=text,
+            action_hint=(
+                "Inspect the new child attempt and broker response before "
+                "submitting again."
+            ),
         )
     heuristic = _diagnostic_from_templates(
         text,

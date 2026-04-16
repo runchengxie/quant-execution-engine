@@ -22,6 +22,7 @@ from .execution import OrderLifecycleService
 from .fees import FeeSchedule, estimate_fees
 from .logging import get_logger, get_run_id
 from .models import AccountSnapshot, Order, Position, RebalanceResult
+from .risk import summarize_risk_decisions
 from .targets import KNOWN_MARKETS, TargetEntry
 
 logger = get_logger(__name__)
@@ -223,7 +224,9 @@ class RebalanceService:
                 logger.error(f"获取报价失败: {e}")
                 raise
 
-        weighted_targets = [target for target in targets if target.target_weight is not None]
+        weighted_targets = [
+            target for target in targets if target.target_weight is not None
+        ]
 
         effective_total = self._compute_effective_total(
             account_snapshot, quotes, target_gross_exposure
@@ -404,6 +407,14 @@ class RebalanceService:
 
         with open(log_file, "w", encoding="utf-8") as f:
             run_id = get_run_id()
+            all_risk_decisions = [
+                decision
+                for order in rebalance_result.orders
+                for decision in (order.risk_decisions or [])
+            ]
+            risk_decision_summary = summarize_risk_decisions(
+                all_risk_decisions
+            ).to_payload()
             summary = {
                 "record_type": "rebalance_summary",
                 "env": self.env,
@@ -416,9 +427,13 @@ class RebalanceService:
                 "target_input_path": rebalance_result.target_input_path,
                 "order_count": len(rebalance_result.orders),
                 "reconcile_warnings": list(rebalance_result.reconcile_warnings or []),
+                "risk_decision_summary": risk_decision_summary,
             }
             f.write(json.dumps(summary, ensure_ascii=False) + "\n")
             for order in rebalance_result.orders:
+                order_risk_decision_summary = summarize_risk_decisions(
+                    list(order.risk_decisions or [])
+                ).to_payload()
                 order_dict = {
                     "record_type": "order",
                     "symbol": order.symbol,
@@ -439,6 +454,7 @@ class RebalanceService:
                     "reconcile_status": order.reconcile_status,
                     "risk_summary": order.risk_summary,
                     "risk_decisions": list(order.risk_decisions or []),
+                    "risk_decision_summary": order_risk_decision_summary,
                     "timestamp": order.timestamp.isoformat()
                     if order.timestamp
                     else None,

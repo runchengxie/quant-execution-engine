@@ -60,6 +60,13 @@ uv run pytest --cov=src/quant_execution_engine --cov-report=term-missing -m 'not
 
 `outputs/` 默认被 git 忽略；上表里的 evidence 指的是本地可复查证据，不是随仓库版本化提交的固定测试夹具。
 
+可以用下面的命令查看代码路径状态和 evidence maturity 是否一致：
+
+```bash
+qexec evidence-maturity
+qexec evidence-maturity --format json
+```
+
 ## 当前测试证明了什么
 
 - 默认 `pytest` 能证明快速行为测试通过。
@@ -67,6 +74,9 @@ uv run pytest --cov=src/quant_execution_engine --cov-report=term-missing -m 'not
 - CLI 单测覆盖了新旧命令的分发和实盘保护行为。
 - `e2e` 当前证明了 CLI / 工装的子进程冒烟行为，包括信号 / 目标持仓工装输出、操作员工装的非模拟盘拒绝路径。
 - `smoke_operator_harness.py` 已有单测覆盖固定流程、`preflight-only` 路径、下游操作员步骤失败，以及证据 JSON 输出。
+- evidence bundle 单测覆盖按 `run_id` 收拢 audit / targets / state / smoke / operator note，缺失可选件，以及 `.env*` 这类敏感文件跳过。
+- 风控降级单测覆盖 disabled-gate `BYPASS` 与 market-data-degraded `BYPASS` 的区分，`preflight` 结构化详情，以及 audit JSONL 中的 bypass 摘要。
+- 恢复建议单测覆盖 `pending cancel`、stale open order、部分成交相关诊断，以及 `order` 详情只给建议、不触发 broker mutation。
 - `longport-paper` 已经是正式券商后端；提供 `LONGPORT_ACCESS_TOKEN_TEST` 后，可以走模拟盘 `preflight / rebalance` 路径。
 - `ibkr-paper` 已经有单测覆盖 backend 注册、config surfacing、market/account 校验、order/fill 归一化，以及 smoke harness 的 IBKR 环境快照路径。
 - `longport-paper` 当前已经通过人工监督的模拟盘冒烟，跑通 `submit / query / reconcile / cancel` 最小闭环；这是一条可复现的模拟盘证据链，默认自动化测试不包含这一段。
@@ -113,6 +123,13 @@ PYTHONPATH=src python project_tools/smoke_operator_harness.py --broker alpaca-pa
 PYTHONPATH=src python project_tools/smoke_operator_harness.py --broker ibkr-paper --execute --evidence-output outputs/evidence/ibkr-paper-smoke.json --operator-note "operator supervised paper smoke"
 PYTHONPATH=src python project_tools/smoke_operator_harness.py --broker longport-paper --execute --cleanup-open-orders --evidence-output outputs/evidence/longport-paper-smoke.json
 PYTHONPATH=src python project_tools/smoke_operator_harness.py --broker longport --allow-non-paper --execute --evidence-output outputs/evidence/longport-real-smoke.json --operator-note "operator supervised" --operator-note "cancel not covered"
+```
+
+如果这次运行写出了审计 `run_id`，可以继续生成本地复查包：
+
+```bash
+qexec evidence-pack <run-id>
+qexec evidence-pack <run-id> --operator-note "reviewed terminal output"
 ```
 
 如果流程中途某一步失败，`--evidence-output` 现在也会保留部分证据，包括：

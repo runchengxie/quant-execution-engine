@@ -10,6 +10,13 @@ from typing import Any
 from .config import load_cfg
 from .models import Order, Quote
 
+MARKET_DATA_BYPASS_REASONS = (
+    "bid/ask unavailable",
+    "daily volume unavailable",
+    "insufficient market data",
+    "market data unavailable",
+)
+
 
 @dataclass(slots=True)
 class RiskDecision:
@@ -27,6 +34,122 @@ class RiskDecision:
             "reason": self.reason,
             "metrics": dict(self.metrics),
         }
+
+
+@dataclass(slots=True)
+class RiskDecisionSummary:
+    """Grouped risk decision counts for operator and audit output."""
+
+    pass_count: int = 0
+    block_count: int = 0
+    bypass_count: int = 0
+    disabled_bypass_count: int = 0
+    market_data_bypass_count: int = 0
+    other_bypass_count: int = 0
+    bypass_reasons: list[dict[str, Any]] = field(default_factory=list)
+    block_reasons: list[dict[str, Any]] = field(default_factory=list)
+
+    def to_payload(self) -> dict[str, Any]:
+        return {
+            "pass_count": self.pass_count,
+            "block_count": self.block_count,
+            "bypass_count": self.bypass_count,
+            "disabled_bypass_count": self.disabled_bypass_count,
+            "market_data_bypass_count": self.market_data_bypass_count,
+            "other_bypass_count": self.other_bypass_count,
+            "bypass_reasons": list(self.bypass_reasons),
+            "block_reasons": list(self.block_reasons),
+        }
+
+
+RiskDecisionLike = RiskDecision | dict[str, Any]
+
+
+def _decision_value(decision: RiskDecisionLike, key: str) -> Any:
+    if isinstance(decision, RiskDecision):
+        return getattr(decision, key)
+    return decision.get(key)
+
+
+def _classify_bypass_reason(reason: str) -> str:
+    normalized = reason.lower()
+    if "disabled" in normalized:
+        return "disabled"
+    if any(token in normalized for token in MARKET_DATA_BYPASS_REASONS):
+        return "market_data_degraded"
+    return "other"
+
+
+def summarize_risk_decisions(
+    decisions: list[RiskDecisionLike] | tuple[RiskDecisionLike, ...],
+) -> RiskDecisionSummary:
+    """Group risk decisions by outcome and bypass reason class."""
+
+    summary = RiskDecisionSummary()
+    for decision in decisions:
+        outcome = str(_decision_value(decision, "outcome") or "").upper()
+        gate = str(_decision_value(decision, "gate") or "")
+        reason = str(_decision_value(decision, "reason") or "")
+        metrics = _decision_value(decision, "metrics") or {}
+        if outcome == "PASS":
+            summary.pass_count += 1
+        elif outcome == "BLOCK":
+            summary.block_count += 1
+            summary.block_reasons.append(
+                {"gate": gate, "reason": reason, "metrics": dict(metrics)}
+            )
+        elif outcome == "BYPASS":
+            summary.bypass_count += 1
+            classification = _classify_bypass_reason(reason)
+            if classification == "disabled":
+                summary.disabled_bypass_count += 1
+            elif classification == "market_data_degraded":
+                summary.market_data_bypass_count += 1
+            else:
+                summary.other_bypass_count += 1
+            summary.bypass_reasons.append(
+                {
+                    "gate": gate,
+                    "reason": reason,
+                    "classification": classification,
+                    "metrics": dict(metrics),
+                }
+            )
+    return summary
+
+
+def format_risk_bypass_summary(
+    summary: RiskDecisionSummary | dict[str, Any],
+) -> str | None:
+    """Return a compact operator-facing bypass summary."""
+
+    payload = (
+        summary.to_payload()
+        if isinstance(summary, RiskDecisionSummary)
+        else summary
+    )
+    bypass_count = int(payload.get("bypass_count") or 0)
+    if bypass_count <= 0:
+        return None
+    parts = [f"{bypass_count} bypassed"]
+    market_data_count = int(payload.get("market_data_bypass_count") or 0)
+    disabled_count = int(payload.get("disabled_bypass_count") or 0)
+    other_count = int(payload.get("other_bypass_count") or 0)
+    if market_data_count:
+        parts.append(f"{market_data_count} market-data degraded")
+    if disabled_count:
+        parts.append(f"{disabled_count} disabled")
+    if other_count:
+        parts.append(f"{other_count} other")
+    reasons = payload.get("bypass_reasons") or []
+    reason_text = "; ".join(
+        f"{item.get('gate')}: {item.get('reason')}"
+        for item in reasons
+        if item.get("gate")
+    )
+    if reason_text:
+        parts.append(reason_text)
+    return " | ".join(parts)
 
 
 def _execution_cfg() -> dict[str, Any]:
@@ -53,7 +176,10 @@ def is_manual_kill_switch_active() -> tuple[bool, str | None]:
     """Check whether a manual kill switch has been activated."""
 
     cfg = get_kill_switch_config()
-    env_var = str(cfg.get("env_var") or "QEXEC_KILL_SWITCH").strip() or "QEXEC_KILL_SWITCH"
+    env_var = (
+        str(cfg.get("env_var") or "QEXEC_KILL_SWITCH").strip()
+        or "QEXEC_KILL_SWITCH"
+    )
     raw_env = os.getenv(env_var)
     if raw_env and str(raw_env).strip().lower() in {"1", "true", "yes", "on"}:
         return True, f"{env_var}=true"
@@ -84,6 +210,44 @@ class RiskGateChain:
                 "max_market_impact_bps",
             )
         )
+
+    def configured_market_data_dependencies(self) -> list[dict[str, Any]]:
+        """Return configured market-data gates and fields needed to avoid BYPASS."""
+
+        dependencies: list[dict[str, Any]] = []
+        spread_threshold = float(self.config.get("max_spread_bps", 0.0) or 0.0)
+        if spread_threshold > 0:
+            dependencies.append(
+                {
+                    "gate": "spread_guard",
+                    "config_key": "max_spread_bps",
+                    "threshold": spread_threshold,
+                    "required_fields": ["bid", "ask"],
+                }
+            )
+        participation_threshold = float(
+            self.config.get("max_participation_rate", 0.0) or 0.0
+        )
+        if participation_threshold > 0:
+            dependencies.append(
+                {
+                    "gate": "participation_guard",
+                    "config_key": "max_participation_rate",
+                    "threshold": participation_threshold,
+                    "required_fields": ["daily_volume"],
+                }
+            )
+        impact_threshold = float(self.config.get("max_market_impact_bps", 0.0) or 0.0)
+        if impact_threshold > 0:
+            dependencies.append(
+                {
+                    "gate": "market_impact_guard",
+                    "config_key": "max_market_impact_bps",
+                    "threshold": impact_threshold,
+                    "required_fields": ["price", "daily_volume"],
+                }
+            )
+        return dependencies
 
     def evaluate(
         self,
@@ -214,7 +378,9 @@ class RiskGateChain:
                 reason="market impact guard disabled",
             )
         daily_volume = float(getattr(quote, "daily_volume", 0.0) or 0.0)
-        last_price = float(getattr(quote, "price", 0.0) or 0.0) or float(order.price or 0.0)
+        last_price = float(getattr(quote, "price", 0.0) or 0.0) or float(
+            order.price or 0.0
+        )
         if daily_volume <= 0 or last_price <= 0:
             return RiskDecision(
                 gate="market_impact_guard",
@@ -228,7 +394,8 @@ class RiskGateChain:
                 gate="market_impact_guard",
                 outcome="BLOCK",
                 reason=(
-                    f"impact estimate {impact_bps:.2f}bps exceeds limit {threshold:.2f}bps"
+                    f"impact estimate {impact_bps:.2f}bps exceeds limit "
+                    f"{threshold:.2f}bps"
                 ),
                 metrics={
                     "estimated_impact_bps": impact_bps,

@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from ..models import AccountSnapshot, Order, Position, RebalanceResult
+from ..risk import format_risk_bypass_summary, summarize_risk_decisions
 
 _HAS_RICH = importlib.util.find_spec("rich") is not None
 
@@ -119,12 +120,12 @@ def render_rebalance_diff(
     )
 
     mode = "DRY-RUN" if result.dry_run else "LIVE"
+    broker_label = getattr(result, "broker_name", "longport")
+    account_label = getattr(result, "account_label", "main")
 
     lines.append("=== Rebalance Preview (Diff) ===")
     lines.append(f"As of: {before.env.upper()}  Currency: USD  Mode: {mode}")
-    lines.append(
-        f"Broker: {getattr(result, 'broker_name', 'longport')}  Account: {getattr(result, 'account_label', 'main')}"
-    )
+    lines.append(f"Broker: {broker_label}  Account: {account_label}")
     if getattr(result, "audit_log_path", None):
         lines.append(f"Audit Log: {result.audit_log_path}")
     lines.append("--- Totals (Before → After) ---")
@@ -263,6 +264,10 @@ def render_rebalance_diff(
         for order in sell_first:
             est_amount = (order.price or 0.0) * float(order.quantity)
             price_display = "MKT" if not order.price else _fmt_money(order.price)
+            risk_decision_summary = summarize_risk_decisions(
+                list(getattr(order, "risk_decisions", []) or [])
+            )
+            risk_bypass_summary = format_risk_bypass_summary(risk_decision_summary)
             order_line = (
                 f"{order.side:4s} {order.symbol[:8]:8s} {order.quantity:>6} @ "
                 f"{price_display:<8} est{_fmt_money(est_amount)} "
@@ -273,10 +278,20 @@ def render_rebalance_diff(
             if getattr(order, "broker_order_id", None):
                 order_line += f" id={order.broker_order_id}"
             lines.append(order_line)
-            if order.error_message or getattr(order, "risk_summary", None):
-                lines.append(
-                    f"  -> {getattr(order, 'risk_summary', None) or order.error_message}"
+            risk_summary = getattr(order, "risk_summary", None)
+            if order.error_message or risk_summary:
+                lines.append(f"  -> {risk_summary or order.error_message}")
+            if risk_bypass_summary:
+                lines.append(f"  -> Risk BYPASS: {risk_bypass_summary}")
+            rich_detail = (
+                getattr(order, "risk_summary", None)
+                or order.error_message
+                or (
+                    f"Risk BYPASS: {risk_bypass_summary}"
+                    if risk_bypass_summary
+                    else None
                 )
+            )
             orders_for_rich.append(
                 {
                     "side": order.side,
@@ -285,8 +300,7 @@ def render_rebalance_diff(
                     "price_display": price_display,
                     "est_amount": est_amount,
                     "status": order.status,
-                    "detail": getattr(order, "risk_summary", None)
-                    or order.error_message,
+                    "detail": rich_detail,
                 }
             )
 

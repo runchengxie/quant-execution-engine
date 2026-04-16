@@ -176,3 +176,18 @@ PYTHONPATH=src python project_tools/smoke_operator_harness.py \
 当前已有第一份样例，但它是 no-order evidence：`config / account / quote / rebalance / reconcile / exceptions / cancel-all` 流程跑完，审计日志也写入 `outputs/orders/20260416-181822_paper_live.jsonl`，但 AAPL quote 为 0，`audit_order_count=0`。
 
 因此现阶段建议把 `ibkr-paper` 视为“Gateway 可达、代码闭环已接通，但 broker order 证据链仍待补齐”的 backend。下一次有效行情下的 paper smoke 需要补齐 submit / query / reconcile / cancel 或 fill 证据。
+
+完成一次有效行情 smoke 后，先用成熟度报告确认状态：
+
+```bash
+qexec evidence-maturity
+```
+
+再用审计 `run_id` 生成复查包：
+
+```bash
+qexec evidence-pack <audit-run-id>
+qexec evidence-pack <audit-run-id> --operator-note "IBKR paper order evidence reviewed"
+```
+
+如果 evidence bundle 里缺少 smoke JSON、audit JSONL 或 state snapshot，这次运行只能算部分证据，不能把 `ibkr-paper` 提升为完整 broker-order 成熟路径。

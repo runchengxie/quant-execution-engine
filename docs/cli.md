@@ -47,6 +47,29 @@ qexec config --broker ibkr-paper
 
 对于 `ibkr-paper`，`config` 会显示 Gateway host / paper port / client ID / account ID / connect timeout，以及当前 runtime 假设：本地 IB Gateway over TWS API。
 
+### `evidence-maturity`
+
+查看各 broker 的执行代码路径状态、最新 evidence、缺口和下一步 smoke 建议。
+
+```bash
+qexec evidence-maturity
+qexec evidence-maturity --format json
+```
+
+这个命令只读取本地 `outputs/evidence/*.json` 和 broker capability，不扫描券商全量订单，也不引入数据库。
+
+### `evidence-pack`
+
+按审计 `run_id` 收拢一次执行的复查证据。
+
+```bash
+qexec evidence-pack <run-id>
+qexec evidence-pack <run-id> --output-dir outputs/review
+qexec evidence-pack <run-id> --operator-note "terminal output reviewed"
+```
+
+默认输出到 `outputs/evidence-bundles/<run-id>`。manifest 会记录 audit JSONL、targets、本地 state、smoke evidence、operator note 的 included / missing / skipped 状态；`.env*` 这类敏感文件不会被打包。
+
 ### `preflight`
 
 运行不会修改券商状态的就绪性检查。
@@ -67,6 +90,7 @@ qexec preflight --broker ibkr-paper
 - 账户解析
 - 账户快照
 - 行情 / 深度 / 成交量可达性
+- 已配置的市场数据风控项是否会因为 bid/ask 或 daily volume 缺失而在执行时 `BYPASS`
 
 对于 `ibkr-paper`，这些检查会反映本地 IB Gateway 连通性、账户解析和 market-data 可达性；失败时会直接把 Gateway/connectivity 相关错误透传到检查项里。
 
@@ -291,6 +315,7 @@ qexec rebalance outputs/targets/2026-04-09.json --target-gross-exposure 0.9
 ## 行为约定
 
 - `rebalance` 会先做本地文件和 schema 校验，再触发券商适配器。
+- 如果风险门禁因为配置关闭或市场数据缺失而 `BYPASS`，`rebalance` 输出和 `outputs/orders/*.jsonl` 会保留 bypass 计数与原因；没有 `BLOCK` 时不改变既有提交语义。
 - 非 `.json` 输入会被直接拒绝。
 - schema-v1 / 旧版 ticker-list 不能作为实盘执行输入。
 - `--execute` 默认关闭；不传时是预演。

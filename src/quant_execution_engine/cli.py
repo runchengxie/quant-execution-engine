@@ -27,6 +27,15 @@ from .broker.longport_credentials import (
     probe_longport_credentials,
     resolve_longport_runtime_value,
 )
+from .evidence_bundle import (
+    EvidenceBundleError,
+    create_evidence_bundle,
+    render_evidence_bundle_result,
+)
+from .evidence_maturity import (
+    build_broker_evidence_maturity_report,
+    render_broker_evidence_maturity,
+)
 from .execution import ExecutionStateStore, OrderLifecycleService
 from .execution import (
     DEFAULT_EXCEPTION_STATUSES,
@@ -41,7 +50,7 @@ from .preflight import run_preflight_checks
 from .rebalance import RebalanceService
 from .risk import get_kill_switch_config, get_risk_config
 from .renderers.diff import render_rebalance_diff
-from .renderers.jsonout import render_multiple_account_snapshots_json
+from .renderers.jsonout import render_json, render_multiple_account_snapshots_json
 from .renderers.table import (
     render_accept_partial_summary,
     render_bulk_cancel_summary,
@@ -189,6 +198,39 @@ Examples:
         type=str,
         default=None,
         help="Broker backend override, e.g. longport or alpaca-paper",
+    )
+
+    evidence_maturity_parser = subparsers.add_parser(
+        "evidence-maturity",
+        help="Show broker execution evidence maturity and remaining smoke gaps",
+    )
+    evidence_maturity_parser.add_argument(
+        "--format",
+        choices=["table", "json"],
+        default="table",
+        help="Output format",
+    )
+
+    evidence_pack_parser = subparsers.add_parser(
+        "evidence-pack",
+        help="Collect audit, state, target, smoke evidence, and notes for one run id",
+    )
+    evidence_pack_parser.add_argument(
+        "run_id",
+        type=str,
+        help="Audit run id from outputs/orders/*.jsonl",
+    )
+    evidence_pack_parser.add_argument(
+        "--output-dir",
+        type=str,
+        default=None,
+        help="Optional bundle output directory, default: outputs/evidence-bundles/<run-id>",
+    )
+    evidence_pack_parser.add_argument(
+        "--operator-note",
+        action="append",
+        default=None,
+        help="Operator note to include in the evidence bundle; may be passed more than once",
     )
 
     orders_parser = subparsers.add_parser(
@@ -830,6 +872,43 @@ def run_config(show: bool = True, broker: str | None = None) -> CommandResult:
         return CommandResult(exit_code=0, stdout="\n".join(lines))
     except Exception as exc:
         return CommandResult(exit_code=1, stderr=str(exc))
+
+
+def run_evidence_maturity(fmt: str = "table") -> CommandResult:
+    try:
+        records = build_broker_evidence_maturity_report()
+        if fmt == "json":
+            return CommandResult(
+                exit_code=0,
+                stdout=render_json([record.to_payload() for record in records]),
+            )
+        return CommandResult(exit_code=0, stdout=render_broker_evidence_maturity(records))
+    except Exception as exc:
+        msg = f"Evidence maturity report failed: {exc}"
+        get_logger(__name__).error(msg)
+        return CommandResult(exit_code=1, stderr=msg)
+
+
+def run_evidence_pack(
+    *,
+    run_id: str,
+    output_dir: str | None = None,
+    operator_notes: list[str] | None = None,
+) -> CommandResult:
+    try:
+        result = create_evidence_bundle(
+            run_id=run_id,
+            output_dir=Path(output_dir) if output_dir else None,
+            operator_notes=operator_notes,
+        )
+        exit_code = 1 if result.missing_count else 0
+        return CommandResult(exit_code=exit_code, stdout=render_evidence_bundle_result(result))
+    except EvidenceBundleError as exc:
+        return CommandResult(exit_code=1, stderr=str(exc))
+    except Exception as exc:
+        msg = f"Evidence pack failed: {exc}"
+        get_logger(__name__).error(msg)
+        return CommandResult(exit_code=1, stderr=msg)
 
 
 def run_orders(
@@ -1481,6 +1560,18 @@ def main() -> int:
     if args.command == "config":
         return _handle_command_result(
             run_config(getattr(args, "show", True), broker=getattr(args, "broker", None))
+        )
+    if args.command == "evidence-maturity":
+        return _handle_command_result(
+            run_evidence_maturity(fmt=getattr(args, "format", "table"))
+        )
+    if args.command == "evidence-pack":
+        return _handle_command_result(
+            run_evidence_pack(
+                run_id=getattr(args, "run_id"),
+                output_dir=getattr(args, "output_dir", None),
+                operator_notes=getattr(args, "operator_note", None),
+            )
         )
     if args.command == "orders":
         return _handle_command_result(
