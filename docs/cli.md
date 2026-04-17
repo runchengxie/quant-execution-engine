@@ -349,4 +349,5 @@ PYTHONPATH=src python project_tools/smoke_operator_harness.py --broker longport-
 这个工装默认拒绝非 paper broker；如果明确要做 LongPort 实盘人工监督冒烟，需要额外传 `--allow-non-paper`。
 
 如果你是第一次跑 IBKR 模拟盘，先看 [ibkr-paper-smoke.md](ibkr-paper-smoke.md)。
+如果你想把 Alpaca 模拟盘作为固定回归基线，先看 [alpaca-paper-smoke.md](alpaca-paper-smoke.md)。
 如果你想围绕 `longport-paper` 系统化做操作员失败场景冒烟，建议直接按 [longport-paper-failure-smoke.md](longport-paper-failure-smoke.md) 的场景执行。

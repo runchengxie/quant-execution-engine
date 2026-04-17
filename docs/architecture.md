@@ -29,6 +29,7 @@ src/quant_execution_engine/
   __init__.py
   __main__.py
   cli.py
+  cli_parser.py
   config.py
   paths.py
   logging.py
@@ -39,6 +40,10 @@ src/quant_execution_engine/
   account.py
   rebalance.py
   execution.py
+  execution_service.py
+  execution_service_recovery.py
+  evidence_maturity.py
+  evidence_bundle.py
   execution_state.py
   diagnostics.py
   guards.py
@@ -72,7 +77,9 @@ project_tools/
 ## 分层说明
 
 - `cli.py`
-  负责参数解析、券商后端选择、命令分发和错误码收口，包括 `preflight`、操作员恢复命令和本地状态维护命令。
+  负责券商后端选择、命令分发和错误码收口，包括 `preflight`、操作员恢复命令和本地状态维护命令。
+- `cli_parser.py`
+  负责 `qexec` 参数树构建与命令参数声明，作为 CLI 机械性定义的独立模块。
 - `broker/base.py` / `broker/factory.py`
   定义券商生命周期契约、能力矩阵和后端选择逻辑。
 - `broker/longport.py` / `broker/longport_adapter.py` / `broker/alpaca.py` / `broker/ibkr.py` / `broker/ibkr_runtime.py`
@@ -86,7 +93,15 @@ project_tools/
 - `rebalance.py`
   负责目标仓位计算、订单规划、执行入口和审计日志。
 - `execution.py`
-  负责订单提交流程、对账、部分成交恢复和已跟踪订单的操作员行为。
+  作为兼容出口，保留执行生命周期相关类型和服务的导出。
+- `execution_service.py`
+  负责订单提交流程、对账入口、取消入口和异常视图聚合等主流程编排。
+- `execution_service_recovery.py`
+  负责 retry / reprice / cancel-rest / resume-remaining / accept-partial / stale-retry，以及执行状态写入细节和 reconcile 合并细节。
+- `evidence_maturity.py`
+  负责汇总各 broker 的代码路径状态、已有证据和下一步 smoke 建议，供 `qexec evidence-maturity` 使用。
+- `evidence_bundle.py`
+  负责按审计 `run_id` 收拢 audit / targets / state / smoke evidence / operator note，供 `qexec evidence-pack` 使用。
 - `execution_state.py`
   负责执行生命周期数据类、状态常量和基于文件的状态存储。
 - `diagnostics.py`

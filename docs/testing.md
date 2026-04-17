@@ -175,5 +175,6 @@ PYTHONPATH=src python project_tools/smoke_operator_harness.py --broker longport-
 
 如果你准备开始做 IBKR 模拟盘的最小验证，先看 [docs/ibkr-paper-smoke.md](ibkr-paper-smoke.md)。
 如果你想系统化重复 `longport-paper` 的操作员失败场景冒烟，可先看 [docs/longport-paper-failure-smoke.md](longport-paper-failure-smoke.md)。
+如果你准备把 Alpaca 模拟盘作为回归基线，先看 [docs/alpaca-paper-smoke.md](alpaca-paper-smoke.md)。
 
 如果你准备开始做 LongPort 实盘的最小验证，先看 [docs/longport-real-smoke.md](longport-real-smoke.md)。
