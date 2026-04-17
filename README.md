@@ -16,8 +16,12 @@
 - 对部分成交执行 `cancel-rest` / `resume-remaining` / `accept-partial`
 - 运行正式的 `preflight` 预检查
 - 维护本地状态：`state-doctor` / `state-prune` / `state-repair`
+- 查看 broker 代码路径与证据成熟度：`evidence-maturity`
+- 按审计 `run_id` 打包本地复查证据：`evidence-pack`
 - 把调仓审计日志写入 `outputs/orders/*.jsonl`
 - 把执行状态持久化到 `outputs/state/*.json`
+- 输出 smoke 证据：`outputs/evidence/*.json`
+- 输出证据打包结果：`outputs/evidence-bundles/*`
 - 提供面向信号、目标持仓和操作员的冒烟测试工装
 
 ## 当前成熟度与证据边界
@@ -91,6 +95,10 @@ qexec retry-stale --broker longport-paper --older-than-minutes 15
 qexec state-doctor --broker longport-paper
 qexec state-prune --broker longport-paper --older-than-days 30
 qexec state-repair --broker longport-paper --clear-kill-switch --dedupe-fills
+qexec evidence-maturity
+qexec evidence-maturity --format json
+qexec evidence-pack <run-id>
+qexec evidence-pack <run-id> --operator-note "terminal output reviewed"
 qexec rebalance outputs/targets/2026-04-09.json --broker longport-paper
 qexec rebalance outputs/targets/2026-04-09.json --broker longport-paper --execute
 qexec rebalance outputs/targets/2026-04-09.json --broker ibkr-paper --execute
@@ -137,6 +145,7 @@ Alpaca 模拟盘至少需要：
 
 - `ALPACA_API_KEY` 或 `APCA_API_KEY_ID`
 - `ALPACA_SECRET_KEY` 或 `APCA_API_SECRET_KEY`
+- 推荐先按 [docs/alpaca-paper-smoke.md](docs/alpaca-paper-smoke.md) 跑 `preflight-only` 和最小 `--execute` 证据流程
 
 IBKR 模拟盘至少需要：
 
@@ -177,6 +186,7 @@ uv run pytest -m integration
 - 默认 `pytest` 证明的是快速行为测试通过。
 - `e2e` 证明 CLI / 工装子进程的冒烟行为和输出边界。
 - `integration` 证明跨模块生命周期行为，并在提供凭证或本地 runtime 时尝试 LongPort / IBKR 的 broker-backed 验证。
+- `IBKR_ENABLE_INTEGRATION=1`、`IBKR_ENABLE_MUTATION_TESTS=1`、`IBKR_ENABLE_FILL_TESTS=1` 这类变量用于显式打开 IBKR 相关 opt-in 测试层。
 - 这些测试仍不能单独证明 LongPort 实盘交易能力已经被自动化完整跑实。
 - `ibkr-paper` 的有效 broker order 证据仍依赖本地 Gateway 和有效行情下的 opt-in paper smoke。
 
@@ -227,10 +237,13 @@ PYTHONPATH=src python project_tools/smoke_operator_harness.py --broker longport-
 
 - 调仓审计日志：`outputs/orders/*.jsonl`
 - 执行状态持久化：`outputs/state/*.json`
+- smoke 证据输出：`outputs/evidence/*.json`
+- 证据打包输出：`outputs/evidence-bundles/*`
 
 ## 文档
 
 - [docs/architecture.md](docs/architecture.md)
+- [docs/alpaca-paper-smoke.md](docs/alpaca-paper-smoke.md)
 - [docs/cli.md](docs/cli.md)
 - [docs/configuration.md](docs/configuration.md)
 - [docs/execution-checklist.md](docs/execution-checklist.md)

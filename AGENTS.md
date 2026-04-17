@@ -40,3 +40,5 @@
 
 - 调仓审计日志输出到 `outputs/orders/*.jsonl`。
 - 本地执行状态输出到 `outputs/state/*.json`。
+- smoke evidence 输出到 `outputs/evidence/*.json`（例如 `smoke_operator_harness.py --evidence-output ...`）。
+- evidence bundle 输出到 `outputs/evidence-bundles/*`（通过 `qexec evidence-pack <run-id>` 生成）。
