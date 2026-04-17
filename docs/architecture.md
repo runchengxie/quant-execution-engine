@@ -112,7 +112,7 @@ project_tools/
 - 实盘执行输入边界严格收敛到统一的 `targets.json`。
 - 本地状态是幂等、恢复和操作员处置的基础面。
 - `orders` / `exceptions` / `order` 明确是已跟踪状态视图，不伪装成券商全量订单簿。
-- IBKR 属于本地 broker runtime 依赖型 backend；当前通过本地 IB Gateway over TWS API 接入，而不是把它抽象成纯云端 HTTP broker。
+- IBKR 属于本地 broker runtime 依赖型 backend；当前通过本地 IB Gateway over TWS API 接入。
 
 ## 当前限制
 
