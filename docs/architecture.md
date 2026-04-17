@@ -42,6 +42,8 @@ src/quant_execution_engine/
   execution.py
   execution_service.py
   execution_service_recovery.py
+  execution_service_recovery_actions.py
+  execution_service_state_reconcile_ops.py
   evidence_maturity.py
   evidence_bundle.py
   execution_state.py
@@ -97,7 +99,11 @@ project_tools/
 - `execution_service.py`
   负责订单提交流程、对账入口、取消入口和异常视图聚合等主流程编排。
 - `execution_service_recovery.py`
-  负责 retry / reprice / cancel-rest / resume-remaining / accept-partial / stale-retry，以及执行状态写入细节和 reconcile 合并细节。
+  作为兼容出口，保留 recovery mixin 的稳定导入路径。
+- `execution_service_recovery_actions.py`
+  负责 retry / reprice / cancel-rest / resume-remaining / accept-partial / stale-retry 等操作员恢复动作。
+- `execution_service_state_reconcile_ops.py`
+  负责 execution state 写入、reconcile 合并、tracked order 同步和本地状态标记等底层细节。
 - `evidence_maturity.py`
   负责汇总各 broker 的代码路径状态、已有证据和下一步 smoke 建议，供 `qexec evidence-maturity` 使用。
 - `evidence_bundle.py`
