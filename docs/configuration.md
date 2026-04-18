@@ -35,8 +35,8 @@
 
 说明：
 
-- LongPort 实盘和模拟盘共用 App Key / Secret，但使用不同的 Access Token。
-- 当前 `longport-paper` 后端会优先读取 `LONGPORT_ACCESS_TOKEN_TEST`。
+- 长桥实盘和模拟盘共用 App Key / Secret，但使用不同的 Access Token。
+- 当前长桥模拟盘后端会优先读取 `LONGPORT_ACCESS_TOKEN_TEST`。
 
 兼容读取：
 
@@ -51,9 +51,9 @@
 
 这两个变量仍会被兼容读取，但当前 CLI 主执行路径更推荐通过 `execution.risk.*` 配置本地风控阈值。
 
-### LongPort 读取优先级
+### 长桥证券读取优先级
 
-当前项目刻意把 LongPort 的模拟盘和实盘路径分开处理：
+当前项目刻意把长桥的模拟盘和实盘路径分开处理：
 
 - `longport-paper`：优先读取仓库根目录 `.env` / `.env.local`，其次读取当前进程环境变量，最后才回退到 `~/.config/qexec/longport-live.env`
 - `longport` 实盘：优先读取 `~/.config/qexec/longport-live.env`，其次读取当前进程环境变量
@@ -81,7 +81,7 @@
 - 当前适配器是纯模拟盘验证路径，不提供实盘切换
 - 当前也不提供真实多账户切换
 
-### IBKR 模拟盘
+### 盈透证券模拟盘
 
 必需：
 
@@ -97,7 +97,7 @@
 
 说明：
 
-- 当前 `ibkr-paper` 后端按本地 `IB Gateway + TWS API` 路线运行。
+- 当前盈透证券模拟盘后端按本地 `IB Gateway + TWS API` 路线运行。
 - 当前只支持 US equities 最小切片；非 `.US` symbol 会在适配器层快速失败。
 - `qexec config --broker ibkr-paper` 会显示 host / paper port / client ID / account ID / timeout 的有效值和来源。
 - 真实多账户路由不在当前范围内；`--account` 仍只接受 `main`。
@@ -210,4 +210,4 @@ fx:
 - `execution.kill_switch.env_var` 和可选 `execution.kill_switch.path` 可以手动停掉新的券商提交。
 - `broker.default_account` 是 CLI 没显式传 `--account` 时的默认标签；如果适配器不支持该标签，会直接报错。
 - `execution.state_dir` 控制幂等与恢复状态文件目录，默认是 `outputs/state`。
-- `ibkr-paper` 当前依赖本地 IB Gateway；当前配置层只暴露 paper runtime 路径，不包含 live broker 切换。
+- 盈透证券目前依赖本地已启动的 IB Gateway，当前配置层只开放模拟盘运行路径，暂不支持切换到实盘券商后端。
