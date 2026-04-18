@@ -49,6 +49,8 @@ class BrokerCapabilityMatrix:
     supports_cancel: bool = False
     supports_order_query: bool = False
     supports_open_order_listing: bool = False
+    supports_order_history: bool = False
+    supports_fill_history: bool = False
     supports_reconcile: bool = False
     supports_account_selection: bool = False
     supports_fractional: bool = False
@@ -195,6 +197,17 @@ class BrokerAdapter:
             f"{self.backend_name} does not support open-order listing"
         )
 
+    def list_order_history(
+        self,
+        account: ResolvedBrokerAccount | None = None,
+        *,
+        symbol: str | None = None,
+        broker_order_id: str | None = None,
+    ) -> list[BrokerOrderRecord]:
+        raise UnsupportedBrokerOperationError(
+            f"{self.backend_name} does not support broker-side order history"
+        )
+
     def cancel_order(
         self,
         broker_order_id: str,
@@ -212,6 +225,17 @@ class BrokerAdapter:
     ) -> list[BrokerFillRecord]:
         return []
 
+    def list_fill_history(
+        self,
+        account: ResolvedBrokerAccount | None = None,
+        *,
+        symbol: str | None = None,
+        broker_order_id: str | None = None,
+    ) -> list[BrokerFillRecord]:
+        raise UnsupportedBrokerOperationError(
+            f"{self.backend_name} does not support broker-side fill history"
+        )
+
     def reconcile(
         self,
         account: ResolvedBrokerAccount | None = None,
@@ -224,4 +248,3 @@ class BrokerAdapter:
 
     def close(self) -> None:
         """Release resources held by the adapter."""
-

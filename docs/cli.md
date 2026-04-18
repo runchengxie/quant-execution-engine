@@ -136,6 +136,30 @@ qexec orders --broker longport-paper --symbol AAPL
 你可以通过状态（如 `open`、`failure`、`terminal`）或标的代码（如 `AAPL`）进行过滤。
 *注意：此命令仅展示本地执行引擎已追踪的订单，并非直接查询券商后台的全量历史订单簿。*
 
+### `broker-orders`
+
+查看券商原生的只读订单历史视图（当前仅在支持该能力的后端上可用，例如 LongPort）。
+
+```bash
+qexec broker-orders --broker longport-paper
+qexec broker-orders --broker longport --symbol AAPL --status filled
+qexec broker-orders --broker longport --order-id 123456789 --format json
+```
+
+这是一条 broker-side 的只读查询路径，用于辅助排障、审计与复盘；它不替代本地 tracked-state，也不改变 `orders` 命令的语义。
+
+### `broker-fills`
+
+查看券商原生的只读成交历史视图（当前仅在支持该能力的后端上可用，例如 LongPort）。
+
+```bash
+qexec broker-fills --broker longport-paper
+qexec broker-fills --broker longport --symbol AAPL
+qexec broker-fills --broker longport --order-id 123456789 --format json
+```
+
+此命令返回的是券商侧成交记录，用于和本地 fill/tracked-state 对照排查。
+
 ### `exceptions`
 
 查看本地执行状态中的异常订单队列。

@@ -35,6 +35,15 @@ def _add_broker_account_args(parser: argparse.ArgumentParser) -> None:
     _add_account_arg(parser)
 
 
+def _add_format_arg(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--format",
+        choices=["table", "json"],
+        default="table",
+        help="Output format",
+    )
+
+
 def _add_order_ref_arg(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "order_ref",
@@ -87,12 +96,7 @@ Examples:
     account_parser.add_argument("--funds", action="store_true", help="Only show cash/funds")
     account_parser.add_argument("--positions", action="store_true", help="Only show positions")
     _add_broker_account_args(account_parser)
-    account_parser.add_argument(
-        "--format",
-        choices=["table", "json"],
-        default="table",
-        help="Output format",
-    )
+    _add_format_arg(account_parser)
 
     config_parser = subparsers.add_parser("config", help="Show effective broker config")
     config_parser.add_argument("--show", action="store_true", default=True)
@@ -102,12 +106,7 @@ Examples:
         "evidence-maturity",
         help="Show broker execution evidence maturity and remaining smoke gaps",
     )
-    evidence_maturity_parser.add_argument(
-        "--format",
-        choices=["table", "json"],
-        default="table",
-        help="Output format",
-    )
+    _add_format_arg(evidence_maturity_parser)
 
     evidence_pack_parser = subparsers.add_parser(
         "evidence-pack",
@@ -148,6 +147,50 @@ Examples:
         default=None,
         help="Optional symbol filter, e.g. AAPL or AAPL.US",
     )
+
+    broker_orders_parser = subparsers.add_parser(
+        "broker-orders",
+        help="Show broker-side read-only order history where supported",
+    )
+    _add_broker_account_args(broker_orders_parser)
+    broker_orders_parser.add_argument(
+        "--status",
+        type=str,
+        default=None,
+        help="Optional broker-order status filter, e.g. open, failure, terminal, or exact status",
+    )
+    broker_orders_parser.add_argument(
+        "--symbol",
+        type=str,
+        default=None,
+        help="Optional symbol filter, e.g. AAPL or AAPL.US",
+    )
+    broker_orders_parser.add_argument(
+        "--order-id",
+        type=str,
+        default=None,
+        help="Optional broker-native order id filter",
+    )
+    _add_format_arg(broker_orders_parser)
+
+    broker_fills_parser = subparsers.add_parser(
+        "broker-fills",
+        help="Show broker-side read-only fill history where supported",
+    )
+    _add_broker_account_args(broker_fills_parser)
+    broker_fills_parser.add_argument(
+        "--symbol",
+        type=str,
+        default=None,
+        help="Optional symbol filter, e.g. AAPL or AAPL.US",
+    )
+    broker_fills_parser.add_argument(
+        "--order-id",
+        type=str,
+        default=None,
+        help="Optional broker-native order id filter",
+    )
+    _add_format_arg(broker_fills_parser)
 
     exceptions_parser = subparsers.add_parser(
         "exceptions",

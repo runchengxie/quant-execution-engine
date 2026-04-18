@@ -8,7 +8,12 @@ import pytest
 
 import quant_execution_engine.cli as cli
 import quant_execution_engine.guards as guards
-from quant_execution_engine.broker.base import BrokerAdapter, BrokerOrderRecord, ResolvedBrokerAccount
+from quant_execution_engine.broker.base import (
+    BrokerAdapter,
+    BrokerFillRecord,
+    BrokerOrderRecord,
+    ResolvedBrokerAccount,
+)
 from quant_execution_engine.execution import ExecutionExceptionRecord, ExecutionState, ExecutionStateStore
 
 
@@ -235,6 +240,73 @@ def test_main_routes_orders() -> None:
         broker=None,
         status_filter="open",
         symbol_filter="AAPL",
+    )
+
+
+def test_main_routes_broker_orders() -> None:
+    with patch.object(
+        cli,
+        "run_broker_orders",
+        return_value=cli.CommandResult(exit_code=0),
+    ) as mock_run:
+        with patch.object(
+            sys,
+            "argv",
+            [
+                "qexec",
+                "broker-orders",
+                "--account",
+                "main",
+                "--status",
+                "open",
+                "--symbol",
+                "AAPL",
+                "--order-id",
+                "broker-1",
+                "--format",
+                "json",
+            ],
+        ):
+            result = cli.main()
+
+    assert result == 0
+    mock_run.assert_called_once_with(
+        account="main",
+        broker=None,
+        status_filter="open",
+        symbol_filter="AAPL",
+        broker_order_id_filter="broker-1",
+        fmt="json",
+    )
+
+
+def test_main_routes_broker_fills() -> None:
+    with patch.object(
+        cli,
+        "run_broker_fills",
+        return_value=cli.CommandResult(exit_code=0),
+    ) as mock_run:
+        with patch.object(
+            sys,
+            "argv",
+            [
+                "qexec",
+                "broker-fills",
+                "--symbol",
+                "MSFT",
+                "--order-id",
+                "broker-2",
+            ],
+        ):
+            result = cli.main()
+
+    assert result == 0
+    mock_run.assert_called_once_with(
+        account="main",
+        broker=None,
+        symbol_filter="MSFT",
+        broker_order_id_filter="broker-2",
+        fmt="table",
     )
 
 
@@ -756,6 +828,116 @@ def test_run_orders_filters_by_symbol(tmp_path: Path, monkeypatch: pytest.Monkey
     assert result.exit_code == 0
     assert result.stdout is not None
     assert "AAPL.US" in result.stdout
+    assert "MSFT.US" not in result.stdout
+
+
+def test_run_broker_orders_filters_by_status_symbol_and_order_id(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class FakeHistoryAdapter(BrokerAdapter):
+        backend_name = "fake"
+
+        def resolve_account(self, account_label: str | None = None) -> ResolvedBrokerAccount:
+            return ResolvedBrokerAccount(label=account_label or "main")
+
+        def list_order_history(
+            self,
+            account: ResolvedBrokerAccount | None = None,
+            *,
+            symbol: str | None = None,
+            broker_order_id: str | None = None,
+        ) -> list[BrokerOrderRecord]:
+            return [
+                BrokerOrderRecord(
+                    broker_order_id="broker-aapl-1",
+                    symbol="AAPL.US",
+                    side="BUY",
+                    quantity=10,
+                    filled_quantity=10,
+                    status="FILLED",
+                    broker_name="fake",
+                    account_label=(account or ResolvedBrokerAccount(label="main")).label,
+                    updated_at="2026-04-19T00:00:00+00:00",
+                ),
+                BrokerOrderRecord(
+                    broker_order_id="broker-msft-1",
+                    symbol="MSFT.US",
+                    side="BUY",
+                    quantity=5,
+                    status="NEW",
+                    broker_name="fake",
+                    account_label=(account or ResolvedBrokerAccount(label="main")).label,
+                    updated_at="2026-04-18T00:00:00+00:00",
+                ),
+            ]
+
+    monkeypatch.setattr(cli, "get_broker_adapter", lambda broker_name=None: FakeHistoryAdapter())
+
+    result = cli.run_broker_orders(
+        account="main",
+        broker=None,
+        status_filter="filled",
+        symbol_filter="AAPL",
+        broker_order_id_filter="broker-aapl-1",
+    )
+
+    assert result.exit_code == 0
+    assert result.stdout is not None
+    assert "AAPL.US" in result.stdout
+    assert "broker-aapl-1" in result.stdout
+    assert "MSFT.US" not in result.stdout
+
+
+def test_run_broker_fills_filters_by_symbol_and_order_id(monkeypatch: pytest.MonkeyPatch) -> None:
+    class FakeHistoryAdapter(BrokerAdapter):
+        backend_name = "fake"
+
+        def resolve_account(self, account_label: str | None = None) -> ResolvedBrokerAccount:
+            return ResolvedBrokerAccount(label=account_label or "main")
+
+        def list_fill_history(
+            self,
+            account: ResolvedBrokerAccount | None = None,
+            *,
+            symbol: str | None = None,
+            broker_order_id: str | None = None,
+        ) -> list[BrokerFillRecord]:
+            return [
+                BrokerFillRecord(
+                    fill_id="fill-aapl-1",
+                    broker_order_id="broker-aapl-1",
+                    symbol="AAPL.US",
+                    quantity=10,
+                    price=190.5,
+                    broker_name="fake",
+                    account_label=(account or ResolvedBrokerAccount(label="main")).label,
+                    filled_at="2026-04-19T00:00:00+00:00",
+                ),
+                BrokerFillRecord(
+                    fill_id="fill-msft-1",
+                    broker_order_id="broker-msft-1",
+                    symbol="MSFT.US",
+                    quantity=5,
+                    price=420.0,
+                    broker_name="fake",
+                    account_label=(account or ResolvedBrokerAccount(label="main")).label,
+                    filled_at="2026-04-18T00:00:00+00:00",
+                ),
+            ]
+
+    monkeypatch.setattr(cli, "get_broker_adapter", lambda broker_name=None: FakeHistoryAdapter())
+
+    result = cli.run_broker_fills(
+        account="main",
+        broker=None,
+        symbol_filter="AAPL",
+        broker_order_id_filter="broker-aapl-1",
+    )
+
+    assert result.exit_code == 0
+    assert result.stdout is not None
+    assert "AAPL.US" in result.stdout
+    assert "broker-aapl-1" in result.stdout
     assert "MSFT.US" not in result.stdout
 
 

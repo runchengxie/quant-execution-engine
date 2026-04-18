@@ -15,6 +15,7 @@
     *   通过统一的券商适配层执行完整的订单生命周期：提交、查询、撤单与对账（`submit / query / cancel / reconcile`）。
 *   订单追踪与干预
     *   查看本地已跟踪订单、异常队列，以及单笔订单的完整生命周期详情。
+    *   在支持的券商后端上，只读查询 broker-side 订单历史与成交历史，用于排障与审计对照。
     *   丰富的手动操作指令：撤单（`cancel`）、全部撤销（`cancel-all`）、失败重试（`retry`）、改价重提（`reprice`）、重试过旧未成交订单（`retry-stale`）。
     *   部分成交（Partial Fill）处理：撤销剩余（`cancel-rest`）、继续执行剩余数量（`resume-remaining`）、接受部分成交结果（`accept-partial`）。
 *   运维与安全
@@ -35,6 +36,7 @@
 *   LongPort real 已验证只读路径和实盘保护机制，但真实下单仍按 operator-supervised 路径推进。
 *   `ibkr-paper` 依赖本地 IB Gateway，目前只支持 US equities 最小切片，仍缺有效行情下的下单、撤单和成交证据。
 *   `orders` / `exceptions` / `order` 是本地 tracked-state 视图，不是券商全量订单簿。
+*   `broker-orders` / `broker-fills` 是单独的 broker-side 只读查询命令，仅在支持的后端上可用。
 *   `--account` 是标签解析与 fail-fast 校验，不是多账户路由。
 
 ## 快速开始
@@ -78,6 +80,8 @@ qexec quote AAPL 700.HK --broker longport-paper
 qexec orders --broker longport-paper --status open
 qexec exceptions --broker longport-paper --status failure
 qexec order <broker-order-id> --broker longport-paper
+qexec broker-orders --broker longport-paper --symbol AAPL
+qexec broker-fills --broker longport-paper --order-id <broker-order-id>
 qexec reconcile --broker longport-paper
 qexec cancel <broker-order-id> --broker longport-paper
 qexec cancel-all --broker longport-paper

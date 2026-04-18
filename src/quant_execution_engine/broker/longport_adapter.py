@@ -88,6 +88,53 @@ class _BaseLongPortBrokerAdapter(BrokerAdapter):
     ) -> dict[str, Quote]:
         return self.client.quote_snapshot(symbols, include_depth=include_depth)
 
+    def _order_to_record(
+        self,
+        order: object,
+        resolved: ResolvedBrokerAccount,
+    ) -> BrokerOrderRecord:
+        quantity = float(getattr(order, "quantity", 0) or 0)
+        filled_quantity = float(getattr(order, "executed_quantity", 0) or 0)
+        return BrokerOrderRecord(
+            broker_order_id=str(getattr(order, "order_id", "")),
+            symbol=str(getattr(order, "symbol", "")),
+            side=str(_enum_value(getattr(order, "side", ""))).upper(),
+            quantity=quantity,
+            filled_quantity=filled_quantity,
+            remaining_quantity=max(0.0, quantity - filled_quantity),
+            status=_normalize_order_status(getattr(order, "status", "")),
+            broker_name=self.backend_name,
+            account_label=resolved.label,
+            client_order_id=str(getattr(order, "remark", "") or "") or None,
+            avg_fill_price=float(getattr(order, "executed_price", 0) or 0) or None,
+            submitted_at=_coerce_iso(getattr(order, "submitted_at", "")),
+            updated_at=_coerce_iso(
+                getattr(order, "updated_at", None) or getattr(order, "submitted_at", "")
+            ),
+            message=str(getattr(order, "msg", "") or "") or None,
+            raw={
+                "order_type": str(_enum_value(getattr(order, "order_type", ""))),
+                "time_in_force": str(_enum_value(getattr(order, "time_in_force", ""))),
+            },
+        )
+
+    def _execution_to_fill(
+        self,
+        execution: object,
+        resolved: ResolvedBrokerAccount,
+    ) -> BrokerFillRecord:
+        return BrokerFillRecord(
+            fill_id=str(getattr(execution, "trade_id", "")),
+            broker_order_id=str(getattr(execution, "order_id", "")),
+            symbol=str(getattr(execution, "symbol", "")),
+            quantity=float(getattr(execution, "quantity", 0) or 0),
+            price=float(getattr(execution, "price", 0) or 0),
+            broker_name=self.backend_name,
+            account_label=resolved.label,
+            filled_at=_coerce_iso(getattr(execution, "trade_done_at", "")),
+            raw={},
+        )
+
     def lot_size(self, symbol: str) -> int:
         return self.client.lot_size(symbol)
 
@@ -147,34 +194,28 @@ class _BaseLongPortBrokerAdapter(BrokerAdapter):
         resolved = account or self.resolve_account()
         records: list[BrokerOrderRecord] = []
         for order in self.client.list_orders():
-            status = _normalize_order_status(getattr(order, "status", ""))
-            if status in {"FILLED", "CANCELED", "REJECTED", "EXPIRED"}:
+            record = self._order_to_record(order, resolved)
+            if record.status in {"FILLED", "CANCELED", "REJECTED", "EXPIRED"}:
                 continue
-            quantity = float(getattr(order, "quantity", 0) or 0)
-            filled_quantity = float(getattr(order, "executed_quantity", 0) or 0)
-            records.append(
-                BrokerOrderRecord(
-                    broker_order_id=str(getattr(order, "order_id", "")),
-                    symbol=str(getattr(order, "symbol", "")),
-                    side=str(_enum_value(getattr(order, "side", ""))).upper(),
-                    quantity=quantity,
-                    filled_quantity=filled_quantity,
-                    remaining_quantity=max(0.0, quantity - filled_quantity),
-                    status=status,
-                    broker_name=self.backend_name,
-                    account_label=resolved.label,
-                    client_order_id=str(getattr(order, "remark", "") or "") or None,
-                    avg_fill_price=float(getattr(order, "executed_price", 0) or 0)
-                    or None,
-                    submitted_at=_coerce_iso(getattr(order, "submitted_at", "")),
-                    updated_at=_coerce_iso(
-                        getattr(order, "updated_at", None)
-                        or getattr(order, "submitted_at", "")
-                    ),
-                    message=str(getattr(order, "msg", "") or "") or None,
-                )
-            )
+            records.append(record)
         return records
+
+    def list_order_history(
+        self,
+        account: ResolvedBrokerAccount | None = None,
+        *,
+        symbol: str | None = None,
+        broker_order_id: str | None = None,
+    ) -> list[BrokerOrderRecord]:
+        resolved = account or self.resolve_account()
+        return [
+            self._order_to_record(order, resolved)
+            for order in self.client.list_orders(
+                symbol=symbol,
+                order_id=broker_order_id,
+                include_history=True,
+            )
+        ]
 
     def cancel_order(
         self,
@@ -190,23 +231,27 @@ class _BaseLongPortBrokerAdapter(BrokerAdapter):
         broker_order_id: str | None = None,
     ) -> list[BrokerFillRecord]:
         resolved = account or self.resolve_account()
-        executions = self.client.list_executions(order_id=broker_order_id)
-        fills: list[BrokerFillRecord] = []
-        for execution in executions:
-            fills.append(
-                BrokerFillRecord(
-                    fill_id=str(getattr(execution, "trade_id", "")),
-                    broker_order_id=str(getattr(execution, "order_id", "")),
-                    symbol=str(getattr(execution, "symbol", "")),
-                    quantity=float(getattr(execution, "quantity", 0) or 0),
-                    price=float(getattr(execution, "price", 0) or 0),
-                    broker_name=self.backend_name,
-                    account_label=resolved.label,
-                    filled_at=_coerce_iso(getattr(execution, "trade_done_at", "")),
-                    raw={},
-                )
+        return [
+            self._execution_to_fill(execution, resolved)
+            for execution in self.client.list_executions(order_id=broker_order_id)
+        ]
+
+    def list_fill_history(
+        self,
+        account: ResolvedBrokerAccount | None = None,
+        *,
+        symbol: str | None = None,
+        broker_order_id: str | None = None,
+    ) -> list[BrokerFillRecord]:
+        resolved = account or self.resolve_account()
+        return [
+            self._execution_to_fill(execution, resolved)
+            for execution in self.client.list_executions(
+                symbol=symbol,
+                order_id=broker_order_id,
+                include_history=True,
             )
-        return fills
+        ]
 
     def reconcile(
         self,
@@ -240,6 +285,8 @@ class LongPortBrokerAdapter(_BaseLongPortBrokerAdapter):
         supports_cancel=True,
         supports_order_query=True,
         supports_open_order_listing=True,
+        supports_order_history=True,
+        supports_fill_history=True,
         supports_reconcile=True,
         supports_account_selection=False,
         supports_fractional=False,
@@ -263,6 +310,8 @@ class LongPortPaperBrokerAdapter(_BaseLongPortBrokerAdapter):
         supports_cancel=True,
         supports_order_query=True,
         supports_open_order_listing=True,
+        supports_order_history=True,
+        supports_fill_history=True,
         supports_reconcile=True,
         supports_account_selection=False,
         supports_fractional=False,
