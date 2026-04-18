@@ -245,3 +245,16 @@ qexec state-prune --older-than-days 45 --apply --broker longport-paper
 # 例如：清除紧急停单标记、去重成交记录、移除游离数据，或重新计算母订单进度
 qexec state-repair --clear-kill-switch --dedupe-fills --recompute-parent-aggregates --broker longport-paper
 ```
+
+`state-repair` 当前支持的修复开关：
+
+- `--clear-kill-switch`
+  清除本地紧急停单标记并重置连续失败计数。
+- `--dedupe-fills`
+  去除本地执行状态中的重复成交记录。
+- `--drop-orphan-fills`
+  移除无法映射到任何已跟踪订单的游离成交记录。
+- `--drop-orphan-terminal-broker-orders`
+  移除未被任何子订单引用、且已经处于终态的游离券商订单记录。
+- `--recompute-parent-aggregates`
+  根据本地子订单、券商订单和成交记录重新计算母订单的成交数量、剩余数量和汇总状态。

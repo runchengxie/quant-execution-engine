@@ -4,6 +4,9 @@
 
 `quant_execution_engine` 定位为一个纯粹的量化执行引擎。
 
+当前支持矩阵、证据成熟度和 shared caveats 以
+[current-capabilities.md](current-capabilities.md) 为准。
+
 它负责：
 
 *   提供券商底层的适配、接口能力矩阵以及凭证封装。

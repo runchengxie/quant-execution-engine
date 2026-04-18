@@ -1,5 +1,8 @@
 # 盈透证券（IBKR）模拟盘冒烟测试
 
+当前 broker 支持矩阵和证据成熟度以
+[current-capabilities.md](current-capabilities.md) 为准。
+
 本文档旨在说明以下目标：
 
 - 为盈透模拟盘（`ibkr-paper`）提供一套最小化的人工监督操作手册。

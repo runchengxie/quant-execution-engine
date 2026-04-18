@@ -1,5 +1,8 @@
 # 长桥（LongPort）模拟盘失败场景冒烟测试
 
+当前 broker 支持矩阵和证据成熟度以
+[current-capabilities.md](current-capabilities.md) 为准。
+
 本文档的目标：
 
 *   为 `longport-paper` 提供一套贴近真实运维人员的失败场景冒烟测试操作手册。

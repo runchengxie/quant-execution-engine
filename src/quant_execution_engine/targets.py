@@ -158,7 +158,7 @@ def _entry_from_obj(
     )
 
 
-def _entries_from_legacy(
+def _entries_from_ticker_list(
     tickers: list[str],
     *,
     weights: dict[str, float] | None = None,
@@ -170,7 +170,7 @@ def _entries_from_legacy(
         if symbol:
             cleaned.append((str(raw), symbol, market))
     if not cleaned:
-        raise ValueError("legacy targets document contained no valid tickers")
+        raise ValueError("ticker list contained no valid symbols")
 
     if weights:
         entries: list[TargetEntry] = []
@@ -181,9 +181,7 @@ def _entries_from_legacy(
                     weight = weights[key]
                     break
             if weight is None:
-                raise ValueError(
-                    "legacy targets weights must define each target explicitly"
-                )
+                raise ValueError("weights must define each target explicitly")
             entries.append(
                 TargetEntry(
                     symbol=symbol,
@@ -215,7 +213,8 @@ def write_targets_json(
     """Write canonical targets JSON.
 
     Callers may either provide explicit ``targets`` entries or a ticker list
-    plus optional weights, which will be normalized before writing.
+    plus optional weights. Ticker lists are normalized into the canonical
+    ``targets`` array before writing and are not accepted by ``read_targets_json``.
     """
 
     if targets is not None:
@@ -223,7 +222,7 @@ def write_targets_json(
             _entry_from_obj(target, default_market=default_market) for target in targets
         ]
     else:
-        entries = _entries_from_legacy(
+        entries = _entries_from_ticker_list(
             list(tickers or []),
             weights=weights,
             default_market=default_market,
@@ -250,9 +249,10 @@ def read_targets_json(
     require_canonical: bool = False,
     default_market: str = "US",
 ) -> Targets:
-    """Read targets JSON and return structured data.
+    """Read canonical targets JSON and return structured data.
 
-    When ``require_canonical`` is true, ticker-list inputs are rejected.
+    The ``require_canonical`` argument is retained for compatibility with
+    existing call sites. All reads now require a top-level ``targets`` array.
     """
 
     if not path.exists():
@@ -282,24 +282,7 @@ def read_targets_json(
             schema_version=schema_version,
         )
 
-    if require_canonical:
-        raise ValueError(
-            "ticker-list targets are not canonical rebalance inputs; "
-            "provide a targets JSON with a 'targets' array"
-        )
-
-    tickers = [str(t).upper().strip() for t in (raw.get("tickers") or []) if t]
-    weights = raw.get("weights") or None
-    entries = _entries_from_legacy(
-        tickers,
-        weights=weights,
-        default_market=default_market,
-    )
-    return Targets(
-        targets=entries,
-        asof=asof,
-        source=source,
-        target_gross_exposure=target_gross_exposure,
-        notes=notes,
-        schema_version=schema_version,
+    raise ValueError(
+        "ticker-list targets are not canonical rebalance inputs; "
+        "provide a targets JSON with a 'targets' array"
     )

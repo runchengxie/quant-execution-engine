@@ -28,14 +28,14 @@
 
 ## 平台支持与功能成熟度
 
-从代码实现来看，长桥实盘，以及长桥、Alpaca、盈透的模拟盘均已跑通了基础的订单生命周期闭环，但各自的自动化验证（证据）成熟度有所不同：
+当前事实以 [docs/current-capabilities.md](docs/current-capabilities.md) 为准。简要来说：
 
-*   Alpaca 模拟盘：作为低成本、稳定且直观的基线测试环境，非常适合用于日常的回归测试和重复冒烟测试。
-*   长桥（LongPort）模拟盘：依赖 `LONGPORT_ACCESS_TOKEN_TEST`，目前已通过人工监督的冒烟测试，跑通了完整的业务闭环。
-*   长桥（LongPort）实盘：已通过只读模式验证了配置、预检查、账户和行情功能，并确认了实盘保护机制及私有配置路由生效。但实盘下单（`rebalance --execute`）目前仍处于人工监督阶段，最终成熟度以实际交易的审计日志及可复查证据为准。
-*   盈透（IBKR）模拟盘：基于本地 `IB Gateway` + `TWS API` 运行，支持代码最小闭环（目前暂仅支持美股交易）。
-*   *注 1*：CLI 工具中的订单/异常视图仅展示本地执行状态中已跟踪的订单，并非券商后台的全量订单簿。
-*   *注 2*：`--account` 参数目前仅用于标签解析和快速失败校验，暂不支持真实的多账户路由（各券商均按单账户语义运行）。
+*   Alpaca 模拟盘是低成本、稳定的日常回归和冒烟测试基线。
+*   `longport-paper` 已具备人工监督的模拟盘提交、查询、对账、撤单证据。
+*   LongPort real 已验证只读路径和实盘保护机制，但真实下单仍按 operator-supervised 路径推进。
+*   `ibkr-paper` 依赖本地 IB Gateway，目前只支持 US equities 最小切片，仍缺有效行情下的下单、撤单和成交证据。
+*   `orders` / `exceptions` / `order` 是本地 tracked-state 视图，不是券商全量订单簿。
+*   `--account` 是标签解析与 fail-fast 校验，不是多账户路由。
 
 ## 快速开始
 
@@ -80,7 +80,9 @@ qexec exceptions --broker longport-paper --status failure
 qexec order <broker-order-id> --broker longport-paper
 qexec reconcile --broker longport-paper
 qexec cancel <broker-order-id> --broker longport-paper
+qexec cancel-all --broker longport-paper
 qexec cancel-rest <broker-order-id> --broker longport-paper
+qexec resume-remaining <broker-order-id> --broker longport-paper
 qexec accept-partial <broker-order-id> --broker longport-paper
 qexec reprice <broker-order-id> --broker longport-paper --limit-price 9.50
 qexec retry-stale --broker longport-paper --older-than-minutes 15
@@ -121,11 +123,12 @@ PYTHONPATH=src python -m quant_execution_engine --help
 
 实盘安全与配置隔离设计：
 *   为防止 `.env` 文件被误提交或随项目打包泄露，实盘路径会强拦截并拒绝从项目根目录的 `.env*` / `.envrc*` 读取实盘 Token。
+*   `.env.example` 仅作为本地 paper/smoke 示例，不包含 LongPort 实盘 Token 占位符。
 *   实盘推荐配置方式：在当前 shell 中显式 `export`，或将私有凭证存放在项目外部（推荐路径：`~/.config/qexec/longport-live.env`），并使用 `source` 加载。
 *   读取优先级：模拟盘（`longport-paper`）优先读取项目根目录的 `.env`；实盘（`longport`）优先读取用户级私有文件 `~/.config/qexec/longport-live.env`。
 *   实盘执行门禁：实盘下单（`--execute`）必须设置环境变量 `QEXEC_ENABLE_LIVE=1`，且项目根目录下严禁出现实盘凭证。
 *   使用 `qexec config --broker longport` 可查看各项配置的最终命中来源。
-*   详情请参阅 [docs/longport-real-smoke.md](docs/longport-real-smoke.md)。
+*   当前支持矩阵与配置来源规则请参阅 [docs/current-capabilities.md](docs/current-capabilities.md)，实盘操作手册请参阅 [docs/longport-real-smoke.md](docs/longport-real-smoke.md)。
 
 ### Alpaca 模拟盘配置
 
@@ -161,6 +164,7 @@ uv run pytest -m e2e
 uv run pytest -m integration
 ```
 *注：自动化测试仅覆盖行为逻辑，实盘交易的稳定性证明仍以人工监督下的冒烟测试及留存的审计数据为准。*
+各 broker 的测试证据成熟度以 [docs/current-capabilities.md](docs/current-capabilities.md) 为准。
 
 冒烟测试脚手架 (Smoke Harnesses)：
 
@@ -213,6 +217,7 @@ PYTHONPATH=src python project_tools/smoke_operator_harness.py --broker longport-
 深入了解引擎设计与特定流程操作手册：
 
 *   [架构设计 (Architecture)](docs/architecture.md)
+*   [当前能力与成熟度 (Current Capabilities)](docs/current-capabilities.md)
 *   [CLI 命令参考 (CLI)](docs/cli.md)
 *   [配置文件说明 (Configuration)](docs/configuration.md)
 *   [目标文件格式 (Targets)](docs/targets.md)

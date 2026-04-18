@@ -261,6 +261,7 @@ def probe_longport_credentials(
     app_search_order = _search_order_for_longport_env(normalized_env)
     token_search_order = _search_order_for_longport_env(normalized_env)
 
+    # LONGBRIDGE_* names remain deprecated compatibility fallbacks.
     app_key, app_key_source = _resolve_secret(
         ("LONGPORT_APP_KEY", "LONGBRIDGE_APP_KEY"),
         project_root=root,

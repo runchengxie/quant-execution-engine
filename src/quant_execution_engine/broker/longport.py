@@ -9,7 +9,7 @@ from .base import BrokerImportError
 _LONGPORT_SDK_SOURCE = "stub"
 _LONGPORT_SDK_IMPORT_ERROR: ImportError | None = None
 
-# Compatibility import: prefer longport, fallback to longbridge and finally local stubs
+# Deprecated compatibility: prefer longport, fall back to longbridge, then stubs.
 try:  # pragma: no cover - depends on external package
     from longport.openapi import (
         Config,
@@ -115,6 +115,262 @@ def _market_enum(m: str) -> Market:
     }[m]
 
 
+def _coerce_float(value: str | None, default: float = 0.0) -> float:
+    try:
+        return float(str(value)) if value is not None else default
+    except Exception:
+        return default
+
+
+def _coerce_int(value: str | None, default: int = 0) -> int:
+    try:
+        return int(float(str(value))) if value is not None else default
+    except Exception:
+        return default
+
+
+def _default_broker_limits_from_env() -> BrokerLimits:
+    # LONGBRIDGE_* limit names are deprecated compatibility fallbacks.
+    max_notional_env = getenv_both(
+        "LONGPORT_MAX_NOTIONAL_PER_ORDER",
+        "LONGBRIDGE_MAX_NOTIONAL_PER_ORDER",
+        "0",
+    )
+    max_qty_env = getenv_both(
+        "LONGPORT_MAX_QTY_PER_ORDER",
+        "LONGBRIDGE_MAX_QTY_PER_ORDER",
+        "0",
+    )
+    tw_start = getenv_both(
+        "LONGPORT_TRADING_WINDOW_START",
+        "LONGBRIDGE_TRADING_WINDOW_START",
+        "09:30",
+    )
+    tw_end = getenv_both(
+        "LONGPORT_TRADING_WINDOW_END",
+        "LONGBRIDGE_TRADING_WINDOW_END",
+        "16:00",
+    )
+    return BrokerLimits(
+        max_notional_per_order=_coerce_float(max_notional_env, 0.0),
+        max_qty_per_order=_coerce_int(max_qty_env, 0),
+        trading_window_start=str(tw_start or "09:30"),
+        trading_window_end=str(tw_end or "16:00"),
+    )
+
+
+def _extended_hours_enabled(env_name: str) -> bool:
+    # LONGBRIDGE_ENABLE_OVERNIGHT is a deprecated compatibility fallback.
+    enable_overnight, _overnight_source = resolve_longport_runtime_value(
+        ("LONGPORT_ENABLE_OVERNIGHT", "LONGBRIDGE_ENABLE_OVERNIGHT"),
+        env_name=env_name,
+        default="false",
+    )
+    return str(enable_overnight).strip().lower() in {"1", "true", "yes", "y"}
+
+
+class _LazyContext:
+    def __init__(self, factory):
+        self._factory = factory
+        self._ctx = None
+
+    def _ensure(self):
+        if self._ctx is None:
+            self._ctx = self._factory()
+        return self._ctx
+
+    def __getattr__(self, name):
+        return getattr(self._ensure(), name)
+
+
+def _make_longport_context_factory(region: str | None, kind: str):
+    def _factory():
+        tried: list[str] = []
+        for rg in [region, "us", "hk", "sg"]:
+            if not rg or rg in tried:
+                continue
+            tried.append(rg)
+            os.environ["LONGPORT_REGION"] = rg
+            try:
+                cfg = Config.from_env()
+                return QuoteContext(cfg) if kind == "quote" else TradeContext(cfg)
+            except Exception as e:  # Defer raising until all options tried
+                msg = str(e).lower()
+                if "timeout" in msg or "connect" in msg or "dns" in msg:
+                    continue
+                raise
+        raise RuntimeError("无法初始化 LongPort 上下文：network/region configuration error")
+
+    return _factory
+
+
+def _field(item: object, name: str, default=None):
+    if isinstance(item, dict):
+        return item.get(name, default)
+    return getattr(item, name, default)
+
+
+def _cash_snapshot_from_asset(
+    asset: object,
+) -> tuple[float, float | None, str | None]:
+    assets_seq = asset if isinstance(asset, (list, tuple)) else [asset]
+    totals: dict[str, float] = {}
+    picked_net_assets: float | None = None
+    picked_base_ccy: str | None = None
+
+    for account_balance in assets_seq:
+        ci_list = (
+            _field(account_balance, "cash_infos")
+            or _field(account_balance, "cash_info")
+            or []
+        )
+        for ci in ci_list:
+            ccy = str(_field(ci, "currency", "") or _field(ci, "ccy", "")).upper()
+            raw_amt = (
+                _field(ci, "available_cash")
+                or _field(ci, "cash")
+                or _field(ci, "withdraw_cash", 0.0)
+            )
+            try:
+                amt = float(raw_amt or 0.0)
+            except Exception:
+                amt = 0.0
+            if not ccy:
+                continue
+            totals[ccy] = totals.get(ccy, 0.0) + amt
+
+        if picked_net_assets is None:
+            net_assets = _field(account_balance, "net_assets")
+            if net_assets is not None:
+                try:
+                    picked_net_assets = float(net_assets)
+                except Exception:
+                    picked_net_assets = None
+        if picked_base_ccy is None:
+            picked_base_ccy = (
+                str(
+                    _field(account_balance, "currency", "")
+                    or _field(account_balance, "base_currency", "")
+                ).upper()
+                or None
+            )
+
+    if totals:
+        logger.debug(
+            "现金分币种: " + ", ".join(f"{k}={v:.2f}" for k, v in totals.items())
+        )
+
+    cash_usd = totals.get("USD", 0.0)
+    if cash_usd == 0.0:
+        cash_usd = _converted_cash_usd_from_totals(totals)
+    if cash_usd == 0.0:
+        cash_usd = _cash_usd_from_top_level_fields(asset, picked_base_ccy)
+    if cash_usd == 0.0 and totals and any(k != "USD" for k in totals):
+        logger.debug("未找到USD现金，检测到非USD余额；如需折算，请配置FX或启用USD子账户。")
+
+    return cash_usd, picked_net_assets, picked_base_ccy
+
+
+def _converted_cash_usd_from_totals(totals: dict[str, float]) -> float:
+    if not totals:
+        return 0.0
+    total_conv = 0.0
+    any_conv = False
+    for ccy, amt in totals.items():
+        if ccy == "USD":
+            continue
+        conv = to_usd(amt, ccy)
+        if conv is not None:
+            total_conv += float(conv)
+            any_conv = True
+    if any_conv:
+        logger.debug(f"按汇率折算非USD现金合计: {total_conv:.2f} USD")
+        return total_conv
+    return 0.0
+
+
+def _cash_usd_from_top_level_fields(asset: object, base_ccy: str | None) -> float:
+    for name in ("available_cash", "cash", "withdraw_cash", "total_cash"):
+        value = _field(asset, name)
+        if value is None:
+            continue
+        try:
+            raw = float(value)
+        except Exception:
+            continue
+        if raw == 0.0:
+            continue
+        base = (base_ccy or "").upper() if base_ccy else None
+        if base and base != "USD":
+            converted = to_usd(raw, base)
+            if converted is not None:
+                cash_usd = float(converted)
+                logger.debug(f"使用{base}字段{name}={raw:.2f}折算USD={cash_usd:.2f}")
+                return cash_usd
+        elif base == "USD":
+            logger.debug(f"使用USD字段{name}={raw:.2f}")
+            return raw
+    return 0.0
+
+
+def _push_stock_position(
+    pos_map: dict[str, int],
+    symbol: object,
+    quantity: object,
+    market: object | None = None,
+) -> None:
+    if symbol is None or quantity is None:
+        return
+    try:
+        qty = int(float(quantity))
+    except Exception:
+        return
+    normalized_symbol = str(symbol).upper()
+    if "." not in normalized_symbol and market:
+        normalized_symbol = f"{normalized_symbol}.{str(market).upper()}"
+    pos_map[normalized_symbol] = pos_map.get(normalized_symbol, 0) + qty
+
+
+def _stock_position_map_from_response(response: object) -> dict[str, int]:
+    groups = _field(response, "list") or _field(response, "channels")
+    if groups is None:
+        groups = response
+
+    pos_map: dict[str, int] = {}
+    if not isinstance(groups, list):
+        return pos_map
+    for group in groups:
+        stock_info = _field(group, "stock_info")
+        if stock_info is not None:
+            for item in stock_info:
+                _push_stock_position(
+                    pos_map,
+                    _field(item, "symbol"),
+                    _field(item, "quantity"),
+                    _field(item, "market"),
+                )
+            continue
+
+        positions = _field(group, "positions")
+        if positions is not None:
+            for item in positions:
+                _push_stock_position(
+                    pos_map,
+                    _field(item, "symbol"),
+                    _field(item, "quantity"),
+                    _field(item, "market"),
+                )
+            continue
+
+        _push_stock_position(
+            pos_map,
+            _field(group, "symbol"),
+            _field(group, "quantity"),
+            _field(group, "market"),
+        )
+    return pos_map
+
+
 class LongPortClient:
     """LongPort client for stock trading and querying.
 
@@ -152,7 +408,8 @@ class LongPortClient:
         )
         access_token = credentials.access_token
 
-        # Inject token/region via environment variables, then use SDK's from_env to select correct endpoint and default config
+        # Inject token/region via environment variables, then use SDK's
+        # from_env to select the correct endpoint and default config.
         self._prev_env = {
             "LONGPORT_APP_KEY": os.getenv("LONGPORT_APP_KEY"),
             "LONGPORT_APP_SECRET": os.getenv("LONGPORT_APP_SECRET"),
@@ -175,106 +432,20 @@ class LongPortClient:
         # Use lightweight wrappers that only create the underlying contexts
         # when a method is actually invoked.
 
-        class _LazyContext:
-            def __init__(self, factory):
-                self._factory = factory
-                self._ctx = None
-
-            def _ensure(self):
-                if self._ctx is None:
-                    self._ctx = self._factory()
-                return self._ctx
-
-            def __getattr__(self, name):
-                return getattr(self._ensure(), name)
-
-        # Region-aware factory with fallback on connection timeout
-        def _mk_ctx(kind: str):
-            def _factory():
-                # Try current region first, then fall back to common regions
-                tried: list[str] = []
-                for rg in [self.region, "us", "hk", "sg"]:
-                    if not rg or rg in tried:
-                        continue
-                    tried.append(rg)
-                    os.environ["LONGPORT_REGION"] = rg
-                    try:
-                        cfg = Config.from_env()
-                        return QuoteContext(cfg) if kind == "quote" else TradeContext(cfg)
-                    except Exception as e:  # Defer raising until all options tried
-                        # Only retry on probable connectivity/endpoint issues
-                        msg = str(e).lower()
-                        if "timeout" in msg or "connect" in msg or "dns" in msg:
-                            continue
-                        raise
-                # Should not reach here; raise a generic error if we do
-                raise RuntimeError(
-                    "无法初始化 LongPort 上下文：network/region configuration error"
-                )
-
-            return _factory
-
-        self.quote = _LazyContext(_mk_ctx("quote"))
-        self.trade = _LazyContext(_mk_ctx("trade"))
+        self.quote = _LazyContext(
+            _make_longport_context_factory(self.region, "quote")
+        )
+        self.trade = _LazyContext(
+            _make_longport_context_factory(self.region, "trade")
+        )
         # Backward compatible attribute names expected by older code/tests
         self.q = self.quote
         self.t = self.trade
 
         # Build limits from env if not explicitly provided. 0 means unlimited.
-        if limits is None:
+        self.limits = limits if limits is not None else _default_broker_limits_from_env()
 
-            def _to_float(v: str | None, default: float = 0.0) -> float:
-                try:
-                    return float(str(v)) if v is not None else default
-                except Exception:
-                    return default
-
-            def _to_int(v: str | None, default: int = 0) -> int:
-                try:
-                    return int(float(str(v))) if v is not None else default
-                except Exception:
-                    return default
-
-            max_notional_env = getenv_both(
-                "LONGPORT_MAX_NOTIONAL_PER_ORDER",
-                "LONGBRIDGE_MAX_NOTIONAL_PER_ORDER",
-                "0",
-            )
-            max_qty_env = getenv_both(
-                "LONGPORT_MAX_QTY_PER_ORDER",
-                "LONGBRIDGE_MAX_QTY_PER_ORDER",
-                "0",
-            )
-            tw_start = getenv_both(
-                "LONGPORT_TRADING_WINDOW_START",
-                "LONGBRIDGE_TRADING_WINDOW_START",
-                "09:30",
-            )
-            tw_end = getenv_both(
-                "LONGPORT_TRADING_WINDOW_END",
-                "LONGBRIDGE_TRADING_WINDOW_END",
-                "16:00",
-            )
-            self.limits = BrokerLimits(
-                max_notional_per_order=_to_float(max_notional_env, 0.0),
-                max_qty_per_order=_to_int(max_qty_env, 0),
-                trading_window_start=str(tw_start or "09:30"),
-                trading_window_end=str(tw_end or "16:00"),
-            )
-        else:
-            self.limits = limits
-
-        enable_overnight, _overnight_source = resolve_longport_runtime_value(
-            ("LONGPORT_ENABLE_OVERNIGHT", "LONGBRIDGE_ENABLE_OVERNIGHT"),
-            env_name=self.env.value,
-            default="false",
-        )
-        self.allow_extended = str(enable_overnight).strip().lower() in {
-            "1",
-            "true",
-            "yes",
-            "y",
-        }
+        self.allow_extended = _extended_hours_enabled(self.env.value)
 
         # Cache related
         self._session_cache: dict[str, list[tuple[int, int, str]]] = {}
@@ -282,6 +453,56 @@ class LongPortClient:
         self._is_trading_day_cache: dict[str, bool] = {}
         self._day_cache_expire_at: float = 0.0
         self._cache_ttl_seconds: int = 600
+
+    def _quote_context(self):
+        quote_ctx = getattr(self, "q", None) or getattr(self, "quote", None)
+        if quote_ctx is None:
+            raise AttributeError("Quote context not initialised")
+        return quote_ctx
+
+    def _trade_context(self):
+        trade_ctx = getattr(self, "t", None) or getattr(self, "trade", None)
+        if trade_ctx is None:
+            raise AttributeError("Trade context not initialised")
+        return trade_ctx
+
+    def _account_asset(self) -> tuple[object | None, Exception | None]:
+        trade_ctx = self._trade_context()
+        last_err: Exception | None = None
+        for fn_name in ("asset", "account_balance"):
+            fn = getattr(trade_ctx, fn_name, None)
+            if not fn:
+                continue
+            try:
+                return fn(), None
+            except Exception as e:  # pragma: no cover - depends on live SDK/network
+                last_err = e
+                logger.debug(f"调用 {fn_name}() 获取资金失败: {e}")
+        return None, last_err
+
+    def _submit_order(
+        self,
+        *,
+        symbol: str,
+        order_type: OrderType,
+        quantity: float,
+        price: float | None = None,
+        tif: TimeInForceType | None = None,
+        remark: str | None = None,
+    ):
+        trade_ctx = self._trade_context()
+        side = OrderSide.Buy if quantity >= 0 else OrderSide.Sell
+        payload = {
+            "symbol": _to_lb_symbol(symbol),
+            "order_type": order_type,
+            "side": side,
+            "submitted_quantity": Decimal(str(abs(quantity))),
+            "time_in_force": tif or TimeInForceType.Day,
+            "remark": remark,
+        }
+        if price is not None:
+            payload["submitted_price"] = Decimal(str(price))
+        return trade_ctx.submit_order(**payload)
 
     # ---------- Quote Data ----------
     def quote_last(self, symbols: Iterable[str]) -> dict[str, tuple[float, str]]:
@@ -295,9 +516,7 @@ class LongPortClient:
         """
         bars: dict[str, tuple[float, str]] = {}
         symbol_list = [_to_lb_symbol(x) for x in symbols]
-        quote_ctx = getattr(self, "q", None) or getattr(self, "quote", None)
-        if quote_ctx is None:
-            raise AttributeError("Quote context not initialised")
+        quote_ctx = self._quote_context()
         ret = quote_ctx.quote(symbol_list)
         for i in ret:
             # Prefer last_done, fallback to prev_close if missing/zero
@@ -317,9 +536,7 @@ class LongPortClient:
     ) -> dict[str, Quote]:
         """Return richer quote snapshots with optional bid/ask depth."""
 
-        quote_ctx = getattr(self, "q", None) or getattr(self, "quote", None)
-        if quote_ctx is None:
-            raise AttributeError("Quote context not initialised")
+        quote_ctx = self._quote_context()
 
         symbol_list = [_to_lb_symbol(symbol) for symbol in symbols]
         quotes = quote_ctx.quote(symbol_list)
@@ -373,9 +590,7 @@ class LongPortClient:
         LongPort format and that parameters are forwarded correctly.
         """
 
-        quote_ctx = getattr(self, "q", None) or getattr(self, "quote", None)
-        if quote_ctx is None:
-            raise AttributeError("Quote context not initialised")
+        quote_ctx = self._quote_context()
         lb_symbol = _to_lb_symbol(symbol)
         market = _market_enum(_market_of(lb_symbol))
         return quote_ctx.history_candlesticks_by_date(
@@ -398,22 +613,12 @@ class LongPortClient:
         are converted to ``Decimal`` to avoid floating point issues.
         """
 
-        trade_ctx = getattr(self, "t", None) or getattr(self, "trade", None)
-        if trade_ctx is None:
-            raise AttributeError("Trade context not initialised")
-
-        side = OrderSide.Buy if quantity >= 0 else OrderSide.Sell
-        qty = Decimal(str(abs(quantity)))
-        px = Decimal(str(price))
-        if tif is None:
-            tif = TimeInForceType.Day
-        return trade_ctx.submit_order(
-            symbol=_to_lb_symbol(symbol),
+        return self._submit_order(
+            symbol=symbol,
             order_type=OrderType.LO,
-            side=side,
-            submitted_price=px,
-            submitted_quantity=qty,
-            time_in_force=tif,
+            quantity=quantity,
+            price=price,
+            tif=tif,
             remark=remark,
         )
 
@@ -426,37 +631,24 @@ class LongPortClient:
     ):
         """Submit a market order."""
 
-        trade_ctx = getattr(self, "t", None) or getattr(self, "trade", None)
-        if trade_ctx is None:
-            raise AttributeError("Trade context not initialised")
-
-        side = OrderSide.Buy if quantity >= 0 else OrderSide.Sell
-        qty = Decimal(str(abs(quantity)))
-        if tif is None:
-            tif = TimeInForceType.Day
-        return trade_ctx.submit_order(
-            symbol=_to_lb_symbol(symbol),
+        return self._submit_order(
+            symbol=symbol,
             order_type=OrderType.MO,
-            side=side,
-            submitted_quantity=qty,
-            time_in_force=tif,
+            quantity=quantity,
+            tif=tif,
             remark=remark,
         )
 
     def get_order_detail(self, order_id: str):
         """Return detailed order state."""
 
-        trade_ctx = getattr(self, "t", None) or getattr(self, "trade", None)
-        if trade_ctx is None:
-            raise AttributeError("Trade context not initialised")
+        trade_ctx = self._trade_context()
         return trade_ctx.order_detail(order_id)
 
     def cancel_order_by_id(self, order_id: str) -> None:
         """Cancel an order by broker order id."""
 
-        trade_ctx = getattr(self, "t", None) or getattr(self, "trade", None)
-        if trade_ctx is None:
-            raise AttributeError("Trade context not initialised")
+        trade_ctx = self._trade_context()
         trade_ctx.cancel_order(order_id)
 
     def list_orders(
@@ -468,9 +660,7 @@ class LongPortClient:
     ) -> list[Any]:
         """List orders, defaulting to today's open-order surface."""
 
-        trade_ctx = getattr(self, "t", None) or getattr(self, "trade", None)
-        if trade_ctx is None:
-            raise AttributeError("Trade context not initialised")
+        trade_ctx = self._trade_context()
         symbol_fmt = _to_lb_symbol(symbol) if symbol else None
         if include_history:
             return list(trade_ctx.history_orders(symbol=symbol_fmt))
@@ -485,9 +675,7 @@ class LongPortClient:
     ) -> list[Any]:
         """List fill/execution events."""
 
-        trade_ctx = getattr(self, "t", None) or getattr(self, "trade", None)
-        if trade_ctx is None:
-            raise AttributeError("Trade context not initialised")
+        trade_ctx = self._trade_context()
         symbol_fmt = _to_lb_symbol(symbol) if symbol else None
         if include_history:
             return list(trade_ctx.history_executions(symbol=symbol_fmt))
@@ -506,240 +694,29 @@ class LongPortClient:
             - net_assets: Total assets from broker (multi-currency/positions), if available
             - base_currency: Currency of net_assets (e.g. 'HKD')
 
-        Compatible with different SDK versions of asset/balance and stock_positions/position_list return formats.
+        Compatible with different SDK versions of asset/balance and
+        stock_positions/position_list return formats.
         """
         cash_usd = 0.0
         pos_map: dict[str, int] = {}
         net_assets: float | None = None
         base_ccy: str | None = None
 
-        # ---------- Cash ----------
-        # Be resilient: try asset() then account_balance(); log failures instead of swallowing silently.
-        asset = None
-        last_err: Exception | None = None
-        for fn_name in ("asset", "account_balance"):
-            fn = getattr(self.trade, fn_name, None)
-            if not fn:
-                continue
-            try:
-                asset = fn()
-                break
-            except Exception as e:  # pragma: no cover - depends on live SDK/network
-                last_err = e
-                logger.debug(f"调用 {fn_name}() 获取资金失败: {e}")
-                continue
-
+        asset, last_err = self._account_asset()
         if asset is None:
             if last_err is not None:
                 logger.warning(f"无法获取账户资金信息，视为0（原因: {last_err}）")
         else:
-            # 1) Prefer detailed cash_infos aggregation by currency; support list returns
-            assets_seq = asset if isinstance(asset, (list, tuple)) else [asset]
-            totals: dict[str, float] = {}
-            picked_net_assets: float | None = None
-            picked_base_ccy: str | None = None
-            for ab in assets_seq:
-                ci_list = (
-                    getattr(ab, "cash_infos", None)
-                    or getattr(ab, "cash_info", None)
-                    or []
-                )
-                for ci in ci_list:
-                    ccy = str(
-                        getattr(ci, "currency", "") or getattr(ci, "ccy", "")
-                    ).upper()
-                    # prefer available_cash > cash > withdraw_cash
-                    raw_amt = (
-                        getattr(ci, "available_cash", None)
-                        or getattr(ci, "cash", None)
-                        or getattr(ci, "withdraw_cash", 0.0)
-                    )
-                    try:
-                        amt = float(raw_amt or 0.0)
-                    except Exception:
-                        amt = 0.0
-                    if not ccy:
-                        continue
-                    totals[ccy] = totals.get(ccy, 0.0) + amt
+            cash_usd, net_assets, base_ccy = _cash_snapshot_from_asset(asset)
 
-                if picked_net_assets is None:
-                    na = getattr(ab, "net_assets", None)
-                    if na is not None:
-                        try:
-                            picked_net_assets = float(na)
-                        except Exception:
-                            picked_net_assets = None
-                if picked_base_ccy is None:
-                    picked_base_ccy = (
-                        str(
-                            getattr(ab, "currency", "")
-                            or getattr(ab, "base_currency", "")
-                        ).upper()
-                        or None
-                    )
-
-            if totals:
-                logger.debug(
-                    "现金分币种: "
-                    + ", ".join(f"{k}={v:.2f}" for k, v in totals.items())
-                )
-            # USD direct bucket
-            cash_usd = totals.get("USD", 0.0)
-            # Broker-reported total assets and base currency
-            if picked_net_assets is not None:
-                net_assets = picked_net_assets
-            if picked_base_ccy is not None:
-                base_ccy = picked_base_ccy
-
-            # 2) If no USD bucket, try converting other currencies; finally fallback to object-level fields
-            if cash_usd == 0.0:
-                if totals:
-                    total_conv = 0.0
-                    any_conv = False
-                    for ccy, amt in totals.items():
-                        if ccy == "USD":
-                            continue
-                        conv = to_usd(amt, ccy)
-                        if conv is not None:
-                            total_conv += float(conv)
-                            any_conv = True
-                    if any_conv:
-                        cash_usd = total_conv
-                        logger.debug(f"按汇率折算非USD现金合计: {cash_usd:.2f} USD")
-
-                if cash_usd == 0.0:
-                    # Some SDKs expose top-level fields on a single object; attempt a last resort
-                    for name in (
-                        "available_cash",
-                        "cash",
-                        "withdraw_cash",
-                        "total_cash",
-                    ):
-                        v = getattr(asset, name, None)
-                        if v is None:
-                            continue
-                        try:
-                            raw = float(v)
-                        except Exception:
-                            continue
-                        if raw == 0.0:
-                            continue
-                        b = (base_ccy or "").upper() if base_ccy else None
-                        if b and b != "USD":
-                            converted = to_usd(raw, b)
-                            if converted is not None:
-                                cash_usd = float(converted)
-                                logger.debug(
-                                    f"使用{b}字段{name}={raw:.2f}折算USD={cash_usd:.2f}"
-                                )
-                                break
-                        elif b == "USD":
-                            cash_usd = raw
-                            logger.debug(f"使用USD字段{name}={cash_usd:.2f}")
-                            break
-                if cash_usd == 0.0 and totals and any(k != "USD" for k in totals):
-                    logger.debug(
-                        "未找到USD现金，检测到非USD余额；如需折算，请配置FX或启用USD子账户。"
-                    )
-
-        # ---------- Positions ----------
         try:
-            pos_fn = getattr(self.trade, "stock_positions", None) or getattr(
-                self.trade, "position_list", None
+            trade_ctx = self._trade_context()
+            pos_fn = getattr(trade_ctx, "stock_positions", None) or getattr(
+                trade_ctx, "position_list", None
             )
             if not pos_fn:
                 return cash_usd, pos_map, net_assets, base_ccy
-
-            ret = pos_fn()
-
-            # Compatible with multiple formats:
-            # 1) Object has .list; 2) Object has .channels (new version return);
-            # 3) dict has same-named keys; 4) Direct list
-            groups = getattr(ret, "list", None) or getattr(ret, "channels", None)
-            if groups is None and isinstance(ret, dict):
-                groups = ret.get("list", None) or ret.get("channels", None)
-            if groups is None:
-                groups = ret  # Some SDKs directly return flattened list
-
-            def push(sym, qty, market=None):
-                if sym is None or qty is None:
-                    return
-                try:
-                    q = int(float(qty))
-                except Exception:
-                    return
-                s = str(sym).upper()
-                if "." not in s and market:
-                    s = f"{s}.{str(market).upper()}"
-                pos_map[s] = pos_map.get(s, 0) + q
-
-            if isinstance(groups, list):
-                for g in groups:
-                    # Format A (old): Group object contains stock_info list
-                    stock_info = getattr(g, "stock_info", None)
-                    if stock_info is None and isinstance(g, dict):
-                        stock_info = g.get("stock_info")
-
-                    if stock_info is not None:
-                        for it in stock_info:
-                            sym = (
-                                getattr(it, "symbol", None)
-                                if not isinstance(it, dict)
-                                else it.get("symbol")
-                            )
-                            qty = (
-                                getattr(it, "quantity", None)
-                                if not isinstance(it, dict)
-                                else it.get("quantity")
-                            )
-                            mkt = (
-                                getattr(it, "market", None)
-                                if not isinstance(it, dict)
-                                else it.get("market")
-                            )
-                            push(sym, qty, mkt)
-                    else:
-                        # Format B (new): Group contains positions list (e.g. ret.channels[].positions)
-                        positions = getattr(g, "positions", None)
-                        if positions is None and isinstance(g, dict):
-                            positions = g.get("positions")
-                        if positions is not None:
-                            for it in positions:
-                                sym = (
-                                    getattr(it, "symbol", None)
-                                    if not isinstance(it, dict)
-                                    else it.get("symbol")
-                                )
-                                qty = (
-                                    getattr(it, "quantity", None)
-                                    if not isinstance(it, dict)
-                                    else it.get("quantity")
-                                )
-                                mkt = (
-                                    getattr(it, "market", None)
-                                    if not isinstance(it, dict)
-                                    else it.get("market")
-                                )
-                                push(sym, qty, mkt)
-                        else:
-                            # Format C: Already flattened Position object
-                            it = g
-                            sym = (
-                                getattr(it, "symbol", None)
-                                if not isinstance(it, dict)
-                                else it.get("symbol")
-                            )
-                            qty = (
-                                getattr(it, "quantity", None)
-                                if not isinstance(it, dict)
-                                else it.get("quantity")
-                            )
-                            mkt = (
-                                getattr(it, "market", None)
-                                if not isinstance(it, dict)
-                                else it.get("market")
-                            )
-                            push(sym, qty, mkt)
+            pos_map = _stock_position_map_from_response(pos_fn())
         except Exception as e:
             logger.warning(f"获取持仓信息失败: {e}")
 
@@ -758,7 +735,7 @@ class LongPortClient:
         """
         result: dict[str, tuple[float, float, str]] = {}
         try:
-            fn = getattr(self.trade, "fund_positions", None)
+            fn = getattr(self._trade_context(), "fund_positions", None)
             if not fn:
                 return result
             resp = fn()
@@ -809,7 +786,7 @@ class LongPortClient:
         Returns:
             Shares per lot
         """
-        # Fast path: US stocks default to 1, avoid unnecessary permission output from static info queries
+        # Fast path: US stocks default to 1, avoiding static-info permission noise.
         if _market_of(symbol) == "US":
             return 1
         try:
@@ -836,7 +813,8 @@ class LongPortClient:
                         beg = int(getattr(seg, "beg_time", 0))  # hhmm
                         end = int(getattr(seg, "end_time", 0))  # hhmm
                         code = getattr(seg, "trade_session", None)
-                        # Convention: None/0 => Regular, 1 => Pre, 2 => Post, 3 => Overnight (if supported)
+                        # Convention: None/0 => Regular, 1 => Pre, 2 => Post,
+                        # 3 => Overnight when supported.
                         if code in (None, 0):
                             kind = "Regular"
                         elif code == 1:
@@ -890,7 +868,8 @@ class LongPortClient:
     def _check_window(self, symbol: str) -> None:
         """Check if current time is within trading window.
 
-        Uses LongPort authoritative trading session and trading day interface. Falls back to local time estimation if interface unavailable.
+        Uses LongPort authoritative trading session and trading day interface.
+        Falls back to local time estimation if the interface is unavailable.
         """
         self._refresh_caches_if_needed()
 
@@ -1055,7 +1034,7 @@ class LongPortClient:
         }
 
     def close(self):
-        """Close quote and trade contexts (fault-tolerant, does not depend on whether SDK provides close)."""
+        """Close quote and trade contexts without requiring SDK close support."""
         for ctx in (self.quote, self.trade):
             try:
                 fn = getattr(ctx, "close", None)
@@ -1064,7 +1043,7 @@ class LongPortClient:
             except Exception:
                 # Ignore close exceptions to avoid affecting main flow
                 pass
-        # Restore environment variables to avoid affecting subsequent instances or other usage in processes
+        # Restore environment variables to avoid affecting later instances.
         try:
             for k, v in (getattr(self, "_prev_env", {}) or {}).items():
                 if v is None:

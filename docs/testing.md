@@ -1,5 +1,8 @@
 # 测试
 
+Broker 支持范围、证据成熟度和已知缺口以
+[current-capabilities.md](current-capabilities.md) 为准。本文只描述测试入口和运行方式。
+
 ## 默认入口
 
 默认的测试入口为：
@@ -49,16 +52,16 @@ uv run pytest -m integration
 uv run pytest --cov=src/quant_execution_engine --cov-report=term-missing -m 'not integration and not e2e and not slow'
 ```
 
-## Broker 测试与证据矩阵
+## Broker 测试与证据入口
 
-| Broker | 默认自动化覆盖 | 按需开启的自动化覆盖 | 人工监督冒烟测试 | 当前证据缺口 |
-| --- | --- | --- | --- | --- |
-| `alpaca-paper` | 单元测试覆盖了适配器的数据归一化、CLI 路由和执行生命周期；默认不发起真实网络请求。 | 默认无真实联网的集成测试；若需验证模拟盘凭证，需按场景手动运行。 | 可作为低成本且稳定的模拟盘回归测试与冒烟测试基线。 | 不包含实盘测试路径。 |
-| `longport-paper` | 单元测试覆盖了凭证解析、LongPort 模拟盘运行环境的优先级逻辑，以及 CLI 和测试脚手架的契约。 | 在提供 `LONGPORT_ACCESS_TOKEN_TEST` 的前提下，可运行模拟盘的预检（`preflight`）与调仓（`rebalance`）路径。 | 已具备人工监督下的模拟盘测试证据，验证通过了“提交/查询/对账/撤单”的基础闭环。 | 仍需继续补充真实失败场景下的测试证据。 |
-| `longport` | 单元测试覆盖了实盘保护机制、本地密钥拦截逻辑以及配置来源解析。 | 涉及 LongPort 实盘行情的集成测试依赖其相关的实盘凭证（Key/Secret/Token），凭证异常时会自动跳过。 | 需附加 `--allow-non-paper` 参数，并按照 `longport-real-smoke.md` 文档进行人工监督执行。 | 完整的实盘“提交/查询/撤单/对账”闭环尚未通过自动化的端到端验证。 |
-| `ibkr-paper` | 单元测试覆盖了后端注册、运行环境配置、美股标签校验、订单与成交数据的归一化，以及冒烟测试脚手架的环境快照功能。 | 通过设置 `IBKR_ENABLE_INTEGRATION=1` 运行只读测试；`IBKR_ENABLE_MUTATION_TESTS=1` 运行提交/撤单测试；`IBKR_ENABLE_FILL_TESTS=1` 运行成交测试。 | 已具备一次本地的“无订单提交（no-order）”测试证据；具体路径请参考 `ibkr-paper-smoke.md`。 | 尚缺在有效行情下的真实券商订单、撤单和成交反馈的测试证据。 |
+| Broker | 默认自动化覆盖 | 按需开启的自动化覆盖 | 人工监督冒烟测试 |
+| --- | --- | --- | --- |
+| `alpaca-paper` | 单元测试覆盖适配器归一化、CLI 路由和执行生命周期；默认不发起真实网络请求。 | 默认无真实联网集成测试；若需验证模拟盘凭证，按场景手动运行。 | 可作为低成本、稳定的模拟盘回归和冒烟基线。 |
+| `longport-paper` | 单元测试覆盖凭证解析、模拟盘运行环境优先级、CLI 和测试脚手架契约。 | 提供 `LONGPORT_ACCESS_TOKEN_TEST` 后可运行模拟盘预检与调仓路径。 | 已具备人工监督的提交、查询、对账、撤单基础闭环证据。 |
+| `longport` | 单元测试覆盖实盘保护、本地密钥拦截和配置来源解析。 | 实盘行情集成测试依赖 Key/Secret/Token，凭证或网络异常时会跳过。 | 需附加 `--allow-non-paper` 并按 `longport-real-smoke.md` 人工监督执行。 |
+| `ibkr-paper` | 单元测试覆盖后端注册、运行环境配置、美股标签校验、订单与成交数据归一化、冒烟环境快照。 | `IBKR_ENABLE_INTEGRATION=1` 运行只读测试；`IBKR_ENABLE_MUTATION_TESTS=1` 运行提交/撤单测试；`IBKR_ENABLE_FILL_TESTS=1` 运行成交测试。 | 已具备本地 no-order 证据；具体路径见 `ibkr-paper-smoke.md`。 |
 
-*注：`outputs/` 目录默认被 Git 忽略。上表中的“证据（evidence）”指的是保存在本地以供复查的运行记录，而非随代码仓库进行版本控制的固定测试夹具（fixtures）。*
+*注：`outputs/` 目录默认被 Git 忽略。证据文件是本地复查记录，不是随仓库版本控制的固定 fixtures。*
 
 可以使用以下命令检查代码路径状态与证据成熟度（evidence maturity）是否一致：
 

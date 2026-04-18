@@ -70,23 +70,28 @@ WORKFLOW_FAILURE_METADATA: dict[str, tuple[str, str]] = {
     ),
     "quote": (
         "QUOTE_CHECK_FAILED",
-        "Retry `qexec quote` and confirm market-data entitlements, symbol mapping, and broker connectivity.",
+        "Retry `qexec quote` and confirm market-data entitlements, "
+        "symbol mapping, and broker connectivity.",
     ),
     "rebalance": (
         "REBALANCE_EXECUTION_FAILED",
-        "Inspect the rebalance stderr, audit log, and local state before retrying the mutation step.",
+        "Inspect the rebalance stderr, audit log, and local state before "
+        "retrying the mutation step.",
     ),
     "orders": (
         "OPEN_ORDER_QUERY_FAILED",
-        "Run `qexec reconcile` or inspect the local tracked state before relying on open-order output.",
+        "Run `qexec reconcile` or inspect the local tracked state before "
+        "relying on open-order output.",
     ),
     "order": (
         "TRACKED_ORDER_QUERY_FAILED",
-        "Inspect the tracked order reference in local state, then rerun `qexec order` or `qexec reconcile`.",
+        "Inspect the tracked order reference in local state, then rerun "
+        "`qexec order` or `qexec reconcile`.",
     ),
     "reconcile": (
         "RECONCILE_FAILED",
-        "Rerun `qexec reconcile` after checking broker/API health; inspect the state file if tracked status may be stale.",
+        "Rerun `qexec reconcile` after checking broker/API health; inspect "
+        "the state file if tracked status may be stale.",
     ),
     "exceptions": (
         "EXCEPTION_VIEW_FAILED",
@@ -94,7 +99,8 @@ WORKFLOW_FAILURE_METADATA: dict[str, tuple[str, str]] = {
     ),
     "cancel-all": (
         "BULK_CANCEL_FAILED",
-        "Inspect remaining tracked open orders, then rerun `qexec cancel-all` or `qexec reconcile`.",
+        "Inspect remaining tracked open orders, then rerun `qexec cancel-all` "
+        "or `qexec reconcile`.",
     ),
 }
 
@@ -167,6 +173,49 @@ def run_cli_subprocess_step(
             stdout=completed.stdout.strip() or None,
             stderr=completed.stderr.strip() or None,
         ),
+    )
+
+
+def qexec_broker_argv(
+    command: str,
+    *,
+    broker: str,
+    account_label: str,
+    positionals: list[str] | None = None,
+    extra_args: list[str] | None = None,
+) -> list[str]:
+    return [
+        sys.executable,
+        "-m",
+        "quant_execution_engine",
+        command,
+        *(positionals or []),
+        "--broker",
+        broker,
+        "--account",
+        account_label,
+        *(extra_args or []),
+    ]
+
+
+def run_broker_workflow_step(
+    env_snapshot: dict[str, str | None],
+    *,
+    name: str,
+    cli_isolation: bool,
+    cli_argv: list[str],
+    direct_fn,
+    direct_args: list[object] | None = None,
+    direct_kwargs: dict[str, object] | None = None,
+) -> dict[str, object]:
+    if cli_isolation:
+        return run_cli_subprocess_step(env_snapshot, name, cli_argv)
+    return run_step_with_env(
+        env_snapshot,
+        name,
+        direct_fn,
+        *(direct_args or []),
+        **(direct_kwargs or {}),
     )
 
 
@@ -656,7 +705,10 @@ def run_operator_smoke_workflow(args: argparse.Namespace) -> int:
         steps.append(run_step_with_env(broker_env, "quote", run_quote, [canonical], broker=broker))
 
         if args.preflight_only:
-            print("\n== preflight ==\nPreflight checks passed; skipping targets and broker mutation steps.")
+            print(
+                "\n== preflight ==\n"
+                "Preflight checks passed; skipping targets and broker mutation steps."
+            )
             write_evidence(
                 args=args,
                 broker=broker,
@@ -697,36 +749,30 @@ def run_operator_smoke_workflow(args: argparse.Namespace) -> int:
             targets=targets,
             notes=f"operator smoke for {canonical}",
         )
-        print(f"\n== targets ==\nWrote {output_path} with target_quantity={targets[0]['target_quantity']}")
+        print(
+            f"\n== targets ==\n"
+            f"Wrote {output_path} with target_quantity={targets[0]['target_quantity']}"
+        )
 
         steps.append(
-            (
-                run_cli_subprocess_step(
-                    broker_env,
+            run_broker_workflow_step(
+                broker_env,
+                name="rebalance",
+                cli_isolation=longport_cli_isolation,
+                cli_argv=qexec_broker_argv(
                     "rebalance",
-                    [
-                        sys.executable,
-                        "-m",
-                        "quant_execution_engine",
-                        "rebalance",
-                        str(output_path),
-                        "--broker",
-                        broker,
-                        "--account",
-                        account_label,
-                        "--execute",
-                    ],
-                )
-                if longport_cli_isolation
-                else run_step_with_env(
-                    broker_env,
-                    "rebalance",
-                    run_rebalance,
-                    str(output_path),
-                    account=account_label,
-                    dry_run=not args.execute,
                     broker=broker,
-                )
+                    account_label=account_label,
+                    positionals=[str(output_path)],
+                    extra_args=["--execute"],
+                ),
+                direct_fn=run_rebalance,
+                direct_args=[str(output_path)],
+                direct_kwargs={
+                    "account": account_label,
+                    "dry_run": not args.execute,
+                    "broker": broker,
+                },
             )
         )
         audit_log_path, audit_summary = discover_audit_log(
@@ -749,33 +795,23 @@ def run_operator_smoke_workflow(args: argparse.Namespace) -> int:
             return 0
 
         steps.append(
-            (
-                run_cli_subprocess_step(
-                    broker_env,
+            run_broker_workflow_step(
+                broker_env,
+                name="orders",
+                cli_isolation=longport_cli_isolation,
+                cli_argv=qexec_broker_argv(
                     "orders",
-                    [
-                        sys.executable,
-                        "-m",
-                        "quant_execution_engine",
-                        "orders",
-                        "--broker",
-                        broker,
-                        "--account",
-                        account_label,
-                        "--symbol",
-                        args.symbol,
-                    ],
-                )
-                if longport_cli_isolation
-                else run_step_with_env(
-                    broker_env,
-                    "orders",
-                    run_orders,
-                    account=account_label,
                     broker=broker,
-                    symbol_filter=args.symbol,
-                )
-        )
+                    account_label=account_label,
+                    extra_args=["--symbol", args.symbol],
+                ),
+                direct_fn=run_orders,
+                direct_kwargs={
+                    "account": account_label,
+                    "broker": broker,
+                    "symbol_filter": args.symbol,
+                },
+            )
         )
         operator_outcome = latest_operator_outcome(
             broker_name=broker,
@@ -791,31 +827,22 @@ def run_operator_smoke_workflow(args: argparse.Namespace) -> int:
         )
         if order_ref:
             steps.append(
-                (
-                    run_cli_subprocess_step(
-                        broker_env,
+                run_broker_workflow_step(
+                    broker_env,
+                    name="order",
+                    cli_isolation=longport_cli_isolation,
+                    cli_argv=qexec_broker_argv(
                         "order",
-                        [
-                            sys.executable,
-                            "-m",
-                            "quant_execution_engine",
-                            "order",
-                            order_ref,
-                            "--broker",
-                            broker,
-                            "--account",
-                            account_label,
-                        ],
-                    )
-                    if longport_cli_isolation
-                    else run_step_with_env(
-                        broker_env,
-                        "order",
-                        run_order,
-                        order_ref=order_ref,
-                        account=account_label,
                         broker=broker,
-                    )
+                        account_label=account_label,
+                        positionals=[order_ref],
+                    ),
+                    direct_fn=run_order,
+                    direct_kwargs={
+                        "order_ref": order_ref,
+                        "account": account_label,
+                        "broker": broker,
+                    },
                 )
             )
         else:
@@ -832,89 +859,60 @@ def run_operator_smoke_workflow(args: argparse.Namespace) -> int:
             )
 
         steps.append(
-            (
-                run_cli_subprocess_step(
-                    broker_env,
+            run_broker_workflow_step(
+                broker_env,
+                name="reconcile",
+                cli_isolation=longport_cli_isolation,
+                cli_argv=qexec_broker_argv(
                     "reconcile",
-                    [
-                        sys.executable,
-                        "-m",
-                        "quant_execution_engine",
-                        "reconcile",
-                        "--broker",
-                        broker,
-                        "--account",
-                        account_label,
-                    ],
-                )
-                if longport_cli_isolation
-                else run_step_with_env(
-                    broker_env,
-                    "reconcile",
-                    run_reconcile,
-                    account=account_label,
                     broker=broker,
-                )
+                    account_label=account_label,
+                ),
+                direct_fn=run_reconcile,
+                direct_kwargs={
+                    "account": account_label,
+                    "broker": broker,
+                },
             )
         )
         steps.append(
-            (
-                run_cli_subprocess_step(
-                    broker_env,
+            run_broker_workflow_step(
+                broker_env,
+                name="exceptions",
+                cli_isolation=longport_cli_isolation,
+                cli_argv=qexec_broker_argv(
                     "exceptions",
-                    [
-                        sys.executable,
-                        "-m",
-                        "quant_execution_engine",
-                        "exceptions",
-                        "--broker",
-                        broker,
-                        "--account",
-                        account_label,
-                        "--symbol",
-                        args.symbol,
-                    ],
-                )
-                if longport_cli_isolation
-                else run_step_with_env(
-                    broker_env,
-                    "exceptions",
-                    run_exceptions,
-                    account=account_label,
                     broker=broker,
-                    symbol_filter=args.symbol,
-                )
+                    account_label=account_label,
+                    extra_args=["--symbol", args.symbol],
+                ),
+                direct_fn=run_exceptions,
+                direct_kwargs={
+                    "account": account_label,
+                    "broker": broker,
+                    "symbol_filter": args.symbol,
+                },
             )
         )
 
         if args.cleanup_open_orders:
-            if longport_cli_isolation:
-                steps.append(
-                    run_cli_subprocess_step(
-                        broker_env,
+            steps.append(
+                run_broker_workflow_step(
+                    broker_env,
+                    name="cancel-all",
+                    cli_isolation=longport_cli_isolation,
+                    cli_argv=qexec_broker_argv(
                         "cancel-all",
-                        [
-                            sys.executable,
-                            "-m",
-                            "quant_execution_engine",
-                            "cancel-all",
-                            "--broker",
-                            broker,
-                            "--account",
-                            account_label,
-                        ],
-                    )
-                )
-            else:
-                steps.append(
-                    run_step_with_env(
-                        broker_env,
-                        "cancel-all",
-                        run_cancel_all,
-                        account=account_label,
                         broker=broker,
-                    )
+                        account_label=account_label,
+                    ),
+                    direct_fn=run_cancel_all,
+                    direct_kwargs={
+                        "account": account_label,
+                        "broker": broker,
+                    },
                 )
+            )
 
         operator_outcome = latest_operator_outcome(
             broker_name=broker,

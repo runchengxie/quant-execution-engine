@@ -1,7 +1,10 @@
-# Copy to .envrc and allow direnv to load local secrets.
+# Copy to .envrc and allow direnv to load local paper/safe development secrets.
 # Requires direnv: https://direnv.net
 
-# Load environment variables from .env files if they exist
+# Do not put LongPort real tokens in repo-local .env* or .envrc* files.
+# Use ~/.config/qexec/longport-live.env or current-shell exports for live.
+
+# Load environment variables from .env files if they exist.
 dotenv_if_exists .env
 dotenv_if_exists .env.local
 
@@ -13,7 +16,6 @@ dotenv_if_exists .env.local
 #   UV_SYNC_ARGS="--group dev --extra cli --extra ibkr"
 #   NO_DEV=1
 
-# Re-run this script when dependency manifests change
 watch_file pyproject.toml
 watch_file uv.lock
 watch_file requirements.txt
@@ -23,7 +25,22 @@ watch_file .env.local
 
 has_cmd() { command -v "$1" >/dev/null 2>&1; }
 
-# Ensure the virtual environment exists
+has_any_env() {
+  for key in "$@"; do
+    eval "value=\${$key:-}"
+    [ -n "$value" ] && return 0
+  done
+  return 1
+}
+
+warn_uv_sync_failed() {
+  echo "warning: uv sync failed, the environment might be incomplete" >&2
+}
+
+warn_pip_install_failed() {
+  echo "warning: failed to install $1" >&2
+}
+
 ensure_venv_uv() {
   if [ ! -d .venv ]; then
     uv venv --seed || return 1
@@ -56,22 +73,26 @@ if has_cmd uv; then
     esac
   }
 
-  if [ -n "${ALPACA_API_KEY:-}" ] || [ -n "${APCA_API_KEY_ID:-}" ] || [ -n "${ALPACA_SECRET_KEY:-}" ] || [ -n "${APCA_API_SECRET_KEY:-}" ]; then
+  if has_any_env \
+    ALPACA_API_KEY APCA_API_KEY_ID ALPACA_SECRET_KEY APCA_API_SECRET_KEY; then
     add_uv_extra_if_missing alpaca
   fi
-  if [ -n "${LONGPORT_APP_KEY:-}" ] || [ -n "${LONGPORT_APP_SECRET:-}" ] || [ -n "${LONGPORT_ACCESS_TOKEN_TEST:-}" ] || [ -n "${LONGPORT_ACCESS_TOKEN:-}" ] || [ -n "${LONGBRIDGE_APP_KEY:-}" ] || [ -n "${LONGBRIDGE_APP_SECRET:-}" ] || [ -n "${LONGBRIDGE_ACCESS_TOKEN:-}" ]; then
+  # LONGBRIDGE_* names are deprecated compatibility fallbacks.
+  if has_any_env \
+    LONGPORT_APP_KEY LONGPORT_APP_SECRET LONGPORT_ACCESS_TOKEN_TEST \
+    LONGPORT_ACCESS_TOKEN LONGBRIDGE_APP_KEY LONGBRIDGE_APP_SECRET \
+    LONGBRIDGE_ACCESS_TOKEN LONGBRIDGE_ACCESS_TOKEN_TEST; then
     add_uv_extra_if_missing longport
   fi
-  if [ -n "${IBKR_HOST:-}" ] || [ -n "${IBKR_PORT:-}" ] || [ -n "${IBKR_PORT_PAPER:-}" ] || [ -n "${IBKR_CLIENT_ID:-}" ] || [ -n "${IBKR_ACCOUNT_ID:-}" ]; then
+  if has_any_env IBKR_HOST IBKR_PORT IBKR_PORT_PAPER IBKR_CLIENT_ID IBKR_ACCOUNT_ID; then
     add_uv_extra_if_missing ibkr
   fi
 
-  # Prefer using uv if available
   if ensure_venv_uv; then
     if [ -f uv.lock ]; then
-      uv sync --frozen $UV_SYNC_ARGS || echo "warning: uv sync failed, the environment might be incomplete" >&2
+      uv sync --frozen $UV_SYNC_ARGS || warn_uv_sync_failed
     else
-      uv sync $UV_SYNC_ARGS || echo "warning: uv sync failed, the environment might be incomplete" >&2
+      uv sync $UV_SYNC_ARGS || warn_uv_sync_failed
     fi
   else
     echo "notice: uv venv failed, falling back to python venv + pip" >&2
@@ -80,16 +101,11 @@ if has_cmd uv; then
 else
   echo "notice: uv not detected, using the python venv + pip method" >&2
   ensure_venv_py
-  # Installation strategy when using pip
   if [ -f requirements-dev.txt ] && [ -z "$NO_DEV" ]; then
-    pip install -r requirements-dev.txt || echo "warning: failed to install requirements-dev.txt" >&2
+    pip install -r requirements-dev.txt || warn_pip_install_failed requirements-dev.txt
   elif [ -f requirements.txt ]; then
-    pip install -r requirements.txt || echo "warning: failed to install requirements.txt" >&2
+    pip install -r requirements.txt || warn_pip_install_failed requirements.txt
   elif [ -f pyproject.toml ]; then
-    if [ -z "$NO_DEV" ]; then
-      pip install -e . || echo 'warning: failed to install "." with pip' >&2
-    else
-      pip install -e . || echo 'warning: failed to install "." with pip' >&2
-    fi
+    pip install -e . || warn_pip_install_failed '"." with pip'
   fi
 fi

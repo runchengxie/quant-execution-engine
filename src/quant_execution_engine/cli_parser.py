@@ -5,6 +5,44 @@ from __future__ import annotations
 import argparse
 
 
+_BROKER_HELP = "Broker backend override, e.g. longport or alpaca-paper"
+_ACCOUNT_HELP = "Broker account/profile label. Unsupported labels fail fast."
+_ORDER_REF_HELP = (
+    "Tracked order reference: broker_order_id, client_order_id, or child_order_id"
+)
+
+
+def _add_broker_arg(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--broker",
+        type=str,
+        default=None,
+        help=_BROKER_HELP,
+    )
+
+
+def _add_account_arg(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--account",
+        type=str,
+        default="main",
+        help=_ACCOUNT_HELP,
+    )
+
+
+def _add_broker_account_args(parser: argparse.ArgumentParser) -> None:
+    _add_broker_arg(parser)
+    _add_account_arg(parser)
+
+
+def _add_order_ref_arg(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "order_ref",
+        type=str,
+        help=_ORDER_REF_HELP,
+    )
+
+
 def create_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="qexec",
@@ -25,30 +63,14 @@ Examples:
 
     quote_parser = subparsers.add_parser("quote", help="Fetch real-time quotes")
     quote_parser.add_argument("tickers", nargs="+", help="Tickers such as AAPL or 700.HK")
-    quote_parser.add_argument(
-        "--broker",
-        type=str,
-        default=None,
-        help="Broker backend override, e.g. longport or alpaca-paper",
-    )
+    _add_broker_arg(quote_parser)
 
     rebalance_parser = subparsers.add_parser(
         "rebalance",
         help="Preview rebalance orders from a canonical targets JSON",
     )
     rebalance_parser.add_argument("input_file", type=str, help="targets JSON file")
-    rebalance_parser.add_argument(
-        "--broker",
-        type=str,
-        default=None,
-        help="Broker backend override, e.g. longport or alpaca-paper",
-    )
-    rebalance_parser.add_argument(
-        "--account",
-        type=str,
-        default="main",
-        help="Broker account/profile label. Unsupported labels fail fast.",
-    )
+    _add_broker_account_args(rebalance_parser)
     rebalance_parser.add_argument(
         "--execute",
         action="store_true",
@@ -64,18 +86,7 @@ Examples:
     account_parser = subparsers.add_parser("account", help="Show account overview")
     account_parser.add_argument("--funds", action="store_true", help="Only show cash/funds")
     account_parser.add_argument("--positions", action="store_true", help="Only show positions")
-    account_parser.add_argument(
-        "--broker",
-        type=str,
-        default=None,
-        help="Broker backend override, e.g. longport or alpaca-paper",
-    )
-    account_parser.add_argument(
-        "--account",
-        type=str,
-        default="main",
-        help="Broker account/profile label. Unsupported labels fail fast.",
-    )
+    _add_broker_account_args(account_parser)
     account_parser.add_argument(
         "--format",
         choices=["table", "json"],
@@ -85,12 +96,7 @@ Examples:
 
     config_parser = subparsers.add_parser("config", help="Show effective broker config")
     config_parser.add_argument("--show", action="store_true", default=True)
-    config_parser.add_argument(
-        "--broker",
-        type=str,
-        default=None,
-        help="Broker backend override, e.g. longport or alpaca-paper",
-    )
+    _add_broker_arg(config_parser)
 
     evidence_maturity_parser = subparsers.add_parser(
         "evidence-maturity",
@@ -129,18 +135,7 @@ Examples:
         "orders",
         help="Show tracked broker orders from local execution state",
     )
-    orders_parser.add_argument(
-        "--broker",
-        type=str,
-        default=None,
-        help="Broker backend override, e.g. longport or alpaca-paper",
-    )
-    orders_parser.add_argument(
-        "--account",
-        type=str,
-        default="main",
-        help="Broker account/profile label. Unsupported labels fail fast.",
-    )
+    _add_broker_account_args(orders_parser)
     orders_parser.add_argument(
         "--status",
         type=str,
@@ -158,18 +153,7 @@ Examples:
         "exceptions",
         help="Show tracked execution exceptions from local execution state",
     )
-    exceptions_parser.add_argument(
-        "--broker",
-        type=str,
-        default=None,
-        help="Broker backend override, e.g. longport or alpaca-paper",
-    )
-    exceptions_parser.add_argument(
-        "--account",
-        type=str,
-        default="main",
-        help="Broker account/profile label. Unsupported labels fail fast.",
-    )
+    _add_broker_account_args(exceptions_parser)
     exceptions_parser.add_argument(
         "--status",
         type=str,
@@ -187,129 +171,47 @@ Examples:
         "reconcile",
         help="Run a manual broker reconcile pass and persist refreshed state",
     )
-    reconcile_parser.add_argument(
-        "--broker",
-        type=str,
-        default=None,
-        help="Broker backend override, e.g. longport or alpaca-paper",
-    )
-    reconcile_parser.add_argument(
-        "--account",
-        type=str,
-        default="main",
-        help="Broker account/profile label. Unsupported labels fail fast.",
-    )
+    _add_broker_account_args(reconcile_parser)
 
     cancel_parser = subparsers.add_parser(
         "cancel",
         help="Cancel a tracked order by broker_order_id, client_order_id, or child_order_id",
     )
-    cancel_parser.add_argument(
-        "order_ref",
-        type=str,
-        help="Tracked order reference: broker_order_id, client_order_id, or child_order_id",
-    )
-    cancel_parser.add_argument(
-        "--broker",
-        type=str,
-        default=None,
-        help="Broker backend override, e.g. longport or alpaca-paper",
-    )
-    cancel_parser.add_argument(
-        "--account",
-        type=str,
-        default="main",
-        help="Broker account/profile label. Unsupported labels fail fast.",
-    )
+    _add_order_ref_arg(cancel_parser)
+    _add_broker_account_args(cancel_parser)
 
     cancel_all_parser = subparsers.add_parser(
         "cancel-all",
         help="Cancel all tracked open broker orders from local execution state",
     )
-    cancel_all_parser.add_argument(
-        "--broker",
-        type=str,
-        default=None,
-        help="Broker backend override, e.g. longport or alpaca-paper",
-    )
-    cancel_all_parser.add_argument(
-        "--account",
-        type=str,
-        default="main",
-        help="Broker account/profile label. Unsupported labels fail fast.",
-    )
+    _add_broker_account_args(cancel_all_parser)
 
     order_parser = subparsers.add_parser(
         "order",
         help="Show tracked order detail by broker_order_id, client_order_id, or child_order_id",
     )
-    order_parser.add_argument(
-        "order_ref",
-        type=str,
-        help="Tracked order reference: broker_order_id, client_order_id, or child_order_id",
-    )
-    order_parser.add_argument(
-        "--broker",
-        type=str,
-        default=None,
-        help="Broker backend override, e.g. longport or alpaca-paper",
-    )
-    order_parser.add_argument(
-        "--account",
-        type=str,
-        default="main",
-        help="Broker account/profile label. Unsupported labels fail fast.",
-    )
+    _add_order_ref_arg(order_parser)
+    _add_broker_account_args(order_parser)
 
     retry_parser = subparsers.add_parser(
         "retry",
         help="Retry a zero-fill failed or canceled tracked order",
     )
-    retry_parser.add_argument(
-        "order_ref",
-        type=str,
-        help="Tracked order reference: broker_order_id, client_order_id, or child_order_id",
-    )
-    retry_parser.add_argument(
-        "--broker",
-        type=str,
-        default=None,
-        help="Broker backend override, e.g. longport or alpaca-paper",
-    )
-    retry_parser.add_argument(
-        "--account",
-        type=str,
-        default="main",
-        help="Broker account/profile label. Unsupported labels fail fast.",
-    )
+    _add_order_ref_arg(retry_parser)
+    _add_broker_account_args(retry_parser)
 
     reprice_parser = subparsers.add_parser(
         "reprice",
         help="Cancel and resubmit a tracked open LIMIT order at a new limit price",
     )
-    reprice_parser.add_argument(
-        "order_ref",
-        type=str,
-        help="Tracked order reference: broker_order_id, client_order_id, or child_order_id",
-    )
+    _add_order_ref_arg(reprice_parser)
     reprice_parser.add_argument(
         "--limit-price",
         type=float,
         required=True,
         help="Replacement limit price for the new child order attempt",
     )
-    reprice_parser.add_argument(
-        "--broker",
-        type=str,
-        default=None,
-        help="Broker backend override, e.g. longport or alpaca-paper",
-    )
-    reprice_parser.add_argument(
-        "--account",
-        type=str,
-        default="main",
-        help="Broker account/profile label. Unsupported labels fail fast.",
-    )
+    _add_broker_account_args(reprice_parser)
 
     retry_stale_parser = subparsers.add_parser(
         "retry-stale",
@@ -321,18 +223,7 @@ Examples:
         default=5,
         help="Only target locally tracked open orders older than this many minutes",
     )
-    retry_stale_parser.add_argument(
-        "--broker",
-        type=str,
-        default=None,
-        help="Broker backend override, e.g. longport or alpaca-paper",
-    )
-    retry_stale_parser.add_argument(
-        "--account",
-        type=str,
-        default="main",
-        help="Broker account/profile label. Unsupported labels fail fast.",
-    )
+    _add_broker_account_args(retry_stale_parser)
 
     preflight_parser = subparsers.add_parser(
         "preflight",
@@ -343,101 +234,34 @@ Examples:
         nargs="*",
         help="Optional symbols used for quote/depth reachability checks, default: AAPL",
     )
-    preflight_parser.add_argument(
-        "--broker",
-        type=str,
-        default=None,
-        help="Broker backend override, e.g. longport or alpaca-paper",
-    )
-    preflight_parser.add_argument(
-        "--account",
-        type=str,
-        default="main",
-        help="Broker account/profile label. Unsupported labels fail fast.",
-    )
+    _add_broker_account_args(preflight_parser)
 
     cancel_rest_parser = subparsers.add_parser(
         "cancel-rest",
         help="Cancel the open remainder of a partially filled tracked order",
     )
-    cancel_rest_parser.add_argument(
-        "order_ref",
-        type=str,
-        help="Tracked order reference: broker_order_id, client_order_id, or child_order_id",
-    )
-    cancel_rest_parser.add_argument(
-        "--broker",
-        type=str,
-        default=None,
-        help="Broker backend override, e.g. longport or alpaca-paper",
-    )
-    cancel_rest_parser.add_argument(
-        "--account",
-        type=str,
-        default="main",
-        help="Broker account/profile label. Unsupported labels fail fast.",
-    )
+    _add_order_ref_arg(cancel_rest_parser)
+    _add_broker_account_args(cancel_rest_parser)
 
     resume_remaining_parser = subparsers.add_parser(
         "resume-remaining",
         help="Submit a new child attempt for the remaining quantity after a partial fill",
     )
-    resume_remaining_parser.add_argument(
-        "order_ref",
-        type=str,
-        help="Tracked order reference: broker_order_id, client_order_id, or child_order_id",
-    )
-    resume_remaining_parser.add_argument(
-        "--broker",
-        type=str,
-        default=None,
-        help="Broker backend override, e.g. longport or alpaca-paper",
-    )
-    resume_remaining_parser.add_argument(
-        "--account",
-        type=str,
-        default="main",
-        help="Broker account/profile label. Unsupported labels fail fast.",
-    )
+    _add_order_ref_arg(resume_remaining_parser)
+    _add_broker_account_args(resume_remaining_parser)
 
     accept_partial_parser = subparsers.add_parser(
         "accept-partial",
         help="Accept a partial fill locally and stop expecting the remaining quantity",
     )
-    accept_partial_parser.add_argument(
-        "order_ref",
-        type=str,
-        help="Tracked order reference: broker_order_id, client_order_id, or child_order_id",
-    )
-    accept_partial_parser.add_argument(
-        "--broker",
-        type=str,
-        default=None,
-        help="Broker backend override, e.g. longport or alpaca-paper",
-    )
-    accept_partial_parser.add_argument(
-        "--account",
-        type=str,
-        default="main",
-        help="Broker account/profile label. Unsupported labels fail fast.",
-    )
+    _add_order_ref_arg(accept_partial_parser)
+    _add_broker_account_args(accept_partial_parser)
 
     state_doctor_parser = subparsers.add_parser(
         "state-doctor",
         help="Inspect the local execution state file for consistency issues",
     )
-    state_doctor_parser.add_argument(
-        "--broker",
-        type=str,
-        default=None,
-        help="Broker backend override, e.g. longport or alpaca-paper",
-    )
-    state_doctor_parser.add_argument(
-        "--account",
-        type=str,
-        default="main",
-        help="Broker account/profile label. Unsupported labels fail fast.",
-    )
+    _add_broker_account_args(state_doctor_parser)
 
     state_prune_parser = subparsers.add_parser(
         "state-prune",
@@ -454,18 +278,7 @@ Examples:
         action="store_true",
         help="Actually write the pruned state back to disk; default is preview only",
     )
-    state_prune_parser.add_argument(
-        "--broker",
-        type=str,
-        default=None,
-        help="Broker backend override, e.g. longport or alpaca-paper",
-    )
-    state_prune_parser.add_argument(
-        "--account",
-        type=str,
-        default="main",
-        help="Broker account/profile label. Unsupported labels fail fast.",
-    )
+    _add_broker_account_args(state_prune_parser)
 
     state_repair_parser = subparsers.add_parser(
         "state-repair",
@@ -494,20 +307,11 @@ Examples:
     state_repair_parser.add_argument(
         "--recompute-parent-aggregates",
         action="store_true",
-        help="Recompute parent filled/remaining quantities and status from local child, broker, and fill state",
+        help=(
+            "Recompute parent filled/remaining quantities and status from "
+            "local child, broker, and fill state"
+        ),
     )
-    state_repair_parser.add_argument(
-        "--broker",
-        type=str,
-        default=None,
-        help="Broker backend override, e.g. longport or alpaca-paper",
-    )
-    state_repair_parser.add_argument(
-        "--account",
-        type=str,
-        default="main",
-        help="Broker account/profile label. Unsupported labels fail fast.",
-    )
+    _add_broker_account_args(state_repair_parser)
 
     return parser
-

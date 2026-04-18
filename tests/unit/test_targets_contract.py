@@ -77,7 +77,18 @@ def test_read_targets_json_rejects_ticker_list_for_live_execution(
         read_targets_json(legacy_path, require_canonical=True)
 
 
-def test_write_targets_json_legacy_tickers_defaults_to_equal_weights(
+def test_read_targets_json_rejects_ticker_list_by_default(tmp_path: Path) -> None:
+    target_path = tmp_path / "legacy_targets.json"
+    target_path.write_text(
+        json.dumps({"tickers": ["AAPL"]}),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="targets JSON with a 'targets' array"):
+        read_targets_json(target_path)
+
+
+def test_write_targets_json_ticker_helper_defaults_to_equal_weights(
     tmp_path: Path,
 ) -> None:
     out_path = tmp_path / "targets.json"

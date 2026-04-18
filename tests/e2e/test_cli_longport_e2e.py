@@ -130,7 +130,15 @@ def test_cli_quote_without_credentials() -> None:
         env.pop(var, None)
 
     result = subprocess.run(
-        [sys.executable, "-m", "quant_execution_engine.cli", "quote", "AAPL"],
+        [
+            sys.executable,
+            "-m",
+            "quant_execution_engine.cli",
+            "quote",
+            "AAPL",
+            "--broker",
+            "longport",
+        ],
         capture_output=True,
         text=True,
         cwd=Path.cwd(),
@@ -180,7 +188,15 @@ def test_cli_rebalance_rejects_legacy_workbook(tmp_path: Path) -> None:
 )
 def test_cli_quote_with_credentials() -> None:
     result = subprocess.run(
-        [sys.executable, "-m", "quant_execution_engine.cli", "quote", "AAPL"],
+        [
+            sys.executable,
+            "-m",
+            "quant_execution_engine.cli",
+            "quote",
+            "AAPL",
+            "--broker",
+            "longport",
+        ],
         capture_output=True,
         text=True,
         cwd=Path.cwd(),

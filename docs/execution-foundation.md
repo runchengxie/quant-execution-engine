@@ -5,6 +5,8 @@
 如需了解具体的命令使用方式，请参阅 [命令行参考（cli.md）](cli.md)。  
 如需了解项目的文件结构，请参阅 [架构设计（architecture.md）](architecture.md)。  
 如需了解测试的运行方式，请参阅 [测试指南（testing.md）](testing.md)。
+如需了解当前 broker 支持矩阵、证据成熟度和共享 caveats，请参阅
+[当前能力说明（current-capabilities.md）](current-capabilities.md)。
 
 ## 1. 本文档解答什么问题
 

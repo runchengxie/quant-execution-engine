@@ -1,5 +1,8 @@
 # 配置说明
 
+当前 broker 支持范围、凭证来源规则和证据成熟度以
+[current-capabilities.md](current-capabilities.md) 为准。本文聚焦配置入口。
+
 ## 环境变量
 
 ### LongPort 实盘
@@ -15,6 +18,7 @@
 - `qexec rebalance --execute` 在实盘路径下要求 `QEXEC_ENABLE_LIVE=1`
 - 仓库根目录下的 `.env*` / `.envrc*` 如果包含 LongPort 实盘凭证，CLI 会拒绝执行
 - 这条保护的目的是防止把实盘密钥留在仓库本地文件里；模拟盘路径不受这个限制
+- `.env.example` 只示范本地 paper/smoke 配置，不包含 `LONGPORT_ACCESS_TOKEN` 实盘占位符
 
 可选：
 
@@ -38,9 +42,9 @@
 - 长桥实盘和模拟盘共用 App Key / Secret，但使用不同的 Access Token。
 - 当前长桥模拟盘后端会优先读取 `LONGPORT_ACCESS_TOKEN_TEST`。
 
-兼容读取：
+弃用兼容读取：
 
-- 旧的 `LONGBRIDGE_*` 前缀仍会兼容读取
+- 旧的 `LONGBRIDGE_*` 前缀仍会兼容读取，但新配置和文档应使用 `LONGPORT_*`
 - `LONGPORT_ACCESS_TOKEN_REAL` 仍会作为 `LONGPORT_ACCESS_TOKEN` 的兼容兜底
 - `LONGPORT_FX_<CCY>_USD` 会作为 `FX_<CCY>_USD` 的兼容兜底
 
@@ -113,7 +117,7 @@
 
 ### `.envrc.example`
 
-仓库里的 `.envrc.example` 仍然默认使用：
+仓库里的 `.envrc.example` 和 tracked `.envrc` 使用同一套模型，默认使用：
 
 ```bash
 uv sync --group dev --extra cli
@@ -122,8 +126,29 @@ uv sync --group dev --extra cli
 如果 `.env` / `.env.local` 或当前 shell 里已经有对应 broker 的环境变量，它会自动追加相关可选依赖：
 
 - Alpaca 变量命中时追加 `--extra alpaca`
-- LongPort / LongBridge 变量命中时追加 `--extra longport`
+- LongPort / deprecated LongBridge 兼容变量命中时追加 `--extra longport`
 - IBKR 变量命中时追加 `--extra ibkr`
+
+`.envrc` 仍然是 repo-local 文件，不应写入 LongPort 实盘 token。实盘推荐：
+
+```bash
+export LONGPORT_APP_KEY=...
+export LONGPORT_APP_SECRET=...
+export LONGPORT_ACCESS_TOKEN=...
+export QEXEC_ENABLE_LIVE=1
+```
+
+或使用仓库外部的用户私有文件：
+
+```bash
+mkdir -p ~/.config/qexec
+cat > ~/.config/qexec/longport-live.env <<'EOF'
+export LONGPORT_APP_KEY=...
+export LONGPORT_APP_SECRET=...
+export LONGPORT_ACCESS_TOKEN=...
+export QEXEC_ENABLE_LIVE=1
+EOF
+```
 
 也可以通过 `UV_SYNC_ARGS` 显式覆盖，例如：
 

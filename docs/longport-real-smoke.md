@@ -1,5 +1,8 @@
 # 长桥（LongPort）实盘冒烟测试指南
 
+当前 broker 支持矩阵、实盘 caveats 和证据成熟度以
+[current-capabilities.md](current-capabilities.md) 为准。
+
 本文档旨在：
 * 为长桥实盘环境提供一套最小化的人工冒烟测试操作手册
 * 补齐从提交订单、查询、对账到撤单的完整测试证据链

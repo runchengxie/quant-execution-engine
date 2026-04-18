@@ -1,5 +1,8 @@
 # Alpaca 模拟盘冒烟测试（最小操作路径）
 
+当前 broker 支持矩阵和证据成熟度以
+[current-capabilities.md](current-capabilities.md) 为准。
+
 本文档提供了 Alpaca 模拟盘（`alpaca-paper`）的最小可复查冒烟测试路径，旨在帮助你快速确认以下事项：
 
 *   API 凭证加载正常；

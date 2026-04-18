@@ -197,6 +197,367 @@ def _parent_aggregate_mismatch(
     )
 
 
+@dataclass(slots=True)
+class _StateIndexes:
+    parents_by_id: dict[str, ParentOrder]
+    intents_by_id: dict[str, object]
+    child_records_by_parent: dict[str, list]
+    referenced_broker_order_ids: set[str]
+    broker_orders_by_id: dict[str, object]
+
+
+def _build_state_indexes(state: ExecutionState) -> _StateIndexes:
+    child_records_by_parent: dict[str, list] = {}
+    referenced_broker_order_ids: set[str] = set()
+    for child in state.child_orders:
+        child_records_by_parent.setdefault(child.parent_order_id, []).append(child)
+        if child.broker_order_id:
+            referenced_broker_order_ids.add(child.broker_order_id)
+    return _StateIndexes(
+        parents_by_id={parent.parent_order_id: parent for parent in state.parent_orders},
+        intents_by_id={intent.intent_id: intent for intent in state.intents},
+        child_records_by_parent=child_records_by_parent,
+        referenced_broker_order_ids=referenced_broker_order_ids,
+        broker_orders_by_id={
+            broker_order.broker_order_id: broker_order
+            for broker_order in state.broker_orders
+        },
+    )
+
+
+def _child_reference_issues(
+    state: ExecutionState,
+    indexes: _StateIndexes,
+) -> list[StateDoctorIssue]:
+    issues: list[StateDoctorIssue] = []
+    for child in state.child_orders:
+        if child.parent_order_id not in indexes.parents_by_id:
+            issues.append(
+                StateDoctorIssue(
+                    severity="ERROR",
+                    code="ORPHAN_CHILD",
+                    message=(
+                        f"child {child.child_order_id} has no parent "
+                        f"{child.parent_order_id}"
+                    ),
+                )
+            )
+        if child.broker_order_id and child.broker_order_id not in indexes.broker_orders_by_id:
+            issues.append(
+                StateDoctorIssue(
+                    severity="WARN",
+                    code="MISSING_BROKER_ORDER",
+                    message=(
+                        f"child {child.child_order_id} references missing broker order "
+                        f"{child.broker_order_id}"
+                    ),
+                )
+            )
+    return issues
+
+
+def _parent_integrity_issues(
+    state: ExecutionState,
+    indexes: _StateIndexes,
+) -> list[StateDoctorIssue]:
+    issues: list[StateDoctorIssue] = []
+    for parent in state.parent_orders:
+        if parent.intent_id not in indexes.intents_by_id:
+            issues.append(
+                StateDoctorIssue(
+                    severity="ERROR",
+                    code="ORPHAN_PARENT_INTENT",
+                    message=f"parent {parent.parent_order_id} has no intent {parent.intent_id}",
+                )
+            )
+        child_records = indexes.child_records_by_parent.get(parent.parent_order_id, [])
+        if not child_records:
+            issues.append(
+                StateDoctorIssue(
+                    severity="WARN",
+                    code="PARENT_WITHOUT_CHILD",
+                    message=f"parent {parent.parent_order_id} has no child order attempts",
+                )
+            )
+        if float(parent.filled_quantity or 0.0) > float(parent.requested_quantity or 0.0):
+            issues.append(
+                StateDoctorIssue(
+                    severity="ERROR",
+                    code="PARENT_OVERFILLED",
+                    message=(
+                        f"parent {parent.parent_order_id} filled {parent.filled_quantity:g} "
+                        f"> requested {parent.requested_quantity:g}"
+                    ),
+                )
+            )
+        if float(parent.remaining_quantity or 0.0) < 0:
+            issues.append(
+                StateDoctorIssue(
+                    severity="ERROR",
+                    code="NEGATIVE_REMAINING",
+                    message=f"parent {parent.parent_order_id} has negative remaining quantity",
+                )
+            )
+        latest_status = max((child.status for child in child_records), default=parent.status)
+        if (
+            parent.status == "PARTIALLY_FILLED"
+            and float(parent.remaining_quantity or 0.0) > 0
+            and latest_status not in OPEN_BROKER_STATUSES
+            and parent.metadata.get("manual_resolution") != "accepted_partial"
+        ):
+            issues.append(
+                StateDoctorIssue(
+                    severity="WARN",
+                    code="PARTIAL_FILL_NEEDS_OPERATOR",
+                    message=(
+                        f"parent {parent.parent_order_id} is partially filled with no "
+                        "open child; consider cancel-rest, resume-remaining, or "
+                        "accept-partial"
+                    ),
+                )
+            )
+    return issues
+
+
+def _orphan_broker_order_issues(
+    state: ExecutionState,
+    indexes: _StateIndexes,
+) -> list[StateDoctorIssue]:
+    issues: list[StateDoctorIssue] = []
+    for broker_order in state.broker_orders:
+        if broker_order.broker_order_id in indexes.referenced_broker_order_ids:
+            continue
+        severity = "WARN" if broker_order.status in TERMINAL_BROKER_STATUSES else "ERROR"
+        code = (
+            "ORPHAN_TERMINAL_BROKER_ORDER"
+            if broker_order.status in TERMINAL_BROKER_STATUSES
+            else "ORPHAN_OPEN_BROKER_ORDER"
+        )
+        issues.append(
+            StateDoctorIssue(
+                severity=severity,
+                code=code,
+                message=(
+                    f"broker order {broker_order.broker_order_id} "
+                    f"({broker_order.status}) is not referenced by any child order"
+                ),
+            )
+        )
+    return issues
+
+
+def _parent_aggregate_issues(
+    state: ExecutionState,
+    indexes: _StateIndexes,
+) -> list[StateDoctorIssue]:
+    issues: list[StateDoctorIssue] = []
+    for parent in state.parent_orders:
+        expected = _derive_parent_aggregate(
+            state=state,
+            parent=parent,
+            child_orders=indexes.child_records_by_parent.get(parent.parent_order_id, []),
+            broker_orders_by_id=indexes.broker_orders_by_id,
+        )
+        if (
+            abs(float(parent.filled_quantity or 0.0) - expected.filled_quantity) > 1e-9
+            or abs(float(parent.remaining_quantity or 0.0) - expected.remaining_quantity)
+            > 1e-9
+        ):
+            issues.append(
+                StateDoctorIssue(
+                    severity="WARN",
+                    code="PARENT_AGGREGATE_MISMATCH",
+                    message=(
+                        f"parent {parent.parent_order_id} stores filled/remaining "
+                        f"{float(parent.filled_quantity or 0.0):g}/"
+                        f"{float(parent.remaining_quantity or 0.0):g} but local "
+                        f"child/fill state implies {expected.filled_quantity:g}/"
+                        f"{expected.remaining_quantity:g}"
+                    ),
+                )
+            )
+        if str(parent.status) != expected.status:
+            issues.append(
+                StateDoctorIssue(
+                    severity="WARN",
+                    code="PARENT_STATUS_MISMATCH",
+                    message=(
+                        f"parent {parent.parent_order_id} has status {parent.status} "
+                        f"but local child/fill state implies {expected.status}"
+                    ),
+                )
+            )
+    return issues
+
+
+def _fill_event_issues(state: ExecutionState) -> list[StateDoctorIssue]:
+    issues: list[StateDoctorIssue] = []
+    fill_counts = Counter(fill.fill_id for fill in state.fill_events)
+    for fill_id, count in sorted(fill_counts.items()):
+        if count <= 1:
+            continue
+        issues.append(
+            StateDoctorIssue(
+                severity="WARN",
+                code="DUPLICATE_FILL_ID",
+                message=f"fill id {fill_id} appears {count} times",
+            )
+        )
+
+    child_order_ids = {
+        child.broker_order_id for child in state.child_orders if child.broker_order_id
+    }
+    parent_order_ids = {parent.parent_order_id for parent in state.parent_orders}
+    for fill in state.fill_events:
+        if (
+            fill.parent_order_id in parent_order_ids
+            or fill.broker_order_id in child_order_ids
+        ):
+            continue
+        issues.append(
+            StateDoctorIssue(
+                severity="WARN",
+                code="ORPHAN_FILL_EVENT",
+                message=(
+                    f"fill {fill.fill_id} references parent {fill.parent_order_id} / "
+                    f"broker order {fill.broker_order_id} but no tracked order exists"
+                ),
+            )
+        )
+    return issues
+
+
+def _kill_switch_issues(state: ExecutionState) -> list[StateDoctorIssue]:
+    if not state.kill_switch_active or state.consecutive_failures > 0:
+        return []
+    return [
+        StateDoctorIssue(
+            severity="WARN",
+            code="STUCK_KILL_SWITCH",
+            message="local kill switch is active with no recorded consecutive failures",
+        )
+    ]
+
+
+@dataclass(slots=True)
+class _PrunePlan:
+    parent_order_ids: set[str]
+    child_order_ids: set[str]
+    broker_order_ids: set[str]
+    fill_ids: set[str]
+    intent_ids: set[str]
+    child_count: int
+
+
+def _build_prune_plan(state: ExecutionState, cutoff: datetime) -> _PrunePlan:
+    prunable_parent_ids = {
+        parent.parent_order_id
+        for parent in state.parent_orders
+        if parent.status in TERMINAL_PARENT_STATUSES
+        and (_parse_timestamp(parent.updated_at) or datetime.min.replace(tzinfo=timezone.utc))
+        <= cutoff
+    }
+    prunable_children = [
+        child
+        for child in state.child_orders
+        if child.parent_order_id in prunable_parent_ids
+    ]
+    prunable_broker_order_ids = {
+        child.broker_order_id for child in prunable_children if child.broker_order_id
+    }
+    remaining_parent_intents = {
+        parent.intent_id
+        for parent in state.parent_orders
+        if parent.parent_order_id not in prunable_parent_ids
+    }
+    return _PrunePlan(
+        parent_order_ids=prunable_parent_ids,
+        child_order_ids={child.child_order_id for child in prunable_children},
+        broker_order_ids=prunable_broker_order_ids,
+        fill_ids={
+            fill.fill_id
+            for fill in state.fill_events
+            if fill.parent_order_id in prunable_parent_ids
+            or fill.broker_order_id in prunable_broker_order_ids
+        },
+        intent_ids={
+            parent.intent_id
+            for parent in state.parent_orders
+            if parent.parent_order_id in prunable_parent_ids
+            and parent.intent_id not in remaining_parent_intents
+        },
+        child_count=len(prunable_children),
+    )
+
+
+def _dedupe_fill_events(state: ExecutionState) -> int:
+    seen: set[str] = set()
+    deduped = []
+    removed = 0
+    for fill in state.fill_events:
+        if fill.fill_id in seen:
+            removed += 1
+            continue
+        seen.add(fill.fill_id)
+        deduped.append(fill)
+    state.fill_events = deduped
+    return removed
+
+
+def _drop_orphan_fill_events(state: ExecutionState) -> int:
+    parent_order_ids = {parent.parent_order_id for parent in state.parent_orders}
+    broker_order_ids = {
+        child.broker_order_id for child in state.child_orders if child.broker_order_id
+    }
+    kept = []
+    removed = 0
+    for fill in state.fill_events:
+        if fill.parent_order_id in parent_order_ids or fill.broker_order_id in broker_order_ids:
+            kept.append(fill)
+            continue
+        removed += 1
+    state.fill_events = kept
+    return removed
+
+
+def _drop_orphan_terminal_broker_orders(state: ExecutionState) -> int:
+    referenced = {
+        child.broker_order_id for child in state.child_orders if child.broker_order_id
+    }
+    kept = []
+    removed = 0
+    for broker_order in state.broker_orders:
+        if (
+            broker_order.broker_order_id not in referenced
+            and broker_order.status in TERMINAL_BROKER_STATUSES
+        ):
+            removed += 1
+            continue
+        kept.append(broker_order)
+    state.broker_orders = kept
+    return removed
+
+
+def _recompute_parent_aggregates(state: ExecutionState) -> int:
+    indexes = _build_state_indexes(state)
+    repaired = 0
+    for parent in state.parent_orders:
+        expected = _derive_parent_aggregate(
+            state=state,
+            parent=parent,
+            child_orders=indexes.child_records_by_parent.get(parent.parent_order_id, []),
+            broker_orders_by_id=indexes.broker_orders_by_id,
+        )
+        if not _parent_aggregate_mismatch(parent, expected):
+            continue
+        parent.filled_quantity = expected.filled_quantity
+        parent.remaining_quantity = expected.remaining_quantity
+        parent.status = expected.status
+        parent.updated_at = utc_now_iso()
+        repaired += 1
+    return repaired
+
+
 class StateMaintenanceService:
     """Inspect and maintain local execution state files."""
 
@@ -206,193 +567,15 @@ class StateMaintenanceService:
     def doctor(self, *, broker_name: str, account_label: str) -> StateDoctorResult:
         state = self.state_store.load(broker_name, account_label)
         state_path = self.state_store.path_for(broker_name, account_label)
-        issues: list[StateDoctorIssue] = []
-
-        parents_by_id = {parent.parent_order_id: parent for parent in state.parent_orders}
-        intents_by_id = {intent.intent_id: intent for intent in state.intents}
-        children_by_parent: dict[str, list[str]] = {}
-        child_records_by_parent: dict[str, list] = {}
-        referenced_broker_order_ids: set[str] = set()
-
-        for child in state.child_orders:
-            if child.parent_order_id not in parents_by_id:
-                issues.append(
-                    StateDoctorIssue(
-                        severity="ERROR",
-                        code="ORPHAN_CHILD",
-                        message=f"child {child.child_order_id} has no parent {child.parent_order_id}",
-                    )
-                )
-            if child.broker_order_id:
-                referenced_broker_order_ids.add(child.broker_order_id)
-            children_by_parent.setdefault(child.parent_order_id, []).append(child.child_order_id)
-            child_records_by_parent.setdefault(child.parent_order_id, []).append(child)
-
-        for parent in state.parent_orders:
-            if parent.intent_id not in intents_by_id:
-                issues.append(
-                    StateDoctorIssue(
-                        severity="ERROR",
-                        code="ORPHAN_PARENT_INTENT",
-                        message=f"parent {parent.parent_order_id} has no intent {parent.intent_id}",
-                    )
-                )
-            child_ids = children_by_parent.get(parent.parent_order_id, [])
-            if not child_ids:
-                issues.append(
-                    StateDoctorIssue(
-                        severity="WARN",
-                        code="PARENT_WITHOUT_CHILD",
-                        message=f"parent {parent.parent_order_id} has no child order attempts",
-                    )
-                )
-            if float(parent.filled_quantity or 0.0) > float(parent.requested_quantity or 0.0):
-                issues.append(
-                    StateDoctorIssue(
-                        severity="ERROR",
-                        code="PARENT_OVERFILLED",
-                        message=(
-                            f"parent {parent.parent_order_id} filled {parent.filled_quantity:g} "
-                            f"> requested {parent.requested_quantity:g}"
-                        ),
-                    )
-                )
-            if float(parent.remaining_quantity or 0.0) < 0:
-                issues.append(
-                    StateDoctorIssue(
-                        severity="ERROR",
-                        code="NEGATIVE_REMAINING",
-                        message=f"parent {parent.parent_order_id} has negative remaining quantity",
-                    )
-                )
-            latest_status = max(
-                (
-                    child.status
-                    for child in state.child_orders
-                    if child.parent_order_id == parent.parent_order_id
-                ),
-                default=parent.status,
-            )
-            if (
-                parent.status == "PARTIALLY_FILLED"
-                and float(parent.remaining_quantity or 0.0) > 0
-                and latest_status not in OPEN_BROKER_STATUSES
-                and parent.metadata.get("manual_resolution") != "accepted_partial"
-            ):
-                issues.append(
-                    StateDoctorIssue(
-                        severity="WARN",
-                        code="PARTIAL_FILL_NEEDS_OPERATOR",
-                        message=(
-                            f"parent {parent.parent_order_id} is partially filled with no open child; "
-                            "consider cancel-rest, resume-remaining, or accept-partial"
-                        ),
-                    )
-                )
-
-        broker_orders_by_id = {
-            broker_order.broker_order_id: broker_order for broker_order in state.broker_orders
-        }
-        for child in state.child_orders:
-            if child.broker_order_id and child.broker_order_id not in broker_orders_by_id:
-                issues.append(
-                    StateDoctorIssue(
-                        severity="WARN",
-                        code="MISSING_BROKER_ORDER",
-                        message=(
-                            f"child {child.child_order_id} references missing broker order "
-                            f"{child.broker_order_id}"
-                        ),
-                    )
-                )
-
-        for broker_order in state.broker_orders:
-            if broker_order.broker_order_id not in referenced_broker_order_ids:
-                severity = "WARN" if broker_order.status in TERMINAL_BROKER_STATUSES else "ERROR"
-                code = (
-                    "ORPHAN_TERMINAL_BROKER_ORDER"
-                    if broker_order.status in TERMINAL_BROKER_STATUSES
-                    else "ORPHAN_OPEN_BROKER_ORDER"
-                )
-                issues.append(
-                    StateDoctorIssue(
-                        severity=severity,
-                        code=code,
-                        message=(
-                            f"broker order {broker_order.broker_order_id} ({broker_order.status}) "
-                            "is not referenced by any child order"
-                        ),
-                    )
-                )
-
-        for parent in state.parent_orders:
-            expected = _derive_parent_aggregate(
-                state=state,
-                parent=parent,
-                child_orders=child_records_by_parent.get(parent.parent_order_id, []),
-                broker_orders_by_id=broker_orders_by_id,
-            )
-            if (
-                abs(float(parent.filled_quantity or 0.0) - expected.filled_quantity) > 1e-9
-                or abs(float(parent.remaining_quantity or 0.0) - expected.remaining_quantity) > 1e-9
-            ):
-                issues.append(
-                    StateDoctorIssue(
-                        severity="WARN",
-                        code="PARENT_AGGREGATE_MISMATCH",
-                        message=(
-                            f"parent {parent.parent_order_id} stores filled/remaining "
-                            f"{float(parent.filled_quantity or 0.0):g}/{float(parent.remaining_quantity or 0.0):g} "
-                            f"but local child/fill state implies "
-                            f"{expected.filled_quantity:g}/{expected.remaining_quantity:g}"
-                        ),
-                    )
-                )
-            if str(parent.status) != expected.status:
-                issues.append(
-                    StateDoctorIssue(
-                        severity="WARN",
-                        code="PARENT_STATUS_MISMATCH",
-                        message=(
-                            f"parent {parent.parent_order_id} has status {parent.status} "
-                            f"but local child/fill state implies {expected.status}"
-                        ),
-                    )
-                )
-
-        fill_counts = Counter(fill.fill_id for fill in state.fill_events)
-        for fill_id, count in sorted(fill_counts.items()):
-            if count > 1:
-                issues.append(
-                    StateDoctorIssue(
-                        severity="WARN",
-                        code="DUPLICATE_FILL_ID",
-                        message=f"fill id {fill_id} appears {count} times",
-                    )
-                )
-        child_order_ids = {child.broker_order_id for child in state.child_orders if child.broker_order_id}
-        parent_order_ids = {parent.parent_order_id for parent in state.parent_orders}
-        for fill in state.fill_events:
-            if fill.parent_order_id not in parent_order_ids and fill.broker_order_id not in child_order_ids:
-                issues.append(
-                    StateDoctorIssue(
-                        severity="WARN",
-                        code="ORPHAN_FILL_EVENT",
-                        message=(
-                            f"fill {fill.fill_id} references parent {fill.parent_order_id} / "
-                            f"broker order {fill.broker_order_id} but no tracked order exists"
-                        ),
-                    )
-                )
-
-        if state.kill_switch_active and state.consecutive_failures <= 0:
-            issues.append(
-                StateDoctorIssue(
-                    severity="WARN",
-                    code="STUCK_KILL_SWITCH",
-                    message="local kill switch is active with no recorded consecutive failures",
-                )
-            )
+        indexes = _build_state_indexes(state)
+        issues = [
+            *_child_reference_issues(state, indexes),
+            *_parent_integrity_issues(state, indexes),
+            *_orphan_broker_order_issues(state, indexes),
+            *_parent_aggregate_issues(state, indexes),
+            *_fill_event_issues(state),
+            *_kill_switch_issues(state),
+        ]
         if not issues:
             issues.append(
                 StateDoctorIssue(
@@ -423,40 +606,7 @@ class StateMaintenanceService:
         state = self.state_store.load(broker_name, account_label)
         state_path = self.state_store.path_for(broker_name, account_label)
         cutoff = datetime.now(timezone.utc) - timedelta(days=int(older_than_days))
-
-        prunable_parent_ids = {
-            parent.parent_order_id
-            for parent in state.parent_orders
-            if parent.status in TERMINAL_PARENT_STATUSES
-            and (_parse_timestamp(parent.updated_at) or datetime.min.replace(tzinfo=timezone.utc))
-            <= cutoff
-        }
-        prunable_children = [
-            child
-            for child in state.child_orders
-            if child.parent_order_id in prunable_parent_ids
-        ]
-        prunable_child_ids = {child.child_order_id for child in prunable_children}
-        prunable_broker_order_ids = {
-            child.broker_order_id for child in prunable_children if child.broker_order_id
-        }
-        prunable_fill_ids = {
-            fill.fill_id
-            for fill in state.fill_events
-            if fill.parent_order_id in prunable_parent_ids
-            or fill.broker_order_id in prunable_broker_order_ids
-        }
-        remaining_parent_intents = {
-            parent.intent_id
-            for parent in state.parent_orders
-            if parent.parent_order_id not in prunable_parent_ids
-        }
-        prunable_intent_ids = {
-            parent.intent_id
-            for parent in state.parent_orders
-            if parent.parent_order_id in prunable_parent_ids
-            and parent.intent_id not in remaining_parent_intents
-        }
+        plan = _build_prune_plan(state, cutoff)
 
         result = StatePruneResult(
             broker_name=broker_name,
@@ -464,33 +614,35 @@ class StateMaintenanceService:
             state_path=state_path,
             older_than_days=int(older_than_days),
             apply=apply,
-            parent_orders_removed=len(prunable_parent_ids),
-            child_orders_removed=len(prunable_children),
-            broker_orders_removed=len(prunable_broker_order_ids),
-            fill_events_removed=len(prunable_fill_ids),
-            intents_removed=len(prunable_intent_ids),
+            parent_orders_removed=len(plan.parent_order_ids),
+            child_orders_removed=plan.child_count,
+            broker_orders_removed=len(plan.broker_order_ids),
+            fill_events_removed=len(plan.fill_ids),
+            intents_removed=len(plan.intent_ids),
         )
-        if not apply or not prunable_parent_ids:
+        if not apply or not plan.parent_order_ids:
             return result
 
         state.parent_orders = [
             parent
             for parent in state.parent_orders
-            if parent.parent_order_id not in prunable_parent_ids
+            if parent.parent_order_id not in plan.parent_order_ids
         ]
         state.child_orders = [
-            child for child in state.child_orders if child.child_order_id not in prunable_child_ids
+            child
+            for child in state.child_orders
+            if child.child_order_id not in plan.child_order_ids
         ]
         state.broker_orders = [
             broker_order
             for broker_order in state.broker_orders
-            if broker_order.broker_order_id not in prunable_broker_order_ids
+            if broker_order.broker_order_id not in plan.broker_order_ids
         ]
         state.fill_events = [
-            fill for fill in state.fill_events if fill.fill_id not in prunable_fill_ids
+            fill for fill in state.fill_events if fill.fill_id not in plan.fill_ids
         ]
         state.intents = [
-            intent for intent in state.intents if intent.intent_id not in prunable_intent_ids
+            intent for intent in state.intents if intent.intent_id not in plan.intent_ids
         ]
         result.state_path = self.state_store.save(state)
         return result
@@ -532,69 +684,18 @@ class StateMaintenanceService:
             result.cleared_kill_switch = True
 
         if dedupe_fills:
-            seen: set[str] = set()
-            deduped = []
-            removed = 0
-            for fill in state.fill_events:
-                if fill.fill_id in seen:
-                    removed += 1
-                    continue
-                seen.add(fill.fill_id)
-                deduped.append(fill)
-            state.fill_events = deduped
-            result.duplicate_fills_removed = removed
+            result.duplicate_fills_removed = _dedupe_fill_events(state)
 
         if drop_orphan_fills:
-            parent_order_ids = {parent.parent_order_id for parent in state.parent_orders}
-            broker_order_ids = {child.broker_order_id for child in state.child_orders if child.broker_order_id}
-            kept = []
-            removed = 0
-            for fill in state.fill_events:
-                if fill.parent_order_id in parent_order_ids or fill.broker_order_id in broker_order_ids:
-                    kept.append(fill)
-                    continue
-                removed += 1
-            state.fill_events = kept
-            result.orphan_fills_removed = removed
+            result.orphan_fills_removed = _drop_orphan_fill_events(state)
 
         if drop_orphan_terminal_broker_orders:
-            referenced = {child.broker_order_id for child in state.child_orders if child.broker_order_id}
-            kept = []
-            removed = 0
-            for broker_order in state.broker_orders:
-                if (
-                    broker_order.broker_order_id not in referenced
-                    and broker_order.status in TERMINAL_BROKER_STATUSES
-                ):
-                    removed += 1
-                    continue
-                kept.append(broker_order)
-            state.broker_orders = kept
-            result.orphan_terminal_broker_orders_removed = removed
+            result.orphan_terminal_broker_orders_removed = (
+                _drop_orphan_terminal_broker_orders(state)
+            )
 
         if recompute_parent_aggregates:
-            broker_orders_by_id = {
-                broker_order.broker_order_id: broker_order for broker_order in state.broker_orders
-            }
-            child_records_by_parent: dict[str, list] = {}
-            for child in state.child_orders:
-                child_records_by_parent.setdefault(child.parent_order_id, []).append(child)
-            repaired = 0
-            for parent in state.parent_orders:
-                expected = _derive_parent_aggregate(
-                    state=state,
-                    parent=parent,
-                    child_orders=child_records_by_parent.get(parent.parent_order_id, []),
-                    broker_orders_by_id=broker_orders_by_id,
-                )
-                if not _parent_aggregate_mismatch(parent, expected):
-                    continue
-                parent.filled_quantity = expected.filled_quantity
-                parent.remaining_quantity = expected.remaining_quantity
-                parent.status = expected.status
-                parent.updated_at = utc_now_iso()
-                repaired += 1
-            result.parent_aggregates_recomputed = repaired
+            result.parent_aggregates_recomputed = _recompute_parent_aggregates(state)
 
         result.state_path = self.state_store.save(state)
         return result
