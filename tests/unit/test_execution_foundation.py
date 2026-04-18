@@ -17,13 +17,14 @@ from quant_execution_engine.broker.base import (
 import quant_execution_engine.broker.factory as broker_factory
 from quant_execution_engine.broker.factory import get_broker_capabilities
 from quant_execution_engine.execution import (
+    ExecutionOrderTrace,
     ExecutionFillEvent,
     ExecutionState,
     ExecutionStateStore,
     OrderLifecycleService,
 )
 from quant_execution_engine.models import Order, Quote
-from quant_execution_engine.renderers.table import render_tracked_order_detail
+from quant_execution_engine.renderers.table import render_order_trace, render_tracked_order_detail
 from quant_execution_engine.risk import RiskGateChain
 from quant_execution_engine.state_tools import StateMaintenanceService
 
@@ -118,6 +119,49 @@ class FakeAdapter(BrokerAdapter):
 class FailingSubmitAdapter(FakeAdapter):
     def submit_order(self, request: BrokerOrderRequest) -> BrokerOrderRecord:
         raise RuntimeError("submit rejected by broker")
+
+
+class HistoryAdapter(FakeAdapter):
+    capabilities = BrokerCapabilityMatrix(
+        name="history-fake",
+        supports_live_submit=True,
+        supports_cancel=True,
+        supports_order_query=True,
+        supports_open_order_listing=True,
+        supports_order_history=True,
+        supports_fill_history=True,
+        supports_reconcile=True,
+    )
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.fill_history: dict[str, list[BrokerFillRecord]] = {}
+
+    def list_order_history(
+        self,
+        account: ResolvedBrokerAccount | None = None,
+        *,
+        symbol: str | None = None,
+        broker_order_id: str | None = None,
+    ) -> list[BrokerOrderRecord]:
+        if broker_order_id is not None:
+            record = self.orders.get(broker_order_id)
+            return [record] if record is not None else []
+        return list(self.orders.values())
+
+    def list_fill_history(
+        self,
+        account: ResolvedBrokerAccount | None = None,
+        *,
+        symbol: str | None = None,
+        broker_order_id: str | None = None,
+    ) -> list[BrokerFillRecord]:
+        if broker_order_id is not None:
+            return list(self.fill_history.get(broker_order_id, []))
+        records: list[BrokerFillRecord] = []
+        for fills in self.fill_history.values():
+            records.extend(fills)
+        return records
 
 
 def test_execution_state_store_round_trip(tmp_path: Path) -> None:
@@ -536,6 +580,109 @@ def test_render_tracked_order_detail_includes_target_context_and_reprice_metadat
     assert "Intent Limit Price: 9.5" in rendered
     assert "Last Reprice At:" in rendered
     assert "Last Reprice From Limit: 10.0" in rendered
+
+
+def test_get_order_trace_merges_local_attempts_and_broker_history(tmp_path: Path) -> None:
+    adapter = HistoryAdapter()
+    store = ExecutionStateStore(root_dir=tmp_path)
+    service = OrderLifecycleService(
+        adapter,
+        state_store=store,
+        risk_chain=RiskGateChain({}),
+    )
+    base_kwargs = {
+        "account_label": "main",
+        "dry_run": False,
+        "target_source": "trace-test",
+        "target_asof": "2026-04-19",
+        "target_input_path": "outputs/targets/trace.json",
+    }
+
+    original = service.execute_orders(
+        [Order(symbol="AAPL.US", quantity=10, side="BUY", price=10.0, order_type="LIMIT")],
+        **base_kwargs,
+    )[0]
+    original_order_id = str(original.broker_order_id)
+    adapter.fill_history[original_order_id] = [
+        BrokerFillRecord(
+            fill_id="fill-old",
+            broker_order_id=original_order_id,
+            symbol="AAPL.US",
+            quantity=4.0,
+            price=10.0,
+            broker_name=adapter.backend_name,
+            account_label="main",
+            filled_at="2026-04-19T00:00:01+00:00",
+        )
+    ]
+
+    repriced = service.reprice_order(
+        account_label="main",
+        order_ref=original_order_id,
+        limit_price=9.5,
+    )
+    new_order_id = str(repriced.broker_order_id)
+    adapter.fill_history[new_order_id] = [
+        BrokerFillRecord(
+            fill_id="fill-new",
+            broker_order_id=new_order_id,
+            symbol="AAPL.US",
+            quantity=6.0,
+            price=9.5,
+            broker_name=adapter.backend_name,
+            account_label="main",
+            filled_at="2026-04-19T00:00:02+00:00",
+        )
+    ]
+
+    trace = service.get_order_trace(account_label="main", order_ref=new_order_id)
+
+    assert isinstance(trace, ExecutionOrderTrace)
+    assert trace.parent is not None
+    assert len(trace.child_orders) == 2
+    assert [child.attempt for child in trace.child_orders] == [1, 2]
+    assert {record.broker_order_id for record in trace.tracked_broker_orders} == {
+        original_order_id,
+        new_order_id,
+    }
+    assert {record.broker_order_id for record in trace.broker_history_orders} == {
+        original_order_id,
+        new_order_id,
+    }
+    assert {fill.fill_id for fill in trace.broker_history_fills} == {"fill-old", "fill-new"}
+    assert trace.warnings == []
+
+    rendered = render_order_trace(trace)
+
+    assert "Local Child Attempts: 2" in rendered
+    assert "Broker-side Order History: 2" in rendered
+    assert "Broker-side Fill History: 2" in rendered
+    assert original_order_id in rendered
+    assert new_order_id in rendered
+
+
+def test_get_order_trace_reports_unavailable_broker_history(tmp_path: Path) -> None:
+    adapter = FakeAdapter()
+    store = ExecutionStateStore(root_dir=tmp_path)
+    service = OrderLifecycleService(
+        adapter,
+        state_store=store,
+        risk_chain=RiskGateChain({}),
+    )
+
+    result = service.execute_orders(
+        [Order(symbol="AAPL.US", quantity=10, side="BUY", price=10.0)],
+        account_label="main",
+        dry_run=False,
+        target_source="trace-test",
+        target_asof="2026-04-19",
+        target_input_path="outputs/targets/trace.json",
+    )[0]
+
+    trace = service.get_order_trace(account_label="main", order_ref=str(result.broker_order_id))
+
+    assert any("does not support broker-side order history" in warning for warning in trace.warnings)
+    assert any("does not support broker-side fill history" in warning for warning in trace.warnings)
 
 
 def test_retry_stale_orders_only_retries_eligible_open_orders(tmp_path: Path) -> None:

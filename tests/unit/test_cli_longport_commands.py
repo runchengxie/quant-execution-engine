@@ -428,6 +428,28 @@ def test_main_routes_order() -> None:
     )
 
 
+def test_main_routes_trace_order() -> None:
+    with patch.object(
+        cli,
+        "run_trace_order",
+        return_value=cli.CommandResult(exit_code=0),
+    ) as mock_run:
+        with patch.object(
+            sys,
+            "argv",
+            ["qexec", "trace-order", "fake-order-1", "--broker", "alpaca-paper", "--format", "json"],
+        ):
+            result = cli.main()
+
+    assert result == 0
+    mock_run.assert_called_once_with(
+        order_ref="fake-order-1",
+        account="main",
+        broker="alpaca-paper",
+        fmt="json",
+    )
+
+
 def test_main_routes_retry() -> None:
     with patch.object(
         cli,

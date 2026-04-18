@@ -13,6 +13,7 @@ from ..execution import (
     ExecutionRepriceResult,
     ExecutionResumeRemainingResult,
     ExecutionStaleRetryResult,
+    ExecutionOrderTrace,
     ExecutionTrackedOrder,
 )
 from ..models import AccountSnapshot, Order, Quote, RebalanceResult
@@ -543,6 +544,106 @@ def render_tracked_order_detail(tracked: ExecutionTrackedOrder) -> str:
         lines.append(
             f"  * {fill.fill_id}: {fill.quantity:g} @ {fill.price:g} on {fill.filled_at}"
         )
+    return "\n".join(lines)
+
+
+def render_order_trace(trace: ExecutionOrderTrace) -> str:
+    """Render a merged tracked-state and broker-side trace."""
+
+    lines = [
+        "Order trace:",
+        f"- Broker / Account: {trace.broker_name} / {trace.account_label}",
+        f"- Requested Ref: {trace.order_ref}",
+        f"- State file: {trace.state_path}",
+    ]
+    if trace.intent is not None:
+        lines.extend(
+            [
+                f"- Intent: {trace.intent.intent_id} {trace.intent.side} {trace.intent.quantity:g} {trace.intent.symbol}",
+                f"- Intent Order Type: {trace.intent.order_type}",
+                f"- Intent Run ID: {trace.intent.run_id}",
+            ]
+        )
+        if trace.intent.limit_price is not None:
+            lines.append(f"- Intent Limit Price: {trace.intent.limit_price}")
+    if trace.parent is not None:
+        lines.extend(
+            [
+                f"- Parent: {trace.parent.parent_order_id}",
+                f"- Parent Status: {trace.parent.status}",
+                f"- Parent Filled / Remaining: {trace.parent.filled_quantity:g} / {trace.parent.remaining_quantity:g}",
+            ]
+        )
+    if trace.child is not None:
+        lines.append(
+            f"- Selected Child: {trace.child.child_order_id} (attempt {trace.child.attempt}, status {trace.child.status})"
+        )
+    if trace.broker_order is not None:
+        lines.append(
+            "- Selected Broker Order: "
+            f"{trace.broker_order.broker_order_id} ({trace.broker_order.status}, "
+            f"filled {float(trace.broker_order.filled_quantity or 0.0):g} / "
+            f"remaining {float(trace.broker_order.remaining_quantity or 0.0):g})"
+        )
+        diagnostic = diagnose_order_issue(trace.broker_order)
+        if diagnostic is not None:
+            lines.append(f"- Diagnostic: [{diagnostic.code}] {diagnostic.summary}")
+            if diagnostic.action_hint:
+                lines.append(f"- Suggested Next Step: {diagnostic.action_hint}")
+
+    lines.append(f"- Local Child Attempts: {len(trace.child_orders)}")
+    for child in trace.child_orders:
+        lines.append(
+            "  * "
+            f"attempt {child.attempt}: {child.child_order_id} -> {child.status}"
+            f", broker_order_id={child.broker_order_id or '-'}"
+            f", client_order_id={child.client_order_id or '-'}"
+        )
+        if child.message:
+            lines.append(f"    message: {child.message}")
+
+    lines.append(f"- Local Tracked Broker Orders: {len(trace.tracked_broker_orders)}")
+    for record in trace.tracked_broker_orders:
+        lines.append(
+            "  * "
+            f"{record.broker_order_id}: {record.status}, "
+            f"filled {float(record.filled_quantity or 0.0):g} / "
+            f"remaining {float(record.remaining_quantity or 0.0):g}, "
+            f"updated {record.updated_at}"
+        )
+        if record.message:
+            lines.append(f"    message: {record.message}")
+
+    lines.append(f"- Local Fill Events: {len(trace.fill_events)}")
+    for fill in trace.fill_events:
+        lines.append(
+            f"  * {fill.fill_id}: {fill.quantity:g} @ {fill.price:g} on {fill.filled_at}"
+        )
+
+    lines.append(f"- Broker-side Order History: {len(trace.broker_history_orders)}")
+    for record in trace.broker_history_orders:
+        lines.append(
+            "  * "
+            f"{record.broker_order_id}: {record.status}, "
+            f"filled {float(record.filled_quantity or 0.0):g} / "
+            f"remaining {float(record.remaining_quantity or 0.0):g}, "
+            f"updated {record.updated_at}"
+        )
+
+    lines.append(f"- Broker-side Fill History: {len(trace.broker_history_fills)}")
+    for fill in trace.broker_history_fills:
+        lines.append(
+            f"  * {fill.fill_id}: {fill.quantity:g} @ {fill.price:g} on {fill.filled_at}"
+        )
+
+    if trace.warnings:
+        lines.append("- Warnings:")
+        for warning in trace.warnings:
+            diagnostic = diagnose_warning_message(warning)
+            lines.append(f"  * [{diagnostic.code}] {diagnostic.summary}")
+            if diagnostic.action_hint:
+                lines.append(f"    next: {diagnostic.action_hint}")
+
     return "\n".join(lines)
 
 

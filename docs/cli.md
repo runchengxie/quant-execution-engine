@@ -181,6 +181,17 @@ qexec order <broker-order-id> --broker longport-paper
 
 你可以传入券商订单 ID、本地子订单 ID 或客户端订单 ID 作为引用凭证。系统会输出该订单的交易意图、母子订单关系、详细的成交回报流水，以及针对当前异常状态的诊断与下一步操作建议。
 
+### `trace-order`
+
+查看某一条追踪订单的联合时间线：本地 tracked-state 的 parent/child attempts、fill events，以及在支持的后端上补充 broker-side 的只读 history。
+
+```bash
+qexec trace-order <broker-order-id> --broker longport-paper
+qexec trace-order <child-order-id> --broker longport --format json
+```
+
+这个命令不会修改任何状态；它的目标是把“本地追踪到的事实”和“券商侧只读 history”放到同一个复查视图里。
+
 ### `rebalance`
 
 核心调仓指令。基于标准目标持仓文件生成执行计划，并负责实际下单。

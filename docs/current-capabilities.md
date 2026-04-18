@@ -18,6 +18,7 @@
 - 长桥实盘、长桥模拟盘、Alpaca 模拟盘和盈透模拟盘的适配器目前均按单账户语义运行。传入不支持的账户标签会直接报错拦截。
 - `orders`、`exceptions` 以及 `order` 命令展示的是本地追踪状态视图，而非券商端的全量历史订单簿。
 - `broker-orders` 与 `broker-fills` 是单独的 broker-side 只读查询命令；它们只在支持该能力的后端上可用，目前主要用于补充排障与审计视角，而不改变本地 tracked-state 的权威语义。
+- `trace-order` 会把本地 tracked-state 的 parent/child/fill 记录，与支持后端上的 broker-side history 做联合展示；当后端不支持 history 时，该命令仍可返回本地 trace，并附带只读 history 不可用的提示。
 - 订单重试指令（`retry`）仅支持零成交且已处于终态的追踪订单。对于部分成交的订单，必须使用撤销剩余（`cancel-rest`）、继续执行剩余（`resume-remaining`）或接受部分成交（`accept-partial`）指令来处理。
 - 调仓的输入必须是规范的 `targets.json` 文件（须包含 `targets` 数组）。旧版的纯代码列表、仅包含权重的文档或 Excel 工作簿格式已不再作为对外支持的执行输入。
 

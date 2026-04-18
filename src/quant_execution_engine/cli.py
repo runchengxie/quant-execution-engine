@@ -67,6 +67,7 @@ from .renderers.table import (
     render_reprice_summary,
     render_resume_remaining_summary,
     render_retry_summary,
+    render_order_trace,
     render_state_doctor_summary,
     render_state_prune_summary,
     render_state_repair_summary,
@@ -741,6 +742,31 @@ def run_order(
             close_fn()
 
 
+def run_trace_order(
+    *,
+    order_ref: str,
+    account: str = "main",
+    broker: str | None = None,
+    fmt: str = "table",
+) -> CommandResult:
+    adapter = None
+    try:
+        adapter = get_broker_adapter(broker_name=broker)
+        service = OrderLifecycleService(adapter)
+        trace = service.get_order_trace(account_label=account, order_ref=order_ref)
+        if fmt == "json":
+            return CommandResult(exit_code=0, stdout=render_json(trace))
+        return CommandResult(exit_code=0, stdout=render_order_trace(trace))
+    except Exception as exc:
+        msg = f"Order trace failed: {exc}"
+        get_logger(__name__).error(msg)
+        return CommandResult(exit_code=1, stderr=msg)
+    finally:
+        close_fn = getattr(adapter, "close", None)
+        if callable(close_fn):
+            close_fn()
+
+
 def run_retry(
     *,
     order_ref: str,
@@ -1271,6 +1297,15 @@ def main() -> int:
                 order_ref=getattr(args, "order_ref"),
                 account=getattr(args, "account", "main"),
                 broker=getattr(args, "broker", None),
+            )
+        )
+    if args.command == "trace-order":
+        return _handle_command_result(
+            run_trace_order(
+                order_ref=getattr(args, "order_ref"),
+                account=getattr(args, "account", "main"),
+                broker=getattr(args, "broker", None),
+                fmt=getattr(args, "format", "table"),
             )
         )
     if args.command == "retry":

@@ -8,7 +8,7 @@ from dataclasses import asdict, dataclass, field, is_dataclass
 from pathlib import Path
 from typing import Any
 
-from .broker.base import BrokerOrderRecord, BrokerReconcileReport, utc_now_iso
+from .broker.base import BrokerFillRecord, BrokerOrderRecord, BrokerReconcileReport, utc_now_iso
 from .config import load_cfg
 from .logging import get_run_id
 from .paths import OUTPUTS_DIR
@@ -196,6 +196,26 @@ class ExecutionTrackedOrder:
 
 
 @dataclass(slots=True)
+class ExecutionOrderTrace:
+    """Merged tracked-state and broker-side trace for one execution parent."""
+
+    broker_name: str
+    account_label: str
+    order_ref: str
+    state_path: Path
+    intent: OrderIntent | None
+    parent: ParentOrder | None
+    child: ChildOrder | None
+    broker_order: BrokerOrderRecord | None
+    child_orders: list[ChildOrder] = field(default_factory=list)
+    tracked_broker_orders: list[BrokerOrderRecord] = field(default_factory=list)
+    fill_events: list[ExecutionFillEvent] = field(default_factory=list)
+    broker_history_orders: list[BrokerOrderRecord] = field(default_factory=list)
+    broker_history_fills: list[BrokerFillRecord] = field(default_factory=list)
+    warnings: list[str] = field(default_factory=list)
+
+
+@dataclass(slots=True)
 class ExecutionExceptionRecord:
     """Resolved exception record from local execution state."""
 
@@ -371,6 +391,7 @@ __all__ = [
     "ExecutionCancelResult",
     "ExecutionBulkCancelResult",
     "ExecutionTrackedOrder",
+    "ExecutionOrderTrace",
     "ExecutionExceptionRecord",
     "ExecutionRetryResult",
     "ExecutionResumeRemainingResult",

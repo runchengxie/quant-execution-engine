@@ -31,6 +31,8 @@ def _serialize_dataclass(obj: Any) -> dict[str, Any]:
                     else item
                     for item in value
                 ]
+            elif hasattr(value, "__fspath__"):
+                result[field_name] = str(value)
             elif hasattr(value, "isoformat"):  # datetime objects
                 result[field_name] = value.isoformat()
             else:

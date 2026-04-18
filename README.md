@@ -2,7 +2,7 @@
 
 这是一个面向量化交易的独立执行引擎，专注于券商后端的自动化下单、资金对账、异常恢复，并提供必要的人工干预（运维）接口。
 
-目前已默认支持长桥证券（LongPort）的模拟盘与实盘、Alpaca 模拟盘，以及盈透证券（IBKR）模拟盘的核心美股交易。为控制开发和维护的复杂度，本项目不包含策略研究、回测或原始行情数据处理模块；建议将其与你的“研究前台”项目配合使用。
+目前已默认支持长桥证券（LongPort）的模拟盘与实盘、Alpaca 模拟盘，以及盈透证券（IBKR）模拟盘的核心美股交易。为控制开发和维护的复杂度，本项目不包含策略研究、回测或原始行情数据处理模块；建议将其与你的研究前台项目配合使用。
 
 ## 核心能力
 
@@ -16,6 +16,7 @@
 *   订单追踪与干预
     *   查看本地已跟踪订单、异常队列，以及单笔订单的完整生命周期详情。
     *   在支持的券商后端上，只读查询 broker-side 订单历史与成交历史，用于排障与审计对照。
+    *   使用联合 trace 视图，把本地 tracked-state 与 broker-side history 放到同一个复查时间线上。
     *   丰富的手动操作指令：撤单（`cancel`）、全部撤销（`cancel-all`）、失败重试（`retry`）、改价重提（`reprice`）、重试过旧未成交订单（`retry-stale`）。
     *   部分成交（Partial Fill）处理：撤销剩余（`cancel-rest`）、继续执行剩余数量（`resume-remaining`）、接受部分成交结果（`accept-partial`）。
 *   运维与安全
@@ -37,6 +38,7 @@
 *   `ibkr-paper` 依赖本地 IB Gateway，目前只支持 US equities 最小切片，仍缺有效行情下的下单、撤单和成交证据。
 *   `orders` / `exceptions` / `order` 是本地 tracked-state 视图，不是券商全量订单簿。
 *   `broker-orders` / `broker-fills` 是单独的 broker-side 只读查询命令，仅在支持的后端上可用。
+*   `trace-order` 会把本地 tracked-state 和 broker-side history 组合成一个复查视图；history 不可用时仍可返回本地 trace。
 *   `--account` 是标签解析与 fail-fast 校验，不是多账户路由。
 
 ## 快速开始
@@ -80,6 +82,7 @@ qexec quote AAPL 700.HK --broker longport-paper
 qexec orders --broker longport-paper --status open
 qexec exceptions --broker longport-paper --status failure
 qexec order <broker-order-id> --broker longport-paper
+qexec trace-order <broker-order-id> --broker longport-paper
 qexec broker-orders --broker longport-paper --symbol AAPL
 qexec broker-fills --broker longport-paper --order-id <broker-order-id>
 qexec reconcile --broker longport-paper
@@ -129,7 +132,7 @@ PYTHONPATH=src python -m quant_execution_engine --help
 *   为防止 `.env` 文件被误提交或随项目打包泄露，实盘路径会强拦截并拒绝从项目根目录的 `.env*` / `.envrc*` 读取实盘 Token。
 *   `.env.example` 仅作为本地 paper/smoke 示例，不包含 LongPort 实盘 Token 占位符。
 *   实盘推荐配置方式：在当前 shell 中显式 `export`，或将私有凭证存放在项目外部（推荐路径：`~/.config/qexec/longport-live.env`），并使用 `source` 加载。
-*   读取优先级：模拟盘（`longport-paper`）优先读取项目根目录的 `.env`；实盘（`longport`）优先读取用户级私有文件 `~/.config/qexec/longport-live.env`。
+*   读取优先级：模拟盘（`longport-paper`）优先读取项目根目录的 `.env`，实盘（`longport`）优先读取用户级私有文件 `~/.config/qexec/longport-live.env`。
 *   实盘执行门禁：实盘下单（`--execute`）必须设置环境变量 `QEXEC_ENABLE_LIVE=1`，且项目根目录下严禁出现实盘凭证。
 *   使用 `qexec config --broker longport` 可查看各项配置的最终命中来源。
 *   当前支持矩阵与配置来源规则请参阅 [docs/current-capabilities.md](docs/current-capabilities.md)，实盘操作手册请参阅 [docs/longport-real-smoke.md](docs/longport-real-smoke.md)。

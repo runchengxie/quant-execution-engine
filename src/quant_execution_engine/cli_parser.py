@@ -236,6 +236,14 @@ Examples:
     _add_order_ref_arg(order_parser)
     _add_broker_account_args(order_parser)
 
+    trace_order_parser = subparsers.add_parser(
+        "trace-order",
+        help="Show a merged tracked-state and broker-history trace for one tracked order",
+    )
+    _add_order_ref_arg(trace_order_parser)
+    _add_broker_account_args(trace_order_parser)
+    _add_format_arg(trace_order_parser)
+
     retry_parser = subparsers.add_parser(
         "retry",
         help="Retry a zero-fill failed or canceled tracked order",
