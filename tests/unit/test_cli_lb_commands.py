@@ -602,7 +602,7 @@ def test_run_rebalance_rejects_legacy_workbook(tmp_path: Path) -> None:
     assert result.exit_code == 1
     assert result.stderr is not None
     assert "deprecated" in result.stderr.lower()
-    assert "schema-v2" in result.stderr.lower()
+    assert "canonical targets json" in result.stderr.lower()
 
 
 def test_run_rebalance_live_requires_explicit_enable(

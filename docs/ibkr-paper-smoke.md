@@ -77,7 +77,6 @@ qexec quote AAPL --broker ibkr-paper
 
 ```json
 {
-  "schema_version": 2,
   "asof": "ibkr-paper-smoke",
   "source": "operator-smoke",
   "target_gross_exposure": 1.0,

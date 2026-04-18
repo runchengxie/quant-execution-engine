@@ -34,7 +34,7 @@ Examples:
 
     rebalance_parser = subparsers.add_parser(
         "rebalance",
-        help="Preview rebalance orders from a schema-v2 targets JSON",
+        help="Preview rebalance orders from a canonical targets JSON",
     )
     rebalance_parser.add_argument("input_file", type=str, help="targets JSON file")
     rebalance_parser.add_argument(
@@ -510,5 +510,4 @@ Examples:
     )
 
     return parser
-
 

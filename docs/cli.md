@@ -129,3 +129,119 @@ qexec quote AAPL --broker ibkr-paper
 查看本地执行状态中已被系统跟踪的券商订单。
 
 ```bash
+qexec orders --broker longport-paper --status open
+qexec orders --broker longport-paper --symbol AAPL
+```
+
+你可以通过状态（如 `open`、`failure`、`terminal`）或标的代码（如 `AAPL`）进行过滤。
+*注意：此命令仅展示本地执行引擎已追踪的订单，并非直接查询券商后台的全量历史订单簿。*
+
+### `exceptions`
+
+查看本地执行状态中的异常订单队列。
+
+```bash
+qexec exceptions --broker longport-paper
+qexec exceptions --broker longport-paper --status blocked,failed
+```
+
+用于快速定位需要人工干预的订单。默认展示被本地风控拦截（`blocked`）、提交失败（`failed`）、被券商拒绝（`rejected`）、过期（`expired`）、部分成交（`partially_filled`）或正在等待撤单结果（`pending_cancel`）的追踪记录。
+
+### `order`
+
+查询单笔追踪订单的完整生命周期详情。
+
+```bash
+qexec order <broker-order-id> --broker longport-paper
+```
+
+你可以传入券商订单 ID、本地子订单 ID 或客户端订单 ID 作为引用凭证。系统会输出该订单的交易意图、母子订单关系、详细的成交回报流水，以及针对当前异常状态的诊断与下一步操作建议。
+
+### `rebalance`
+
+核心调仓指令。基于标准目标持仓文件生成执行计划，并负责实际下单。
+
+```bash
+# 默认行为：仅生成调仓差异预览（Dry-run）
+qexec rebalance outputs/targets/2026-04-09.json --broker longport-paper
+
+# 附加 --execute 参数：正式向券商提交订单
+qexec rebalance outputs/targets/2026-04-09.json --broker longport-paper --execute
+
+# 附加 --target-gross-exposure 参数：在命令行层面覆盖目标的总风险敞口倍率
+qexec rebalance outputs/targets/2026-04-09.json --broker longport-paper --target-gross-exposure 0.8
+```
+
+输入文件必须严格符合 [targets.md](targets.md) 中定义的 `targets.json` 格式。
+*安全门禁：若要在实盘环境（如 `--broker longport`）下使用 `--execute` 参数，当前终端会话必须显式设置环境变量 `QEXEC_ENABLE_LIVE=1`。*
+
+### `reconcile`
+
+手动触发与券商后台的状态对账。
+
+```bash
+qexec reconcile --broker longport-paper
+```
+
+系统会主动从券商拉取最新的活跃订单状态与成交回报流水，将其与本地状态进行比对与合并，并输出详细的差异与状态变更摘要。在处理异常订单或执行干预操作前，强烈建议先运行此命令以同步最新事实。
+
+### `cancel` 与 `cancel-all`
+
+撤销追踪中的订单。
+
+```bash
+# 撤销单笔订单
+qexec cancel <broker-order-id> --broker longport-paper
+
+# 批量撤销当前账户下所有本地已追踪且处于开启（Open）状态的订单
+qexec cancel-all --broker longport-paper
+```
+
+`cancel-all` 极其适合用于紧急情况下的快速干预，或在模拟盘冒烟测试结束后的环境清理收尾。
+
+### `retry` / `reprice` / `retry-stale` (订单干预与重试)
+
+对挂单或失败的订单进行主动干预。
+
+```bash
+# 重新提交一笔零成交且已失败/被拒绝的订单
+qexec retry <broker-order-id> --broker longport-paper
+
+# 对一笔仍在开启状态的限价单进行改价（系统会先执行撤单，再以新价格发起新的子订单）
+qexec reprice <broker-order-id> --limit-price 155.50 --broker longport-paper
+
+# 批量处理“过期挂单”：撤销在本地停留超过指定时长（默认 5 分钟）且零成交的挂单，并重新发起提交
+qexec retry-stale --older-than-minutes 15 --broker longport-paper
+```
+
+### `cancel-rest` / `resume-remaining` / `accept-partial` (部分成交处理)
+
+当订单发生“部分成交”（Partial Fill）时，系统会将其停留在需要人工介入的状态。你可以使用以下专项命令进行处理：
+
+```bash
+# 1. 撤销剩余未成交的部分
+qexec cancel-rest <broker-order-id> --broker longport-paper
+
+# 2. 针对剩余未成交的数量，生成并提交一笔新的子订单继续执行
+qexec resume-remaining <broker-order-id> --broker longport-paper
+
+# 3. 接受当前的局部成交结果，放弃后续执行，并在本地将该订单标记为完结
+qexec accept-partial <broker-order-id> --broker longport-paper
+```
+
+### `state-doctor` / `state-prune` / `state-repair` (本地状态维护)
+
+维护位于 `outputs/state/` 目录下的本地执行状态文件一致性。
+
+```bash
+# 状态体检：检查本地状态文件是否存在数据孤岛、父子订单汇总数据不一致等隐患
+qexec state-doctor --broker longport-paper
+
+# 状态清理：清理已完结且超过指定天数（默认 30 天）的旧订单记录
+# 注意：必须附加 --apply 才会真正执行删除，否则仅打印清理预览
+qexec state-prune --older-than-days 45 --apply --broker longport-paper
+
+# 状态修复：执行安全的本地一致性修复
+# 例如：清除紧急停单标记、去重成交记录、移除游离数据，或重新计算母订单进度
+qexec state-repair --clear-kill-switch --dedupe-fills --recompute-parent-aggregates --broker longport-paper
+```

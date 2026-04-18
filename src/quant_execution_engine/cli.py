@@ -843,7 +843,7 @@ def run_rebalance(
             exit_code=1,
             stderr=(
                 "Legacy workbook inputs are deprecated for live execution. "
-                "Provide a canonical schema-v2 targets JSON and rerun "
+                "Provide a canonical targets JSON and rerun "
                 "'qexec rebalance <targets.json>'."
             ),
         )
@@ -859,7 +859,7 @@ def run_rebalance(
         logger.info("Broker: %s", selected_broker)
         logger.info("Account: %s", account)
 
-        targets_doc = read_targets_json(file_path, require_schema_v2=True)
+        targets_doc = read_targets_json(file_path, require_canonical=True)
 
         service = RebalanceService(
             env=env_name,

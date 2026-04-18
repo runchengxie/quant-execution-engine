@@ -43,7 +43,7 @@ def _write_audit_log(root: Path, run_id: str, target_path: Path) -> Path:
 def test_create_evidence_bundle_collects_run_artifacts(tmp_path: Path) -> None:
     run_id = "run-123"
     target_path = tmp_path / "outputs" / "targets" / "targets.json"
-    _write_json(target_path, {"schema_version": 2, "targets": []})
+    _write_json(target_path, {"targets": []})
     audit_path = _write_audit_log(tmp_path, run_id, target_path)
     state_path = ExecutionStateStore(
         root_dir=tmp_path / "outputs" / "state"

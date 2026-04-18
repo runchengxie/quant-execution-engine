@@ -36,7 +36,7 @@ qexec quote AAPL --broker alpaca-paper
 
 ## 4) 最小执行路径
 
-准备一个 schema-v2 的 `targets.json`（例如 `outputs/targets/alpaca-paper-smoke.json`），然后：
+准备一个符合 [targets.md](targets.md) 格式的 `targets.json`（例如 `outputs/targets/alpaca-paper-smoke.json`），然后：
 
 ```bash
 qexec rebalance outputs/targets/alpaca-paper-smoke.json --broker alpaca-paper
@@ -76,4 +76,3 @@ qexec evidence-pack <audit-run-id> --operator-note "alpaca paper smoke reviewed"
 - paper 账户或行情权限异常；
 - 市场状态导致报价/下单行为与预期不同；
 - 本地已有未处理 tracked order，需要先 `qexec cancel-all --broker alpaca-paper` 或先 `qexec reconcile` 再重试。
-

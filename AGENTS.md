@@ -34,7 +34,7 @@
 - LongPort real、`longport-paper`、Alpaca paper 和 `ibkr-paper` 当前 adapter 仍按单账户语义运行；unsupported label 会直接报错。
 - `retry` 只支持零成交 terminal tracked order；部分成交要走 `cancel-rest`、`resume-remaining` 或 `accept-partial`。
 - `orders` / `exceptions` / `order` 都是本地 tracked-state 视图，不是 broker 全量订单视图。
-- 调仓输入只接受 canonical schema-v2 `targets.json`。
+- 调仓输入只接受 canonical `targets.json`。
 
 ## Outputs
 

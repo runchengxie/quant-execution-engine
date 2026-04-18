@@ -170,7 +170,7 @@ def test_cli_rebalance_rejects_legacy_workbook(tmp_path: Path) -> None:
 
     assert result.returncode != 0
     assert "deprecated" in result.stderr.lower()
-    assert "schema-v2" in result.stderr.lower()
+    assert "canonical targets json" in result.stderr.lower()
 
 
 @pytest.mark.e2e

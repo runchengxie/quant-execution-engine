@@ -1,7 +1,6 @@
 """Targets JSON utilities.
 
-Defines a canonical, market-aware schema for live rebalance targets while
-providing a controlled migration path from the older ticker-list format.
+Defines the canonical, market-aware targets format used by rebalance execution.
 """
 
 from __future__ import annotations
@@ -213,10 +212,10 @@ def write_targets_json(
     target_gross_exposure: float = 1.0,
     default_market: str = "US",
 ) -> Path:
-    """Write canonical targets JSON in schema v2.
+    """Write canonical targets JSON.
 
-    Callers may either provide explicit ``targets`` entries or a legacy-style
-    ticker list plus optional weights, which will be normalized into schema v2.
+    Callers may either provide explicit ``targets`` entries or a ticker list
+    plus optional weights, which will be normalized before writing.
     """
 
     if targets is not None:
@@ -231,7 +230,6 @@ def write_targets_json(
         )
 
     payload: dict[str, Any] = {
-        "schema_version": SCHEMA_VERSION,
         "asof": asof,
         "source": source,
         "target_gross_exposure": float(target_gross_exposure or 0.0),
@@ -249,26 +247,28 @@ def write_targets_json(
 def read_targets_json(
     path: Path,
     *,
-    require_schema_v2: bool = False,
+    require_canonical: bool = False,
     default_market: str = "US",
 ) -> Targets:
     """Read targets JSON and return structured data.
 
-    When ``require_schema_v2`` is true, legacy ticker-list inputs are rejected
-    with a migration-oriented error message.
+    When ``require_canonical`` is true, ticker-list inputs are rejected.
     """
 
     if not path.exists():
         raise FileNotFoundError(f"文件不存在: {path}")
 
     raw = json.loads(path.read_text(encoding="utf-8"))
-    schema_version = int(raw.get("schema_version") or 1)
+    try:
+        schema_version = int(raw.get("schema_version") or SCHEMA_VERSION)
+    except (TypeError, ValueError):
+        schema_version = SCHEMA_VERSION
     asof = raw.get("asof") or None
     source = raw.get("source") or None
     notes = raw.get("notes") or None
     target_gross_exposure = float(raw.get("target_gross_exposure", 1.0))
 
-    if schema_version >= SCHEMA_VERSION and isinstance(raw.get("targets"), list):
+    if isinstance(raw.get("targets"), list):
         entries = [
             _entry_from_obj(item, default_market=default_market)
             for item in (raw.get("targets") or [])
@@ -282,10 +282,10 @@ def read_targets_json(
             schema_version=schema_version,
         )
 
-    if require_schema_v2:
+    if require_canonical:
         raise ValueError(
-            "legacy ticker-list targets are no longer canonical execution inputs; "
-            "provide a schema-v2 targets JSON before live execution"
+            "ticker-list targets are not canonical rebalance inputs; "
+            "provide a targets JSON with a 'targets' array"
         )
 
     tickers = [str(t).upper().strip() for t in (raw.get("tickers") or []) if t]

@@ -184,7 +184,6 @@ PYTHONPATH=src python project_tools/smoke_operator_harness.py --broker longport-
 
 ```json
 {
-  "schema_version": 2,
   "asof": "2026-04-09",
   "source": "research-core",
   "target_gross_exposure": 1.0,

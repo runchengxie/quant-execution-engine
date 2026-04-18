@@ -80,7 +80,6 @@ PYTHONPATH=src python project_tools/smoke_operator_harness.py \
 
 ```json
 {
-  "schema_version": 2,
   "asof": "paper-failure-smoke",
   "source": "operator-smoke",
   "target_gross_exposure": 1.0,

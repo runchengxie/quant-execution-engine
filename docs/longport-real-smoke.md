@@ -110,7 +110,6 @@ uv run python -m quant_execution_engine quote AAPL --broker longport
 
 ```json
 {
-  "schema_version": 2,
   "asof": "real-smoke",
   "source": "operator-smoke",
   "target_gross_exposure": 1.0,
