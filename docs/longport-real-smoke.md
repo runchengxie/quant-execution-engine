@@ -1,90 +1,78 @@
-# 长桥 LongPort 实盘冒烟测试
+# 长桥（LongPort）实盘冒烟测试指南
 
-这份文档的目标：
+本文档旨在：
+* 为长桥实盘环境提供一套最小化的人工冒烟测试操作手册
+* 补齐从提交订单、查询、对账到撤单的完整测试证据链
+* 确保实盘密钥不会残留在代码仓库根目录的本地配置文件中
 
-- 为 LongPort 实盘提供一套最小化的实盘冒烟操作手册
-- 补齐 `submit / query / reconcile / cancel` 的证据链
-- 不把实盘密钥留在仓库根目录 `.env*` / `.envrc*`
+## 1. 何时建议开始实盘测试
 
-## 1. 什么时候值得开始
+只有在满足以下前提条件时，才建议引入实盘凭证：
 
-只有在下面这些前提满足时，才值得把 LongPort 实盘 token 加进来：
+* 长桥模拟盘流程已完全跑通，系统就绪状态和操作员流转逻辑已无明显盲区
+* 准备好进行一次最小规模、且需要人工全程盯盘的实盘冒烟测试
+* 接受实盘测试必须以极小仓位、明确留存验证证据并依赖人工确认的方式推进
 
-- `longport-paper` 已经跑通，就绪性和操作员流程没有明显未知数
-- 你准备做一次最小、人工盯盘的实盘冒烟
-- 你接受实盘路径要以极小仓位、明确留证和人工确认来推进
+如果目前仍处于打磨执行逻辑、熟悉命令行操作或验证模拟盘失败场景的阶段，请暂缓引入实盘凭证。
 
-如果你还只是想继续打磨执行语义、CLI 行为或模拟盘失败场景，先不用急着加实盘 token。
+## 2. 实盘凭证的配置方式
 
-## 2. 实盘 token 怎么放
+实盘凭证只能配置在当前终端环境中，或存放在代码仓库外部的私有文件内。代码仓库根目录下的以下文件严禁用于存放实盘凭证：
 
-实盘凭证只放在当前 shell 或仓库外部私有文件中。仓库根目录下这些文件不作为实盘凭证存放位置：
+* `.env`
+* `.env.local`
+* `.envrc`
+* `.envrc.local`
 
-- `.env`
-- `.env.local`
-- `.envrc`
-- `.envrc.local`
+当前命令行工具会将代码仓库根目录中出现的长桥实盘凭证视为危险配置，并在执行实盘下单指令时强制拦截。
 
-当前 CLI 会把仓库根目录里的 LongPort 实盘凭证视为危险配置，并在实盘 `--execute` 路径上拒绝继续。
+推荐的配置方式分为以下两种：
 
-推荐做法只有两种：
-
-1. 在当前 shell 临时 `export`
-2. `source` 一个放在仓库外的私有文件
-
-### 推荐方式 A：当前 shell 临时导出
+### 推荐方式一：在当前终端环境中临时导出
 
 ```bash
-export LONGPORT_APP_KEY="..."
-export LONGPORT_APP_SECRET="..."
-export LONGPORT_ACCESS_TOKEN="..."
-export LONGPORT_REGION="cn"
-export LONGPORT_ENABLE_OVERNIGHT="true"
-export QEXEC_ENABLE_LIVE="1"
+export LONGPORT_APP_KEY=...
+export LONGPORT_APP_SECRET=...
+export LONGPORT_ACCESS_TOKEN=...
+export LONGPORT_REGION=cn
+export LONGPORT_ENABLE_OVERNIGHT=true
+export QEXEC_ENABLE_LIVE=1
 ```
 
-### 推荐方式 B：从仓库外部私有文件导入
+### 推荐方式二：从代码仓库外部的私有文件加载
 
-先在仓库外保存一个私有文件，例如 `~/.config/qexec/longport-live.env`：
+建议在代码仓库外部创建一个私有配置文件，例如建立 `~/.config/qexec/longport-live.env` 文件并写入以下内容：
 
 ```bash
-export LONGPORT_APP_KEY="..."
-export LONGPORT_APP_SECRET="..."
-export LONGPORT_ACCESS_TOKEN="..."
-export LONGPORT_REGION="cn"
-export LONGPORT_ENABLE_OVERNIGHT="true"
-export QEXEC_ENABLE_LIVE="1"
+export LONGPORT_APP_KEY=...
+export LONGPORT_APP_SECRET=...
+export LONGPORT_ACCESS_TOKEN=...
+export LONGPORT_REGION=cn
+export LONGPORT_ENABLE_OVERNIGHT=true
+export QEXEC_ENABLE_LIVE=1
 ```
 
-然后在当前 shell 里执行：
+随后在当前终端中执行加载命令：
 
 ```bash
 source ~/.config/qexec/longport-live.env
 ```
 
-如果你希望新开的 `bash` 会话自动带上这些变量，可以把下面这行加到 `~/.bashrc` 和 `~/.bash_profile`：
+如果你希望新建的终端会话能够自动加载这些变量，可以将以下指令追加到 `~/.bashrc` 或 `~/.bash_profile` 文件中：
 
 ```bash
 [ -f "$HOME/.config/qexec/longport-live.env" ] && source "$HOME/.config/qexec/longport-live.env"
 ```
 
-这样：
+采用此方式的优势在于：
+* 交互式终端或登录类型的终端会自动加载相关配置
+* 实盘凭证绝对不会落入代码仓库的本地文件中
 
-- 交互式 `bash` 会话会自动加载
-- `bash -lc` 这类登录 shell 也会自动加载
-- 实盘 token 仍然不会落进仓库根目录 `.env*`
+## 3. 执行前就绪性检查
 
-## 3. 执行前检查
+首先，请再次确认代码仓库根目录的相关配置文件中不存在实盘凭证。模拟盘的凭证（如 `LONGPORT_ACCESS_TOKEN_TEST`）允许保留在本地文件中，但实盘凭证必须隔离。
 
-先确认仓库根目录 `.env*` / `.envrc*` 里没有实盘 token。
-
-模拟盘 token 可以继续留在仓库本地文件里，例如：
-
-- `LONGPORT_ACCESS_TOKEN_TEST`
-
-但实盘 token 必须只存在于当前 shell 或仓库外私有文件里。
-
-然后先跑只读就绪性检查：
+确认无误后，请先运行只读状态的就绪性检查：
 
 ```bash
 uv run python -m quant_execution_engine config --broker longport
@@ -93,20 +81,13 @@ uv run python -m quant_execution_engine account --broker longport
 uv run python -m quant_execution_engine quote AAPL --broker longport
 ```
 
-这里只读检查通过后，再继续实盘 `--execute`。
+配置查询命令（config）目前会直接打印出各项核心参数的加载来源。请通过终端的输出信息，仔细确认实盘路径是否正确读取了外部的私有配置文件。
 
-`config --broker longport` 现在会直接显示：
+只有当上述只读检查全部顺利通过后，才能附带执行参数进入实盘下单环节。
 
-- App Key / Secret / Access Token 的来源
-- Region / Overnight 的来源
+## 4. 最小化目标持仓文件
 
-确认实盘路径是否走了 `~/.config/qexec/longport-live.env`，直接看这段输出即可。
-
-## 4. 最小 `targets` 文件
-
-准备一个极小仓位、流动性足够高、你能接受的最小冒烟目标。
-
-例子：
+请准备一个用于冒烟测试的目标持仓文件。要求标的具有足够高的流动性，且仓位极小、在你的绝对风险可承受范围内。示例如下：
 
 ```json
 {
@@ -124,81 +105,76 @@ uv run python -m quant_execution_engine quote AAPL --broker longport
 }
 ```
 
-保存为：
+请将上述内容保存至以下路径：
 
 ```bash
 outputs/targets/real-smoke-aapl.json
 ```
 
-## 5. 最小实盘流程
+## 5. 最小化实盘操作流程
 
-### 5.1 先看预演
+### 5.1 生成调仓预览（干跑模式）
 
 ```bash
 uv run python -m quant_execution_engine rebalance outputs/targets/real-smoke-aapl.json --broker longport
 ```
 
-确认：
+在此阶段需确认：
+* 输入文件被正确解析
+* 标的代码和市场后缀正确无误
+* 价格和数量的变化差异符合预期
+* 风控拦截门禁未出现异常阻断
 
-- 输入文件正确
-- `symbol` / `market` 正确
-- 价格和 delta 符合预期
-- 风控门禁没有异常阻断
-
-### 5.2 再做最小实盘执行
+### 5.2 执行实盘下单
 
 ```bash
 uv run python -m quant_execution_engine rebalance outputs/targets/real-smoke-aapl.json --broker longport --execute
 ```
 
-### 5.3 立刻跟进查询
+### 5.3 立即查询状态
+
+下单后请立即执行订单查询与状态对账：
 
 ```bash
 uv run python -m quant_execution_engine orders --broker longport --symbol AAPL
 uv run python -m quant_execution_engine reconcile --broker longport
 ```
 
-如果本地状态里已经拿到券商订单 ID，再查单笔：
+若本地执行状态中已成功获取券商返回的订单编号，可进一步查询该单笔订单的生命周期详情：
 
 ```bash
 uv run python -m quant_execution_engine order <broker-order-id> --broker longport
 ```
 
-## 6. `cancel` 怎么验证
+## 6. 如何验证撤单逻辑
 
-当前 `rebalance --execute` 主路径默认生成的是 `MARKET` 单。
+当前实盘调仓主路径默认生成的是市价单。这意味着订单可能会被券商迅速撮合成交，从而证明订单提交、查询和对账环节正常运作，但你未必有机会顺手验证撤单操作。
 
-这意味着：
-
-- 有可能很快成交，从而证明 `submit / query / reconcile`
-- 但不一定能顺手证明 `cancel`
-
-如果订单在你查询时仍然 open，再执行：
+如果在你查询时该订单仍处于未成交的开启状态，请执行以下命令验证撤单：
 
 ```bash
 uv run python -m quant_execution_engine cancel <broker-order-id> --broker longport
 uv run python -m quant_execution_engine reconcile --broker longport
 ```
 
-如果订单已经立即成交：
+如果订单在提交后瞬间成交完毕：
+* 本次测试将仅覆盖提交、查询、对账以及成交恢复环节的验证
+* 撤单的验证证据可以留待后续遇到更适合挂单的测试场景时再行补齐
 
-- 这次运行只把 `submit / query / reconcile / fill recovery` 记为已覆盖
-- `cancel` 留到下一次能稳定挂单的场景再补证据
+当前项目的范畴暂不涉及扩展更为复杂的限价单或算法订单提交框架。
 
-`cancel` 证据可以留到下一次更适合挂单的场景补齐。当前范围不扩展到更复杂的 limit / algo 提交框架。
+## 7. 应当留存的测试证据
 
-## 7. 这次冒烟至少要保留什么证据
+强烈建议在本次测试完成后留存以下记录：
 
-至少保留这些：
+* 输入的目标持仓文件
+* 实盘下单命令的终端输出日志
+* 相关查询、对账与撤单命令的终端输出日志
+* 对应的结构化审计日志文件（位于 `outputs/orders/` 目录下）
+* 对应的本地执行状态文件（位于 `outputs/state/` 目录下）
+* 一段人工复查备注（需包含运行时间、标的、券商订单编号、最终状态、是否实际成交以及是否覆盖了撤单环节）
 
-- 输入的 `targets.json`
-- `rebalance --execute` 的终端输出
-- `orders / order / reconcile / cancel` 的终端输出
-- `outputs/orders/*.jsonl` 对应的审计日志
-- `outputs/state/*.json` 对应的本地执行状态
-- 一段人工备注：包括运行时间、symbol、券商订单 ID、最终状态、是否实际成交、是否覆盖了 `cancel`
-
-如果你想把这些证据一次性沉淀成结构化 JSON，可以直接跑：
+如果你希望将上述验证过程一次性转化为结构化的数据记录，可以直接运行配套的冒烟测试脚手架：
 
 ```bash
 PYTHONPATH=src python project_tools/smoke_operator_harness.py \
@@ -206,54 +182,41 @@ PYTHONPATH=src python project_tools/smoke_operator_harness.py \
   --allow-non-paper \
   --execute \
   --evidence-output outputs/evidence/longport-real-smoke.json \
-  --operator-note "operator supervised live smoke" \
-  --operator-note "cancel not covered"
+  --operator-note operator supervised live smoke \
+  --operator-note cancel not covered
 ```
 
-这份 evidence 现在会额外保留：
+这份自动生成的证据文件将额外保留审计运行编号、状态文件路径、最新跟踪的订单引用以及操作员备注等关键信息。
 
-- `audit_log_path` / `audit_run_id`
-- `state_path`
-- `latest_tracked_order_ref`
-- `operator_notes`
-
-拿到 `audit_run_id` 后，可以把这次运行的审计、状态、targets、smoke JSON 和 operator note 收成一个本地复查包：
+获取到本次运行的编号后，你可以将所有相关的审计记录、状态文件、目标输入以及测试证据打包为一个本地复查文件包：
 
 ```bash
 qexec evidence-pack <audit-run-id>
-qexec evidence-pack <audit-run-id> --operator-note "terminal output reviewed"
+qexec evidence-pack <audit-run-id> --operator-note terminal output reviewed
 ```
 
-实盘路径是否已经从“代码可达”推进到“证据成熟”，以 `qexec evidence-maturity` 的 LongPort real 行和本地 evidence bundle 为准。
+实盘链路是否已从代码连通推进至证据完备，请以成熟度报告（evidence-maturity）中的长桥实盘条目以及本地留存的复查打包文件为准。
 
-## 8. 判定标准
+## 8. 测试成功判定标准
 
-这次实盘冒烟至少满足下面这些条件，才算“对实盘券商又前进了一步”：
+本次实盘冒烟测试至少需满足以下条件，方可认为针对实盘券商的接入取得了实质性进展：
 
-- `preflight` 通过
-- `rebalance --execute` 没有在本地参数层失败
-- 券商订单能进入已跟踪状态
-- `order` / `reconcile` 至少有一条能查回真实券商状态
-- 终端输出、审计日志和状态文件三者能对上
-- `qexec evidence-pack <audit-run-id>` 能生成 manifest，且关键 artifact 没有缺失
+* 就绪性检查顺利通过
+* 实盘执行命令未在本地参数层发生报错
+* 券商订单成功进入本地跟踪状态
+* 查询或对账命令至少能够成功拉取回一次真实的券商端状态
+* 终端输出、审计日志与本地状态文件三者的数据逻辑自洽
+* 证据打包命令能够成功生成校验清单，且核心产出文件无缺失
 
-如果还能额外拿到：
+若在此基础上还能进一步获取撤单成功或获取到带迟到成交记录的可解释状态，则本次测试的证据链将更为扎实。
 
-- `cancel` 成功
-- 或者 `fill` / `late fill` 的可解释状态
+## 9. 模拟盘的定位说明
 
-那这次证据就更扎实。
+在本项目中，Alpaca 模拟盘依然具有不可替代的价值，但其角色定位非常明确：
 
-## 9. Alpaca 在这里的角色
+* 它是作为更为稳定、低成本的日常回归测试与冒烟测试的基线环境
+* 它在当前代码库中承担着流程跑通验证的兜底作用
 
-Alpaca 模拟盘仍然有价值，但角色应该很明确：
+也就是说，利用模拟盘来让操作员熟练流转过程、执行自动化测试工装或是验证异常状态的恢复逻辑，是非常合理的。但本项目当前并不会向高度依赖模拟盘的高频算法交易中台方向扩张。
 
-- 它是更稳定、更便宜的回归 / 冒烟基线
-- 它在当前仓库里承担回归和冒烟基线角色
-
-也就是说：
-
-- 用 Alpaca 模拟盘练操作员流程、回归工装、验证状态恢复，很合理
-- 仓库当前也不扩展到 Alpaca-first 的高级算法交易平台方向
-
-当前最值钱的，仍然是把 LongPort 实盘的最小证据链补齐。
+目前阶段最具实际业务价值的工作，依然是优先夯实并补齐长桥实盘链路的最小化验证证据链。
