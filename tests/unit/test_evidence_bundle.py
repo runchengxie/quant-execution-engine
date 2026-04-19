@@ -3,11 +3,19 @@ from pathlib import Path
 
 import pytest
 
+import quant_execution_engine.evidence_bundle as evidence_bundle
+from quant_execution_engine.broker.base import BrokerOrderRecord
 from quant_execution_engine.evidence_bundle import (
     EvidenceBundleError,
     create_evidence_bundle,
 )
-from quant_execution_engine.execution_state import ExecutionStateStore
+from quant_execution_engine.execution_state import (
+    ChildOrder,
+    ExecutionOrderTrace,
+    ExecutionStateStore,
+    OrderIntent,
+    ParentOrder,
+)
 
 pytestmark = pytest.mark.unit
 
@@ -32,12 +40,78 @@ def _write_audit_log(root: Path, run_id: str, target_path: Path) -> Path:
         "record_type": "order",
         "run_id": run_id,
         "symbol": "AAPL.US",
+        "child_order_id": "child-1",
     }
     path.write_text(
         "\n".join(json.dumps(record) for record in [summary, order]) + "\n",
         encoding="utf-8",
     )
     return path
+
+
+class _FakeTraceAdapter:
+    def __init__(self) -> None:
+        self.closed = False
+
+    def close(self) -> None:
+        self.closed = True
+
+
+class _FakeTraceService:
+    def __init__(self, adapter: object, *, state_store: object) -> None:
+        self.adapter = adapter
+        self.state_store = state_store
+
+    def get_order_trace(
+        self,
+        *,
+        account_label: str,
+        order_ref: str,
+    ) -> ExecutionOrderTrace:
+        return ExecutionOrderTrace(
+            broker_name="longport-paper",
+            account_label=account_label,
+            order_ref=order_ref,
+            state_path=Path("/tmp/state.json"),
+            intent=OrderIntent(
+                intent_id="intent-1",
+                symbol="AAPL.US",
+                side="BUY",
+                quantity=10,
+                order_type="LIMIT",
+                broker_name="longport-paper",
+                account_label=account_label,
+            ),
+            parent=ParentOrder(
+                parent_order_id="parent-1",
+                intent_id="intent-1",
+                symbol="AAPL.US",
+                side="BUY",
+                requested_quantity=10,
+                remaining_quantity=0,
+                status="FILLED",
+                child_order_ids=["child-1"],
+            ),
+            child=ChildOrder(
+                child_order_id="child-1",
+                parent_order_id="parent-1",
+                intent_id="intent-1",
+                quantity=10,
+                attempt=1,
+                broker_order_id="broker-1",
+                status="FILLED",
+            ),
+            broker_order=BrokerOrderRecord(
+                broker_order_id="broker-1",
+                symbol="AAPL.US",
+                side="BUY",
+                quantity=10,
+                filled_quantity=10,
+                status="FILLED",
+                broker_name="longport-paper",
+                account_label=account_label,
+            ),
+        )
 
 
 def test_create_evidence_bundle_collects_run_artifacts(tmp_path: Path) -> None:
@@ -58,23 +132,40 @@ def test_create_evidence_bundle_collects_run_artifacts(tmp_path: Path) -> None:
             "operator_notes": ["observed pending cancel"],
         },
     )
-
-    result = create_evidence_bundle(
-        run_id=run_id,
-        project_root=tmp_path,
-        created_at="2026-04-16T00:00:00+00:00",
+    fake_adapter = _FakeTraceAdapter()
+    monkeypatch = pytest.MonkeyPatch()
+    monkeypatch.setattr(
+        evidence_bundle,
+        "get_broker_adapter",
+        lambda broker_name=None: fake_adapter,
     )
+    monkeypatch.setattr(evidence_bundle, "OrderLifecycleService", _FakeTraceService)
+
+    try:
+        result = create_evidence_bundle(
+            run_id=run_id,
+            project_root=tmp_path,
+            created_at="2026-04-16T00:00:00+00:00",
+        )
+    finally:
+        monkeypatch.undo()
 
     assert result.missing_count == 0
-    assert result.included_count == 5
+    assert result.included_count == 6
     manifest = json.loads(result.manifest_path.read_text(encoding="utf-8"))
     assert manifest["run_id"] == run_id
     assert manifest["audit_record_count"] == 2
-    assert manifest["included_artifact_count"] == 5
+    assert manifest["included_artifact_count"] == 6
+    trace_payload = json.loads(
+        (result.bundle_path / "trace" / "order_traces.json").read_text(encoding="utf-8")
+    )
+    assert trace_payload["trace_order_refs"] == ["child-1"]
+    assert trace_payload["trace_count"] == 1
     bundled_notes = json.loads(
         (result.bundle_path / "operator_notes.json").read_text(encoding="utf-8")
     )
     assert bundled_notes["operator_notes"] == ["observed pending cancel"]
+    assert fake_adapter.closed is True
 
 
 def test_create_evidence_bundle_skips_sensitive_paths(tmp_path: Path) -> None:
@@ -130,6 +221,7 @@ def test_create_evidence_bundle_marks_absent_optional_artifacts(tmp_path: Path) 
     assert by_name["target_input"].status == "missing"
     assert by_name["local_state"].status == "missing"
     assert by_name["smoke_evidence"].status == "missing"
+    assert by_name["order_traces"].status == "skipped_not_applicable"
     assert by_name["operator_notes"].status == "missing"
 
 

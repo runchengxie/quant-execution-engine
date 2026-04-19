@@ -1053,5 +1053,3 @@ class LongPortClient:
         except Exception:
             # Any restoration failure should not affect the caller
             pass
-
-from .longport_adapter import LongPortBrokerAdapter, LongPortPaperBrokerAdapter

@@ -69,10 +69,12 @@ def __getattr__(name: str):
             probe_ibkr_runtime_config,
             resolve_ibkr_runtime_config,
         )
-        from .longport import (
+        from .longport_adapter import (
             LongPortBrokerAdapter,
-            LongPortClient,
             LongPortPaperBrokerAdapter,
+        )
+        from .longport import (
+            LongPortClient,
             _to_lb_symbol,
             get_config,
             getenv_both,

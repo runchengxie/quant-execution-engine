@@ -24,7 +24,7 @@
     *   本地状态的体检、清理和修复（`state-doctor` / `state-prune` / `state-repair`）。
 *   日志与审计验证
     *   查看各券商适配器的代码路径与验证成熟度（`evidence-maturity`）。
-    *   按审计 `run_id` 打包本地复查证据（`evidence-pack`）。
+    *   按审计 `run_id` 打包本地复查证据（`evidence-pack`），并附带按订单聚合的 trace 快照。
     *   结构化输出：调仓审计日志（`outputs/orders/*.jsonl`）、本地状态持久化（`outputs/state/*.json`）、测试验证记录（`outputs/evidence/*.json` 及 `outputs/evidence-bundles/*`）。
     *   内置面向量化信号、目标持仓和操作员的冒烟测试脚手架（Harness）。
 

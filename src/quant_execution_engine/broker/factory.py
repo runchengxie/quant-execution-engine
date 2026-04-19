@@ -51,11 +51,12 @@ def _load_ibkr_adapter_cls():
 
 
 def _load_longport_runtime() -> tuple[type[Any], type[Any], type[Any]]:
-    module = import_module(".longport", __package__)
+    adapter_module = import_module(".longport_adapter", __package__)
+    runtime_module = import_module(".longport", __package__)
     return (
-        module.LongPortBrokerAdapter,
-        module.LongPortPaperBrokerAdapter,
-        module.LongPortClient,
+        adapter_module.LongPortBrokerAdapter,
+        adapter_module.LongPortPaperBrokerAdapter,
+        runtime_module.LongPortClient,
     )
 
 

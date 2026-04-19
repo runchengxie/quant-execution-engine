@@ -72,7 +72,7 @@ qexec evidence-pack <run-id> --output-dir outputs/review
 qexec evidence-pack <run-id> --operator-note "终端输出已人工复查"
 ```
 
-打包结果默认输出到 `outputs/evidence-bundles/<run-id>` 目录下。系统会生成一份清单文件 （manifest)，记录审计日志、目标持仓文件、本地状态、冒烟测试证据以及操作员备注的包含、缺失或跳过状态；同时，安全机制会确保 `.env*` 等包含敏感信息的凭证文件不会被打包进去。
+打包结果默认输出到 `outputs/evidence-bundles/<run-id>` 目录下。系统会生成一份清单文件 （manifest)，记录审计日志、目标持仓文件、本地状态、冒烟测试证据、按订单聚合的 trace 快照以及操作员备注的包含、缺失或跳过状态；同时，安全机制会确保 `.env*` 等包含敏感信息的凭证文件不会被打包进去。
 
 ### `preflight`
 
