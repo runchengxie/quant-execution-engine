@@ -136,7 +136,7 @@ qexec orders --broker longport-paper --symbol AAPL
 ```
 
 你可以通过状态（如 `open`、`failure`、`terminal`）或标的代码（如 `AAPL`）进行过滤。
-*注意：此命令仅展示本地执行引擎已追踪的订单，并非直接查询券商后台的全量历史订单簿。*
+*注意：此命令仅展示本地执行引擎已追踪的订单。*
 
 ### `broker-orders`
 
