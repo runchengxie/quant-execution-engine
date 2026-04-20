@@ -72,7 +72,7 @@ qexec evidence-pack <run-id> --output-dir outputs/review
 qexec evidence-pack <run-id> --operator-note '终端输出已人工复查'
 ```
 
-生成的 `manifest.json` 现在除了归档清单，还会附带 `trace_summary`，用于快速查看本次打包里追踪记录快照的数量、警告数量和订单级摘要，而不必先打开完整的 `trace/order_traces.json`。
+生成的 `manifest.json` 现在除了归档清单，还会附带 `trace_summary`，用于快速查看本次打包里追踪记录快照的数量、警告数量和订单级摘要，而不必先打开完整的 `trace/order_traces.json`。CLI 终端输出也会同步显示一行简要的 trace 统计。
 
 打包结果默认输出到 `outputs/evidence-bundles/<run-id>` 目录下。系统会生成一份清单文件，记录审计日志、目标持仓文件、本地状态、冒烟测试证据、按订单聚合的追踪记录快照以及操作员备注的包含、缺失或跳过状态；同时，安全机制会确保 `.env*` 等包含敏感信息的凭证文件不会被打包进去。
 

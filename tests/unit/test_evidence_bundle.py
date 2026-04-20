@@ -8,6 +8,7 @@ from quant_execution_engine.broker.base import BrokerOrderRecord
 from quant_execution_engine.evidence_bundle import (
     EvidenceBundleError,
     create_evidence_bundle,
+    render_evidence_bundle_result,
 )
 from quant_execution_engine.execution_state import (
     ChildOrder,
@@ -224,6 +225,42 @@ def test_create_evidence_bundle_skips_sensitive_paths(tmp_path: Path) -> None:
     assert target_artifact.bundle_path is None
 
 
+def test_render_evidence_bundle_result_reports_trace_summary(tmp_path: Path) -> None:
+    run_id = "run-render"
+    target_path = tmp_path / "outputs" / "targets" / "targets.json"
+    _write_json(target_path, {"targets": []})
+    audit_path = _write_audit_log(tmp_path, run_id, target_path)
+    state_path = ExecutionStateStore(
+        root_dir=tmp_path / "outputs" / "state"
+    ).path_for("longport-paper", "main")
+    _write_json(state_path, {"broker_name": "longport-paper", "account_label": "main"})
+    _write_json(
+        tmp_path / "outputs" / "evidence" / "smoke.json",
+        {
+            "audit_run_id": run_id,
+            "audit_log_path": str(audit_path.relative_to(tmp_path)),
+        },
+    )
+    fake_adapter = _FakeTraceAdapter()
+    monkeypatch = pytest.MonkeyPatch()
+    monkeypatch.setattr(
+        evidence_bundle,
+        "get_broker_adapter",
+        lambda broker_name=None: fake_adapter,
+    )
+    monkeypatch.setattr(evidence_bundle, "OrderLifecycleService", _FakeTraceService)
+
+    try:
+        result = create_evidence_bundle(run_id=run_id, project_root=tmp_path)
+    finally:
+        monkeypatch.undo()
+
+    rendered = render_evidence_bundle_result(result)
+
+    assert "- Trace summary: 1 trace(s) / 1 ref(s) / 0 warning(s) [included]" in rendered
+    assert "- Trace warnings:" not in rendered
+
+
 def test_create_evidence_bundle_marks_absent_optional_artifacts(tmp_path: Path) -> None:
     run_id = "run-minimal"
     audit_path = tmp_path / "outputs" / "orders" / "20260416.jsonl"
@@ -260,6 +297,36 @@ def test_create_evidence_bundle_marks_absent_optional_artifacts(tmp_path: Path) 
         "warning_count": 0,
         "entries": [],
     }
+
+
+def test_render_evidence_bundle_result_reports_skipped_trace_summary(
+    tmp_path: Path,
+) -> None:
+    run_id = "run-render-minimal"
+    audit_path = tmp_path / "outputs" / "orders" / "20260416.jsonl"
+    audit_path.parent.mkdir(parents=True, exist_ok=True)
+    audit_path.write_text(
+        json.dumps(
+            {
+                "record_type": "rebalance_summary",
+                "run_id": run_id,
+                "broker_name": "longport-paper",
+                "account_label": "main",
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    result = create_evidence_bundle(run_id=run_id, project_root=tmp_path)
+
+    rendered = render_evidence_bundle_result(result)
+
+    assert (
+        "- Trace summary: 0 trace(s) / 0 ref(s) / 0 warning(s) "
+        "[skipped_not_applicable]"
+    ) in rendered
+    assert "- Trace warnings:" not in rendered
 
 
 def test_create_evidence_bundle_reports_missing_run_candidates(tmp_path: Path) -> None:

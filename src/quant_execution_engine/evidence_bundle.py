@@ -59,6 +59,7 @@ class EvidenceBundleResult:
     dry_run: bool | None
     bundle_path: Path
     manifest_path: Path
+    trace_summary: dict[str, Any] | None = None
     artifacts: list[EvidenceArtifact] = field(default_factory=list)
 
     @property
@@ -605,6 +606,7 @@ def create_evidence_bundle(
         dry_run=dry_run,
         bundle_path=bundle_path,
         manifest_path=bundle_path / "manifest.json",
+        trace_summary=trace_capture.manifest_summary,
         artifacts=artifacts,
     )
     manifest = {
@@ -618,7 +620,7 @@ def create_evidence_bundle(
         "included_artifact_count": result.included_count,
         "missing_artifact_count": result.missing_count,
         "skipped_artifact_count": result.skipped_count,
-        "trace_summary": trace_capture.manifest_summary,
+        "trace_summary": result.trace_summary,
         "artifacts": [artifact.to_payload() for artifact in artifacts],
     }
     result.manifest_path.write_text(
@@ -634,17 +636,28 @@ def render_evidence_bundle_result(result: EvidenceBundleResult) -> str:
     broker_account = (
         f"{result.broker_name or '-'} / {result.account_label or '-'}"
     )
-    return "\n".join(
-        [
-            "Evidence bundle created:",
-            f"- Run ID: {result.run_id}",
-            f"- Broker / Account: {broker_account}",
-            f"- Bundle path: {result.bundle_path}",
-            f"- Manifest: {result.manifest_path}",
-            f"- Included artifacts: {result.included_count}",
-            f"- Missing artifacts: {result.missing_count}",
-            f"- Skipped artifacts: {result.skipped_count}",
-            "- Review: inspect manifest.json first, then compare "
-            "audit/state/target/smoke/trace artifacts.",
-        ]
+    trace_summary = result.trace_summary or {}
+    trace_count = int(trace_summary.get("trace_count") or 0)
+    trace_order_ref_count = int(trace_summary.get("trace_order_ref_count") or 0)
+    warning_count = int(trace_summary.get("warning_count") or 0)
+    trace_status = str(trace_summary.get("artifact_status") or "unknown")
+    lines = [
+        "Evidence bundle created:",
+        f"- Run ID: {result.run_id}",
+        f"- Broker / Account: {broker_account}",
+        f"- Bundle path: {result.bundle_path}",
+        f"- Manifest: {result.manifest_path}",
+        f"- Included artifacts: {result.included_count}",
+        f"- Missing artifacts: {result.missing_count}",
+        f"- Skipped artifacts: {result.skipped_count}",
+        "- Trace summary: "
+        f"{trace_count} trace(s) / {trace_order_ref_count} ref(s) / "
+        f"{warning_count} warning(s) [{trace_status}]",
+    ]
+    if warning_count:
+        lines.append("- Trace warnings: inspect manifest.json trace_summary.warnings")
+    lines.append(
+        "- Review: inspect manifest.json first, then compare "
+        "audit/state/target/smoke/trace artifacts."
     )
+    return "\n".join(lines)
