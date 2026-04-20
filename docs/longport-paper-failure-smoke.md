@@ -1,18 +1,17 @@
-# 长桥（LongPort）模拟盘失败场景冒烟测试
+# 长桥模拟盘失败场景冒烟测试
 
-当前 broker 支持矩阵和证据成熟度以
-[current-capabilities.md](current-capabilities.md) 为准。
+当前券商支持矩阵与证据成熟度，请以 [current-capabilities.md](current-capabilities.md) 为准。
 
 本文档的目标：
 
-*   为 `longport-paper` 提供一套贴近真实运维人员的失败场景冒烟测试操作手册。
-*   重点说明失败后如何观察状态、如何留存证据以及如何进行恢复。
-*   明确区分哪些场景适合通过手工模拟盘复现，哪些场景更适合交由自动化回归测试来验证。
+*   为长桥模拟盘（`longport-paper`）提供一套贴近真实运维人员的失败场景冒烟测试操作手册。
+*   重点说明在发生失败后如何观察状态、留存证据以及进行恢复操作。
+*   明确区分哪些场景适合通过人工操作模拟盘来复现，哪些场景更适合交由自动化回归测试来验证。
 
 本文档刻意避免以下两点：
 
 *   不会将当前代码库改造成一个新的券商模拟器。
-*   不会为了强行构造拒单、部分成交或撤单等待（`pending-cancel`）等异常状态，去额外开发一套测试框架。
+*   不会为了强行构造拒绝接单、部分成交或撤单等待（`pending-cancel`）等异常状态，而额外开发一套测试框架。
 
 ## 1. 适用时机
 
@@ -24,8 +23,7 @@
 *   `qexec account --broker longport-paper`
 *   `qexec quote AAPL --broker longport-paper`
 
-且上述基础检查均能稳定通过。
-在基础检查稳定通过后，方可进入失败场景的冒烟测试。
+且上述基础检查均能稳定通过。只有在基础检查稳定通过之后，方可进行失败场景的冒烟测试。
 
 ## 2. 准备固定的证据目录
 
@@ -43,11 +41,11 @@ mkdir -p outputs/targets
 *   本地阻断与人工复核证据：
     `outputs/evidence/longport-paper-blocked.json`
 
-若需长期归档，可自行按日期建立子目录，但本系统不强制增加额外的目录管理逻辑。
+若需要长期归档，可自行按日期建立子目录，但本系统不强制引入额外的目录管理逻辑。
 
 ## 3. 阶段一：手工可复现的失败场景冒烟测试
 
-本阶段仅包含当前可以直接、低成本重复执行的测试场景。
+本阶段仅包含当前可以直接且低成本重复执行的测试场景。
 
 ### 场景 A：基线正常流程
 
@@ -65,7 +63,7 @@ PYTHONPATH=src python project_tools/smoke_operator_harness.py \
 
 *   从 `config` 到 `account`、`quote`、`rebalance`、`orders`、`reconcile`，最后到 `exceptions` 的整个流程能够顺利走通。
 *   若成功获取到已跟踪订单的引用标识，则 `order` 命令也能正常执行。
-*   `cancel-all` 命令能够成功清理模拟盘中处于开启（open）状态的订单。
+*   `cancel-all` 命令能够成功清理模拟盘中处于开启（`open`）状态的订单。
 *   导出的证据 JSON 文件中显示 `success=true` 且 `failed_step=null`。
 
 在此流程稳定后，再继续补充更复杂的失败场景测试。
@@ -77,7 +75,7 @@ PYTHONPATH=src python project_tools/smoke_operator_harness.py \
 *   本地的紧急停单机制是否按预期拦截了变更类的操作。
 *   运维人员能否从终端输出、异常队列以及本地状态文件中清晰地看出未下单的原因。
 
-请先准备一个最小化的 `targets` 文件，例如：
+请先准备一个最小化的目标持仓（`targets`）文件，例如：
 
 ```json
 {
@@ -131,7 +129,7 @@ qexec state-doctor --broker longport-paper
 *   执行 `exceptions` 命令能否看到本地标记为 `BLOCKED` 的状态。
 *   本地状态文件与异常队列视图的信息是否一致。
 
-这种场景高度还原了真实运维中可能遇到的本地拦截情况，相比于强行构造一个虚假的券商拒单更具验证价值。
+这种场景高度还原了真实运维中可能遇到的本地拦截情况，相比于强行构造一个虚假的券商拒绝接单更具验证价值。
 
 ### 场景 C：本地状态清理与刷新
 
@@ -163,8 +161,7 @@ qexec state-repair --broker longport-paper --dedupe-fills --drop-orphan-fills
 *   撤单等待（`PENDING_CANCEL`）
 *   迟到成交记录
 
-针对此类场景，建议仅在自然遇到时顺手留存证据，不作强行构造。
-若模拟盘账户在运行中自然出现了上述状态，请按以下流程留存证据：
+针对此类场景，建议仅在自然遇到时顺手留存证据，不作强行构造。若模拟盘账户在运行中自然出现了上述状态，请按以下流程留存证据：
 
 ```bash
 qexec orders --broker longport-paper --status open --symbol AAPL
@@ -175,10 +172,8 @@ qexec reconcile --broker longport-paper
 
 随后根据订单状态进行最保守的处置：
 
-*   针对部分成交（`PARTIALLY_FILLED`）：
-    选择执行撤销剩余（`cancel-rest`）、继续执行剩余（`resume-remaining`）或接受部分成交（`accept-partial`）。
-*   针对撤单等待（`PENDING_CANCEL`）：
-    先执行对账（`reconcile`），再根据同步结果决定是否需要重试（`retry`）或改价重提（`reprice`）。
+*   针对部分成交（`PARTIALLY_FILLED`）：选择执行撤销剩余（`cancel-rest`）、继续执行剩余（`resume-remaining`）或接受部分成交（`accept-partial`）。
+*   针对撤单等待（`PENDING_CANCEL`）：先执行对账（`reconcile`），再根据同步结果决定是否需要重试（`retry`）或改价重提（`reprice`）。
 
 对应操作命令如下：
 

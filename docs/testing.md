@@ -1,7 +1,6 @@
 # 测试
 
-Broker 支持范围、证据成熟度和已知缺口以
-[current-capabilities.md](current-capabilities.md) 为准。本文只描述测试入口和运行方式。
+券商支持范围、证据成熟度以及已知缺口，请以 [current-capabilities.md](current-capabilities.md) 为准。本文仅描述测试入口与运行方式。
 
 ## 默认入口
 
@@ -11,7 +10,7 @@ Broker 支持范围、证据成熟度和已知缺口以
 uv run pytest
 ```
 
-该命令仅运行快速测试，默认会排除带有以下标记（marker）的测试用例：
+该命令仅运行快速测试，默认会排除带有以下标记（`marker`）的测试用例：
 
 - `integration`（集成测试）
 - `e2e`（端到端测试）
@@ -22,9 +21,9 @@ uv run pytest
 - `tests/unit/`
   快速且相互隔离的行为测试。覆盖了命令行（CLI）路由、订单生命周期、部分成交后的恢复逻辑、执行前预检（`preflight`）、本地状态维护以及渲染器等功能。
 - `tests/integration/`
-  覆盖适配器和生命周期的跨模块行为测试。例如状态对账（`reconcile`）、紧急停单、状态恢复，以及在提供真实凭证或本地运行环境（runtime）时，基于真实券商后端（LongPort / IBKR）的验证。
+  覆盖适配器和生命周期的跨模块行为测试。例如状态对账（`reconcile`）、紧急停单、状态恢复，以及在提供真实凭证或本地运行环境时，基于真实券商后端（长桥 / 盈透）的验证。
 - `tests/e2e/`
-  通过子进程运行 CLI 和冒烟测试脚手架（smoke harness），进行端到端的冒烟测试。
+  通过子进程运行命令行工具和冒烟测试脚手架（`smoke harness`），进行端到端的冒烟测试。
 
 ## 常用命令
 
@@ -52,18 +51,18 @@ uv run pytest -m integration
 uv run pytest --cov=src/quant_execution_engine --cov-report=term-missing -m 'not integration and not e2e and not slow'
 ```
 
-## Broker 测试与证据入口
+## 券商测试与证据入口
 
-| Broker | 默认自动化覆盖 | 按需开启的自动化覆盖 | 人工监督冒烟测试 |
+| 券商 | 默认自动化覆盖 | 按需开启的自动化覆盖 | 人工监督冒烟测试 |
 | --- | --- | --- | --- |
-| `alpaca-paper` | 单元测试覆盖适配器归一化、CLI 路由和执行生命周期；默认不发起真实网络请求。 | 默认无真实联网集成测试；若需验证模拟盘凭证，按场景手动运行。 | 可作为低成本、稳定的模拟盘回归和冒烟基线。 |
-| `longport-paper` | 单元测试覆盖凭证解析、模拟盘运行环境优先级、CLI 和测试脚手架契约。 | 提供 `LONGPORT_ACCESS_TOKEN_TEST` 后可运行模拟盘预检与调仓路径。 | 已具备人工监督的提交、查询、对账、撤单基础闭环证据。 |
-| `longport` | 单元测试覆盖实盘保护、本地密钥拦截和配置来源解析。 | 实盘行情集成测试依赖 Key/Secret/Token，凭证或网络异常时会跳过。 | 需附加 `--allow-non-paper` 并按 `longport-real-smoke.md` 人工监督执行。 |
-| `ibkr-paper` | 单元测试覆盖后端注册、运行环境配置、美股标签校验、订单与成交数据归一化、冒烟环境快照。 | `IBKR_ENABLE_INTEGRATION=1` 运行只读测试；`IBKR_ENABLE_MUTATION_TESTS=1` 运行提交/撤单测试；`IBKR_ENABLE_FILL_TESTS=1` 运行成交测试。 | 已具备本地 no-order 证据；具体路径见 `ibkr-paper-smoke.md`。 |
+| `alpaca-paper` | 单元测试覆盖适配器归一化、命令行路由和执行生命周期；默认不发起真实网络请求。 | 默认无真实联网集成测试；若需验证模拟盘凭证，请按场景手动运行。 | 可作为低成本且稳定的模拟盘回归和冒烟基线。 |
+| `longport-paper` | 单元测试覆盖凭证解析、模拟盘运行环境优先级、命令行工具和测试脚手架契约。 | 提供 `LONGPORT_ACCESS_TOKEN_TEST` 后可运行模拟盘预检与调仓路径。 | 已具备人工监督的提交、查询、对账与撤单基础闭环证据。 |
+| `longport` | 单元测试覆盖实盘保护、本地密钥拦截和配置来源解析。 | 实盘行情集成测试依赖应用程序密钥、秘密密钥以及访问令牌，凭证或网络异常时会跳过。 | 需附加 `--allow-non-paper` 并按 `longport-real-smoke.md` 人工监督执行。 |
+| `ibkr-paper` | 单元测试覆盖后端注册、运行环境配置、美股标签校验、订单与成交数据归一化、冒烟环境快照。 | `IBKR_ENABLE_INTEGRATION=1` 运行只读测试；`IBKR_ENABLE_MUTATION_TESTS=1` 运行提交与撤单测试；`IBKR_ENABLE_FILL_TESTS=1` 运行成交测试。 | 已具备本地无订单（`no-order`）证据；具体路径见 `ibkr-paper-smoke.md`。 |
 
-*注：`outputs/` 目录默认被 Git 忽略。证据文件是本地复查记录，不是随仓库版本控制的固定 fixtures。*
+*注：`outputs/` 目录默认被 Git 忽略。证据文件是本地复查记录，不是随仓库版本控制的固定测试数据（`fixtures`）。*
 
-可以使用以下命令检查代码路径状态与证据成熟度（evidence maturity）是否一致：
+可以使用以下命令检查代码路径状态与证据成熟度（`evidence maturity`）是否一致：
 
 ```bash
 qexec evidence-maturity
@@ -73,35 +72,35 @@ qexec evidence-maturity --format json
 ## 当前测试证明了什么
 
 - 默认的 `pytest` 命令能够确保快速的行为逻辑测试顺利通过。
-- 与生命周期相关的单元测试覆盖了已跟踪订单的重试（`retry`）、重新定价（`reprice`）、状态对账（`reconcile`）、部分成交后的人工处置、等待撤单（`pending-cancel`）、迟到成交记录的恢复，以及状态诊断/清理/修复工具（`state doctor/prune/repair`）。
+- 与生命周期相关的单元测试覆盖了已跟踪订单的重试（`retry`）、重新定价（`reprice`）、状态对账（`reconcile`）、部分成交后的人工处置、等待撤单（`pending-cancel`）、迟到成交记录的恢复，以及状态诊断、清理、修复工具（`state doctor/prune/repair`）。
 - 命令行（CLI）单元测试覆盖了新旧命令的路由分发以及实盘保护机制。
-- 端到端测试（`e2e`）验证了 CLI 和测试脚手架在子进程中的冒烟测试行为，包括信号生成、目标持仓输出，以及操作员脚手架对非模拟盘环境的拦截路径。
+- 端到端测试（`e2e`）验证了命令行工具和测试脚手架在子进程中的冒烟测试行为，包括信号生成、目标持仓输出，以及操作员脚手架对非模拟盘环境的拦截路径。
 - `smoke_operator_harness.py` 具备单元测试，覆盖了固定的执行流程、仅执行预检（`preflight-only`）路径、下游操作员步骤失败的处理，以及测试证据的 JSON 输出功能。
-- 证据打包工具（evidence bundle）的单元测试覆盖了按运行编号（`run_id`）收集审计日志、目标清单、执行状态、测试证据、按订单聚合的 trace 快照及操作员备注的功能，并验证了其能够妥善处理缺失的可选文件以及跳过 `.env` 等敏感文件。
-- 风控降级单元测试验证了“被禁用的风控项（`BYPASS`）”与“因缺少行情数据而降级的风控项（`BYPASS`）”之间的区分，测试了预检（`preflight`）输出的结构化详情，以及审计日志（audit JSONL）中关于降级原因的摘要信息。
+- 证据打包工具（`evidence bundle`）的单元测试覆盖了按运行编号（`run_id`）收集审计日志、目标清单、执行状态、测试证据、按订单聚合的追踪快照及操作员备注的功能，并验证了其能够妥善处理缺失的可选文件以及跳过 `.env` 等敏感文件。
+- 风控降级单元测试验证了「被禁用的风控项（`BYPASS`）」与「因缺少行情数据而降级的风控项（`BYPASS`）」之间的区分，测试了预检（`preflight`）输出的结构化详情，以及审计日志（`audit JSONL`）中关于降级原因的摘要信息。
 - 异常恢复建议的测试涵盖了对等待撤单、过期未成交订单、部分成交订单的诊断提示，并确保查看单笔订单详情（`order`）时仅提供操作建议，不会意外触发券商后端的订单状态变更。
-- `longport-paper` 已作为正式的券商后端接入。在提供 `LONGPORT_ACCESS_TOKEN_TEST` 的前提下，可执行模拟盘的预检与调仓（`preflight / rebalance`）路径。
-- `ibkr-paper` 已具备单元测试，覆盖了后端注册、配置信息展示、市场与账户校验、订单与成交记录的归一化，以及冒烟测试脚手架的 IBKR 环境快照记录路径。
-- `longport-paper` 目前已通过人工监督的冒烟测试，验证通过了“提交/查询/对账/撤单”的最简闭环；这是一条可复现的模拟盘测试证据链，未包含在默认的自动化测试中。
-- `ibkr-paper` 拥有一次人工监督下的“无订单（no-order）”测试证据：在 WSL 环境内的 CLI 成功连接到 Windows 系统下监听 `127.0.0.1:4002` 的 IB Gateway，并跑通了配置读取、账户查询、行情获取、调仓、对账、异常查看和全部撤单等流程。但由于 IBKR 存在冲突的实盘会话（competing live session），导致 AAPL 行情返回为 0，实际产生的订单数为 0（`audit_order_count=0`）。
-- LongPort 实盘已通过人工监督的只读验证，跑通了配置读取、执行预检、账户查询和行情获取流程，并确认了用户私有实盘配置的路由与实盘保护机制均能正常工作。
-- 涉及 LongPort 实盘行情的测试用例，目前已支持将典型的网络、区域或凭证异常妥善处理为“跳过（skipped）”状态。
+- 长桥模拟盘（`longport-paper`）已作为正式的券商后端接入。在提供 `LONGPORT_ACCESS_TOKEN_TEST` 的前提下，可执行模拟盘的预检与调仓（`preflight / rebalance`）路径。
+- 盈透模拟盘（`ibkr-paper`）已具备单元测试，覆盖了后端注册、配置信息展示、市场与账户校验、订单与成交记录的归一化，以及冒烟测试脚手架的盈透环境快照记录路径。
+- 长桥模拟盘目前已通过人工监督的冒烟测试，验证通过了「提交、查询、对账、撤单」的最简闭环；这是一条可复现的模拟盘测试证据链，未包含在默认的自动化测试中。
+- 盈透模拟盘拥有一次人工监督下的「无订单（`no-order`）」测试证据：在 WSL 环境内的命令行工具成功连接到 Windows 系统下监听 `127.0.0.1:4002` 的 IB Gateway，并跑通了配置读取、账户查询、行情获取、调仓、对账、异常查看和全部撤单等流程。但由于盈透存在冲突的实盘会话（`competing live session`），导致 AAPL 行情返回为 0，实际产生的订单数为 0（`audit_order_count=0`）。
+- 长桥实盘已通过人工监督的只读验证，跑通了配置读取、执行预检、账户查询和行情获取流程，并确认了用户私有实盘配置的路由与实盘保护机制均能正常工作。
+- 涉及长桥实盘行情的测试用例，目前已支持将典型的网络、区域或凭证异常妥善处理为「跳过（`skipped`）」状态。
 
 ## 当前测试还没有证明什么
 
-- 现有的测试无法单独证明 LongPort 的实盘交易（包含提交、查询、撤单、对账的完整生命周期）已通过全自动的端到端验证。
-- 目前成本最低、最稳定的回归测试基线依然是 Alpaca 模拟盘；而 `longport-paper` 则是具备真实券商端测试证据链的 LongPort 模拟盘路径。
-- `ibkr-paper` 目前仍缺乏在有效市场行情下真实发单的测试证据；现阶段它更适合作为依赖本地 Gateway 驱动的增量后端，而不是主要的回归测试基线。
+- 现有的测试无法单独证明长桥的实盘交易（包含提交、查询、撤单、对账的完整生命周期）已通过全自动的端到端验证。
+- 目前成本最低、最稳定的回归测试基线依然是 Alpaca 模拟盘；而长桥模拟盘则是具备真实券商端测试证据链的模拟盘路径。
+- 盈透模拟盘目前仍缺乏在有效市场行情下真实发单的测试证据；现阶段它更适合作为依赖本地网关（`Gateway`）驱动的增量后端，而不是主要的回归测试基线。
 - 实盘券商的支持成熟度，最终应以人工监督下的冒烟测试、生成的审计日志及可复查的本地证据为准。
 
 ## 运行前提
 
-- 位于 `tests/integration/` 目录下涉及 LongPort 实盘行情的测试用例，强依赖于环境变量 `LONGPORT_APP_KEY`、`LONGPORT_APP_SECRET` 以及 `LONGPORT_ACCESS_TOKEN`。
+- 位于 `tests/integration/` 目录下涉及长桥实盘行情的测试用例，强依赖于环境变量 `LONGPORT_APP_KEY`、`LONGPORT_APP_SECRET` 以及 `LONGPORT_ACCESS_TOKEN`。
 - `tests/integration/test_ibkr_paper_integration.py` 强依赖于本地已启动并成功登录的 IB Gateway，并且需要显式开启环境变量 `IBKR_ENABLE_INTEGRATION=1`；涉及提交和撤单的用例还要求设置 `IBKR_ENABLE_MUTATION_TESTS=1`，涉及成交回报的路径则要求设置 `IBKR_ENABLE_FILL_TESTS=1`。
 - `tests/e2e/` 目录下的绝大多数测试无需真实的券商凭证；当凭证缺失或网络/可用区不可达时，涉及实盘行情的用例会自动跳过。
 - Alpaca 相关的测试路径默认不会发起真实的外部网络请求；如果需要进行真实的模拟盘验证，请单独配置 `ALPACA_*` 相关的环境变量并显式指定运行相应的测试场景。
 
-## 操作员冒烟测试 (Operator Smoke Tests)
+## 操作员冒烟测试
 
 如果你希望重复验证模拟盘账户的核心执行路径与操作员命令，可以直接运行：
 
@@ -137,12 +136,12 @@ qexec evidence-pack <run-id> --operator-note "reviewed terminal output"
 
 如果测试流程中途在某一步失败，`--evidence-output` 也会保留部分现场证据，包括：
 
-- 已完成的步骤
-- 失败步骤的名称
-- 失败步骤的退出码（exit code）和错误输出（stderr）
-- 稳定的失败分类（`failure_category`）
-- 保守的下一步操作提示（`next_step_hint`）
-- 被跳过的步骤（`skipped_steps`），说明哪些步骤未执行及其被跳过的原因
+- 已完成的步骤。
+- 失败步骤的名称。
+- 失败步骤的退出码（`exit code`）和错误输出（`stderr`）。
+- 稳定的失败分类（`failure_category`）。
+- 保守的下一步操作提示（`next_step_hint`）。
+- 被跳过的步骤（`skipped_steps`），说明哪些步骤未执行及其被跳过的原因。
 
 如果测试流程顺利执行完毕，但最终已跟踪的订单状态变为本地拦截（`BLOCKED`）或其他需要操作员介入判断的状态，证据文件中还会额外保留以下信息：
 
@@ -167,7 +166,7 @@ qexec evidence-pack <run-id> --operator-note "reviewed terminal output"
 9. `exceptions`（查看异常队列）
 10. 可选的 `cancel-all`（撤销所有开启状态的订单）
 
-如果你希望在模拟盘测试结束时，顺手清理掉本地状态中仍然处于开启（open）状态的订单，可以追加：
+如果你希望在模拟盘测试结束时，顺手清理掉本地状态中仍然处于开启（`open`）状态的订单，可以追加：
 
 ```bash
 PYTHONPATH=src python project_tools/smoke_operator_harness.py --broker alpaca-paper --execute --cleanup-open-orders
@@ -176,7 +175,7 @@ PYTHONPATH=src python project_tools/smoke_operator_harness.py --broker longport-
 
 此测试脚手架默认拒绝在非模拟盘环境的券商后端运行；如果你确切知道自己在做什么，并希望在实盘环境强制运行，需要额外传入 `--allow-non-paper` 参数。
 
-- 如果你准备开始进行盈透证券模拟盘的最小闭环验证，请先阅读 [docs/ibkr-paper-smoke.md](ibkr-paper-smoke.md)。
-- 如果你希望系统化地重复验证长桥证券模拟盘失败场景，建议阅读 [docs/longport-paper-failure-smoke.md](longport-paper-failure-smoke.md)。
+- 如果你准备开始进行盈透模拟盘的最小闭环验证，请先阅读 [docs/ibkr-paper-smoke.md](ibkr-paper-smoke.md)。
+- 如果你希望系统化地重复验证长桥模拟盘失败场景，建议阅读 [docs/longport-paper-failure-smoke.md](longport-paper-failure-smoke.md)。
 - 如果你准备将 Alpaca 模拟盘作为日常回归测试的基线，请先阅读 [docs/alpaca-paper-smoke.md](alpaca-paper-smoke.md)。
-- 如果你准备开始进行长桥证券实盘的最小闭环验证，请先阅读 [docs/longport-real-smoke.md](longport-real-smoke.md)。
+- 如果你准备开始进行长桥实盘的最小闭环验证，请先阅读 [docs/longport-real-smoke.md](longport-real-smoke.md)。

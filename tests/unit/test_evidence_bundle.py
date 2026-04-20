@@ -156,6 +156,33 @@ def test_create_evidence_bundle_collects_run_artifacts(tmp_path: Path) -> None:
     assert manifest["run_id"] == run_id
     assert manifest["audit_record_count"] == 2
     assert manifest["included_artifact_count"] == 6
+    assert manifest["trace_summary"] == {
+        "artifact_status": "included",
+        "artifact_bundle_path": "trace/order_traces.json",
+        "artifact_reason": None,
+        "trace_order_ref_count": 1,
+        "trace_count": 1,
+        "warning_count": 0,
+        "entries": [
+            {
+                "order_ref": "child-1",
+                "state_path": "/tmp/state.json",
+                "intent_id": "intent-1",
+                "parent_order_id": "parent-1",
+                "parent_status": "FILLED",
+                "child_order_id": "child-1",
+                "broker_order_id": "broker-1",
+                "broker_status": "FILLED",
+                "child_attempt_count": 0,
+                "tracked_broker_order_count": 0,
+                "fill_event_count": 0,
+                "broker_history_order_count": 0,
+                "broker_history_fill_count": 0,
+                "warning_count": 0,
+            }
+        ],
+        "warnings": [],
+    }
     trace_payload = json.loads(
         (result.bundle_path / "trace" / "order_traces.json").read_text(encoding="utf-8")
     )
@@ -217,12 +244,22 @@ def test_create_evidence_bundle_marks_absent_optional_artifacts(tmp_path: Path) 
     result = create_evidence_bundle(run_id=run_id, project_root=tmp_path)
 
     by_name = {artifact.name: artifact for artifact in result.artifacts}
+    manifest = json.loads(result.manifest_path.read_text(encoding="utf-8"))
     assert by_name["audit_log"].status == "included"
     assert by_name["target_input"].status == "missing"
     assert by_name["local_state"].status == "missing"
     assert by_name["smoke_evidence"].status == "missing"
     assert by_name["order_traces"].status == "skipped_not_applicable"
     assert by_name["operator_notes"].status == "missing"
+    assert manifest["trace_summary"] == {
+        "artifact_status": "skipped_not_applicable",
+        "artifact_bundle_path": None,
+        "artifact_reason": "audit log contained no traceable order references",
+        "trace_order_ref_count": 0,
+        "trace_count": 0,
+        "warning_count": 0,
+        "entries": [],
+    }
 
 
 def test_create_evidence_bundle_reports_missing_run_candidates(tmp_path: Path) -> None:

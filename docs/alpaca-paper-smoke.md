@@ -1,13 +1,13 @@
 # Alpaca 模拟盘冒烟测试（最小操作路径）
 
-当前 broker 支持矩阵和证据成熟度以
+当前券商支持矩阵和证据成熟度以
 [current-capabilities.md](current-capabilities.md) 为准。
 
 本文档提供了 Alpaca 模拟盘（`alpaca-paper`）的最小可复查冒烟测试路径，旨在帮助你快速确认以下事项：
 
 *   API 凭证加载正常；
 *   核心操作命令链路（如 `config`、`preflight`、`account`、`quote`、带 `--execute` 参数的 `rebalance`、`orders` 以及 `reconcile`）已成功连通；
-*   能够生成并留存本地的测试证据（Evidence）JSON 文件，以便后续复查。
+*   能够生成并留存本地的测试证据 JSON 文件，以便后续复查。
 
 > 定位说明：当前我们将 `alpaca-paper` 作为低成本、稳定且可重复的模拟盘回归测试基线使用，该路径不涉及实盘交易。
 
@@ -24,7 +24,7 @@ uv sync --group dev --extra cli --extra alpaca
 *   `ALPACA_API_KEY` 或 `APCA_API_KEY_ID`
 *   `ALPACA_SECRET_KEY` 或 `APCA_API_SECRET_KEY`
 
-建议在当前的命令行终端（Shell）中临时导出（`export`）这些变量，避免将凭证硬编码并遗留在代码仓库的本地配置文件中。
+建议在当前的命令行终端中临时导出（`export`）这些变量，避免将凭证硬编码并遗留在代码仓库的本地配置文件中。
 
 ## 3. 执行只读预检查（推荐）
 
@@ -35,7 +35,7 @@ qexec account --broker alpaca-paper --format json
 qexec quote AAPL --broker alpaca-paper
 ```
 
-如果在上述步骤发生失败，请先排查并修复凭证配置、网络连接或市场行情（Market Data）的权限问题，切勿直接进入带有 `--execute` 参数的正式下单环节。
+如果在上述步骤发生失败，请先排查并修复凭证配置、网络连接或市场行情的权限问题，切勿直接进入带有 `--execute` 参数的正式下单环节。
 
 ## 4. 最小执行路径
 
@@ -49,7 +49,7 @@ qexec reconcile --broker alpaca-paper
 qexec exceptions --broker alpaca-paper --status failure
 ```
 
-如果你只想通过自动化脚本来验证固定的操作流程，也可以直接使用配套的冒烟测试脚手架（Harness）：
+如果你只想通过自动化脚本来验证固定的操作流程，也可以直接使用配套的冒烟测试脚手架：
 
 ```bash
 PYTHONPATH=src python project_tools/smoke_operator_harness.py --broker alpaca-paper --preflight-only
@@ -68,7 +68,7 @@ PYTHONPATH=src python project_tools/smoke_operator_harness.py --broker alpaca-pa
 
 ```bash
 qexec evidence-pack <audit-run-id>
-qexec evidence-pack <audit-run-id> --operator-note "alpaca 模拟盘冒烟测试已复查"
+qexec evidence-pack <audit-run-id> --operator-note 'alpaca 模拟盘冒烟测试已复查'
 ```
 
 打包后的证据文件默认将输出至：`outputs/evidence-bundles/<audit-run-id>` 目录下。
@@ -78,4 +78,4 @@ qexec evidence-pack <audit-run-id> --operator-note "alpaca 模拟盘冒烟测试
 *   凭证异常：环境变量凭证缺失，或 API Key 与 Secret 不匹配。
 *   权限异常：模拟盘账户状态异常，或缺乏获取相关标的行情的权限。
 *   市场状态：当前市场状态（如处于非交易时段、熔断停牌等）导致报价或下单行为与预期不符。
-*   本地状态残留：本地执行状态中残留有未处理的已跟踪订单（Tracked Order）。遇到此情况，需要先执行全部撤单命令（`qexec cancel-all --broker alpaca-paper`），或先执行对账命令（`qexec reconcile`）同步最新状态后，再尝试重新运行测试。
+*   本地状态残留：本地执行状态中残留有未处理的已追踪订单。遇到此情况，需要先执行全部撤单命令（`qexec cancel-all --broker alpaca-paper`），或先执行对账命令（`qexec reconcile`）同步最新状态后，再尝试重新运行测试。

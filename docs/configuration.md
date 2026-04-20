@@ -1,11 +1,10 @@
 # 配置说明
 
-当前 broker 支持范围、凭证来源规则和证据成熟度以
-[current-capabilities.md](current-capabilities.md) 为准。本文聚焦配置入口。
+当前券商后端支持范围、凭证来源规则和证据成熟度以「current-capabilities.md」为准。本文聚焦配置入口。
 
 ## 环境变量
 
-### LongPort 实盘
+### 长桥实盘
 
 必需：
 
@@ -15,10 +14,10 @@
 
 提交保护：
 
-- `qexec rebalance --execute` 在实盘路径下要求 `QEXEC_ENABLE_LIVE=1`
-- 仓库根目录下的 `.env*` / `.envrc*` 如果包含 LongPort 实盘凭证，CLI 会拒绝执行
-- 这条保护的目的是防止把实盘密钥留在仓库本地文件里；模拟盘路径不受这个限制
-- `.env.example` 只示范本地 paper/smoke 配置，不包含 `LONGPORT_ACCESS_TOKEN` 实盘占位符
+- `qexec rebalance --execute` 在实盘路径下要求 `QEXEC_ENABLE_LIVE=1`。
+- 仓库根目录下的 `.env*` 或 `.envrc*` 如果包含长桥实盘凭证，命令行工具会拒绝执行。
+- 这条保护的目的是防止把实盘密钥留在仓库本地文件里；模拟盘路径不受这个限制。
+- `.env.example` 只示范本地模拟盘与冒烟测试配置，不包含 `LONGPORT_ACCESS_TOKEN` 实盘占位符。
 
 可选：
 
@@ -26,10 +25,10 @@
 - `LONGPORT_ENABLE_OVERNIGHT`
 - `LONGPORT_TRADING_WINDOW_START`
 - `LONGPORT_TRADING_WINDOW_END`
-- `FX_<CCY>_USD`，例如 `FX_HKD_USD=0.128`
-- `LONGPORT_FX_<CCY>_USD`，例如 `LONGPORT_FX_HKD_USD=0.128`
+- `FX_<CCY>_USD`，例如 `FX_HKD_USD=0.128`。
+- `LONGPORT_FX_<CCY>_USD`，例如 `LONGPORT_FX_HKD_USD=0.128`。
 
-### LongPort 模拟盘
+### 长桥模拟盘
 
 必需：
 
@@ -39,38 +38,38 @@
 
 说明：
 
-- 长桥实盘和模拟盘共用 App Key / Secret，但使用不同的 Access Token。
+- 长桥实盘和模拟盘共用应用密钥与秘密，但使用不同的访问令牌。
 - 当前长桥模拟盘后端会优先读取 `LONGPORT_ACCESS_TOKEN_TEST`。
 
 弃用兼容读取：
 
-- 旧的 `LONGBRIDGE_*` 前缀仍会兼容读取，但新配置和文档应使用 `LONGPORT_*`
-- `LONGPORT_ACCESS_TOKEN_REAL` 仍会作为 `LONGPORT_ACCESS_TOKEN` 的兼容兜底
-- `LONGPORT_FX_<CCY>_USD` 会作为 `FX_<CCY>_USD` 的兼容兜底
+- 旧的 `LONGBRIDGE_*` 前缀仍会兼容读取，但新配置和文档应使用 `LONGPORT_*`。
+- `LONGPORT_ACCESS_TOKEN_REAL` 仍会作为 `LONGPORT_ACCESS_TOKEN` 的兼容兜底。
+- `LONGPORT_FX_<CCY>_USD` 会作为 `FX_<CCY>_USD` 的兼容兜底。
 
 兼容限额变量：
 
 - `LONGPORT_MAX_NOTIONAL_PER_ORDER`
 - `LONGPORT_MAX_QTY_PER_ORDER`
 
-这两个变量仍会被兼容读取，但当前 CLI 主执行路径更推荐通过 `execution.risk.*` 配置本地风控阈值。
+这两个变量仍会被兼容读取，但当前命令行工具主执行路径更推荐通过 `execution.risk.*` 配置本地风控阈值。
 
 ### 长桥证券读取优先级
 
 当前项目刻意把长桥的模拟盘和实盘路径分开处理：
 
-- `longport-paper`：优先读取仓库根目录 `.env` / `.env.local`，其次读取当前进程环境变量，最后才回退到 `~/.config/qexec/longport-live.env`
-- `longport` 实盘：优先读取 `~/.config/qexec/longport-live.env`，其次读取当前进程环境变量
+- 长桥模拟盘：优先读取仓库根目录 `.env` 或 `.env.local`，其次读取当前进程环境变量，最后才回退到 `~/.config/qexec/longport-live.env`。
+- 长桥实盘：优先读取 `~/.config/qexec/longport-live.env`，其次读取当前进程环境变量。
 
 这样做的目的很直接：
 
-- 模拟盘和冒烟测试以项目内测试配置为主，不容易被外部残留环境变量带偏
-- 实盘路径默认走用户私有配置，不把实盘 token 放进仓库本地文件
+- 模拟盘和冒烟测试以项目内测试配置为主，不容易被外部残留环境变量带偏。
+- 实盘路径默认走用户私有配置，不把实盘令牌放进仓库本地文件。
 
 另外：
 
-- `QEXEC_ENABLE_LIVE` 会先读当前进程环境变量；如果没设置，再回退到 `~/.config/qexec/longport-live.env`
-- `qexec config --broker longport` 和 `qexec config --broker longport-paper` 会显示 App Key / Secret / Token / Region / Overnight 的命中来源，便于排查到底读到了哪一层配置
+- `QEXEC_ENABLE_LIVE` 会先读当前进程环境变量；如果没设置，再回退到 `~/.config/qexec/longport-live.env`。
+- `qexec config --broker longport` 和 `qexec config --broker longport-paper` 会显示各项配置的命中来源，便于排查到底读到了哪一层配置。
 
 ### Alpaca 模拟盘
 
@@ -81,55 +80,55 @@
 
 说明：
 
-- Alpaca 支持来自可选依赖 `alpaca-py`，安装方式：`uv sync --extra alpaca`
-- 当前适配器是纯模拟盘验证路径，不提供实盘切换
-- 当前也不提供真实多账户切换
+- Alpaca 支持来自可选依赖 `alpaca-py`，安装方式为 `uv sync --extra alpaca`。
+- 当前适配器是纯模拟盘验证路径，不提供实盘切换。
+- 当前也不提供真实多账户切换。
 
 ### 盈透证券模拟盘
 
 必需：
 
-- 本地已启动并登录的 IB Gateway
-- `IBKR_HOST`，默认 `127.0.0.1`
-- `IBKR_PORT` 或 `IBKR_PORT_PAPER`，默认 `4002`
-- `IBKR_CLIENT_ID`，默认 `1`
+- 本地已启动并登录的盈透网关。
+- `IBKR_HOST`，默认 `127.0.0.1`。
+- `IBKR_PORT` 或 `IBKR_PORT_PAPER`，默认 `4002`。
+- `IBKR_CLIENT_ID`，默认 `1`。
 
 可选：
 
 - `IBKR_ACCOUNT_ID`
-- `IBKR_CONNECT_TIMEOUT_SECONDS`，默认 `5`
+- `IBKR_CONNECT_TIMEOUT_SECONDS`，默认 `5`。
 
 说明：
 
-- 当前盈透证券模拟盘后端按本地 `IB Gateway + TWS API` 路线运行。
-- 当前只支持 US equities 最小切片；非 `.US` symbol 会在适配器层快速失败。
-- `qexec config --broker ibkr-paper` 会显示 host / paper port / client ID / account ID / timeout 的有效值和来源。
+- 当前盈透证券模拟盘后端按本地盈透网关配合应用编程接口路线运行。
+- 当前只支持美股正股的最小切片；非美股标的会在适配器层快速失败。
+- `qexec config --broker ibkr-paper` 会显示主机、模拟盘端口、客户编号、账户编号与超时时间的有效值和来源。
 - 真实多账户路由不在当前范围内；`--account` 仍只接受 `main`。
 
 ### 安装模型
 
 - 核心安装：`uv sync --group dev --extra cli`
-- LongPort：`uv sync --group dev --extra cli --extra longport`
+- 长桥：`uv sync --group dev --extra cli --extra longport`
 - Alpaca：`uv sync --group dev --extra cli --extra alpaca`
-- IBKR：`uv sync --group dev --extra cli --extra ibkr`
-- 全量 broker 依赖：`uv sync --group dev --extra cli --extra full`
-- 当前 CLI 不再假设默认 broker；请在本地 YAML 里显式设置 `broker.backend`，或每次传 `--broker`
+- 盈透：`uv sync --group dev --extra cli --extra ibkr`
+- 全量券商依赖：`uv sync --group dev --extra cli --extra full`
+- 当前命令行工具不再假设默认券商；请在本地配置文件里显式设置 `broker.backend`，或每次传 `--broker`。
 
 ### `.envrc.example`
 
-仓库里的 `.envrc.example` 和 tracked `.envrc` 使用同一套模型，默认使用：
+仓库里的 `.envrc.example` 和被追踪的 `.envrc` 使用同一套模型，默认使用：
 
 ```bash
 uv sync --group dev --extra cli
 ```
 
-如果 `.env` / `.env.local` 或当前 shell 里已经有对应 broker 的环境变量，它会自动追加相关可选依赖：
+如果 `.env` 或 `.env.local` 或当前命令行环境中已经有对应券商的环境变量，它会自动追加相关可选依赖：
 
-- Alpaca 变量命中时追加 `--extra alpaca`
-- LongPort / deprecated LongBridge 兼容变量命中时追加 `--extra longport`
-- IBKR 变量命中时追加 `--extra ibkr`
+- Alpaca 变量命中时追加 `--extra alpaca`。
+- 长桥或已弃用的长桥兼容变量命中时追加 `--extra longport`。
+- 盈透变量命中时追加 `--extra ibkr`。
 
-`.envrc` 仍然是 repo-local 文件，不应写入 LongPort 实盘 token。实盘推荐：
+`.envrc` 仍然是仓库本地文件，不应写入长桥实盘令牌。实盘推荐：
 
 ```bash
 export LONGPORT_APP_KEY=...
@@ -156,7 +155,7 @@ EOF
 UV_SYNC_ARGS="--group dev --extra cli --extra longport --extra ibkr"
 ```
 
-## 本地 YAML
+## 本地配置文件
 
 复制模板：
 
@@ -229,10 +228,10 @@ fx:
 
 ## 行为说明
 
-- `execution.risk.*` 是当前 CLI 主执行路径的主要本地风控来源。
-- `LONGPORT_TRADING_WINDOW_START/END` 只是会话 API 不可用时的本地降级判断。
-- `LONGPORT_MAX_QTY_PER_ORDER` 和 `LONGPORT_MAX_NOTIONAL_PER_ORDER` 更偏兼容层 / 遗留客户端语义。当前主执行路径仍以 `execution.risk.*` 作为主要风控来源。
-- `execution.kill_switch.env_var` 和可选 `execution.kill_switch.path` 可以手动停掉新的券商提交。
-- `broker.default_account` 是 CLI 没显式传 `--account` 时的默认标签；如果适配器不支持该标签，会直接报错。
-- `execution.state_dir` 控制幂等与恢复状态文件目录，默认是 `outputs/state`。
-- 盈透证券目前依赖本地已启动的 IB Gateway，当前配置层只开放模拟盘运行路径，暂不支持切换到实盘券商后端。
+- `execution.risk.*` 是当前命令行工具主执行路径的主要本地风控来源。
+- 长桥交易时段配置只是会话接口不可用时的本地降级判断。
+- 长桥最大数量与名义金额配置更偏兼容层或遗留客户端语义。当前主执行路径仍以 `execution.risk.*` 作为主要风控来源。
+- 紧急停单变量和可选路径可以手动停掉新的券商提交。
+- 默认账户是命令行工具没显式传 `--account` 时的默认标签；如果适配器不支持该标签，会直接报错。
+- 执行状态目录控制幂等与恢复状态文件目录，默认是 `outputs/state`。
+- 盈透证券目前依赖本地已启动的盈透网关，当前配置层只开放模拟盘运行路径，暂不支持切换到实盘券商后端。
