@@ -84,3 +84,4 @@
 - 每个目标项必须提供 `symbol`、`market`，并且只能在 `target_weight` 与 `target_quantity` 中选择一个。
 - 旧的 `ticker-list` / `weights` 格式不再作为调仓执行的输入。
 - 内部工装如果接收 `ticker` 列表，会先写成上述标准 JSON，再交给执行链路。
+- `rebalance` 以 USD 统一估值；目标或现有持仓包含 `HK`、`CN`、`SG` 时，必须配置对应的 `FX_<CCY>_USD` 或 `fx.to_usd.<CCY>` 汇率，否则拒绝生成调仓计划。

@@ -20,12 +20,19 @@ from .broker.factory import (
 from .config import load_cfg
 from .execution import OrderLifecycleService
 from .fees import FeeSchedule, estimate_fees
+from .fx import get_rate_to_usd
 from .logging import get_logger, get_run_id
 from .models import AccountSnapshot, Order, Position, RebalanceResult
 from .risk import summarize_risk_decisions
 from .targets import KNOWN_MARKETS, TargetEntry
 
 logger = get_logger(__name__)
+QUOTE_CURRENCY_BY_MARKET = {
+    "US": "USD",
+    "HK": "HKD",
+    "CN": "CNY",
+    "SG": "SGD",
+}
 
 
 class RebalanceService:
@@ -88,6 +95,53 @@ class RebalanceService:
             broker_name=self.broker_name,
         )
         return {sym: q.price for sym, q in quote_objs.items()}
+
+    @staticmethod
+    def _quote_currency(symbol: str) -> str:
+        suffix = str(symbol).upper().rsplit(".", 1)[-1]
+        return QUOTE_CURRENCY_BY_MARKET.get(suffix, "USD")
+
+    def _normalize_quotes_to_usd(self, quotes: dict[str, float]) -> dict[str, float]:
+        """Normalize native market quote prices into the USD valuation currency."""
+        normalized: dict[str, float] = {}
+        for symbol, price in quotes.items():
+            numeric_price = float(price or 0.0)
+            currency = self._quote_currency(symbol)
+            if numeric_price <= 0 or currency == "USD":
+                normalized[symbol] = numeric_price
+                continue
+            rate = get_rate_to_usd(currency)
+            if rate is None:
+                raise ValueError(
+                    f"missing FX rate for {currency} quote valuation ({symbol}); "
+                    f"set FX_{currency}_USD or configure fx.to_usd.{currency}"
+                )
+            normalized[symbol] = numeric_price * rate
+        return normalized
+
+    def _refresh_positions_from_usd_quotes(
+        self,
+        account_snapshot: AccountSnapshot,
+        quotes: dict[str, float],
+    ) -> None:
+        """Refresh existing positions using quotes already normalized to USD."""
+        for position in account_snapshot.positions:
+            price = float(quotes.get(position.symbol, 0.0) or 0.0)
+            if price > 0:
+                position.last_price = price
+                position.estimated_value = price * float(position.quantity)
+                continue
+            if (
+                position.quantity > 0
+                and self._quote_currency(position.symbol) != "USD"
+            ):
+                raise ValueError(
+                    "positive quote required to value existing non-USD position "
+                    f"in USD: {position.symbol}"
+                )
+        account_snapshot.total_market_value = sum(
+            float(position.estimated_value) for position in account_snapshot.positions
+        )
 
     def _compute_effective_total(
         self,
@@ -223,6 +277,8 @@ class RebalanceService:
             except Exception as e:
                 logger.error(f"获取报价失败: {e}")
                 raise
+        quotes = self._normalize_quotes_to_usd(quotes)
+        self._refresh_positions_from_usd_quotes(account_snapshot, quotes)
 
         weighted_targets = [
             target for target in targets if target.target_weight is not None
