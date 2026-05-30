@@ -22,6 +22,7 @@ from .execution_state import (
     TERMINAL_BROKER_STATUSES,
     ChildOrder,
     ExecutionCancelResult,
+    ExecutionFillEvent,
     ExecutionState,
     ExecutionStateStore,
     OrderIntent,
@@ -30,7 +31,6 @@ from .execution_state import (
 from .logging import get_logger
 from .models import Order
 from .risk import RiskGateChain, get_kill_switch_config, is_manual_kill_switch_active
-from .risk import get_kill_switch_config, is_manual_kill_switch_active
 
 logger = get_logger(__name__)
 
@@ -42,6 +42,11 @@ def _intent_limit_price(order: Order) -> float | None:
 
 
 class OrderLifecycleStateReconcileOpsMixin:
+    adapter: BrokerAdapter
+    state_store: ExecutionStateStore
+    risk_chain: RiskGateChain
+    last_reconcile_report: BrokerReconcileReport | None
+
     def _build_intent(
         self,
         order: Order,
@@ -159,7 +164,8 @@ class OrderLifecycleStateReconcileOpsMixin:
             return {}
         symbols = sorted({order.symbol for order in orders})
         try:
-            return self.adapter.get_quotes(symbols, include_depth=True)
+            quotes = self.adapter.get_quotes(symbols, include_depth=True)
+            return dict(quotes)
         except Exception as exc:
             logger.warning("Risk market data lookup failed: %s", exc)
             return {}

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
+from typing import TYPE_CHECKING
 
 from .broker.base import BrokerOrderRequest, ResolvedBrokerAccount, utc_now_iso
 from .execution_helpers import (
@@ -31,12 +32,15 @@ from .execution_state import (
 from .logging import get_logger
 from .models import Order
 
+if TYPE_CHECKING:
+    from .execution_service import OrderLifecycleService
+
 logger = get_logger(__name__)
 
 
 class OrderLifecycleRecoveryActionsMixin(OrderLifecycleStateReconcileOpsMixin):
     def retry_order(
-        self,
+        self: OrderLifecycleService,
         *,
         account_label: str,
         order_ref: str,
@@ -106,7 +110,7 @@ class OrderLifecycleRecoveryActionsMixin(OrderLifecycleStateReconcileOpsMixin):
         )
 
     def cancel_remaining_order(
-        self,
+        self: OrderLifecycleService,
         *,
         account_label: str,
         order_ref: str,
@@ -138,7 +142,7 @@ class OrderLifecycleRecoveryActionsMixin(OrderLifecycleStateReconcileOpsMixin):
         return self.cancel_order(account_label=account_label, order_ref=order_ref)
 
     def resume_remaining_order(
-        self,
+        self: OrderLifecycleService,
         *,
         account_label: str,
         order_ref: str,
@@ -214,7 +218,7 @@ class OrderLifecycleRecoveryActionsMixin(OrderLifecycleStateReconcileOpsMixin):
         )
 
     def accept_partial_fill(
-        self,
+        self: OrderLifecycleService,
         *,
         account_label: str,
         order_ref: str,
@@ -269,7 +273,7 @@ class OrderLifecycleRecoveryActionsMixin(OrderLifecycleStateReconcileOpsMixin):
         )
 
     def _submit_child_attempt(
-        self,
+        self: OrderLifecycleService,
         *,
         state: ExecutionState,
         parent: ParentOrder,
@@ -315,7 +319,7 @@ class OrderLifecycleRecoveryActionsMixin(OrderLifecycleStateReconcileOpsMixin):
             return None, child.status
 
     def reprice_order(
-        self,
+        self: OrderLifecycleService,
         *,
         account_label: str,
         order_ref: str,
@@ -425,7 +429,7 @@ class OrderLifecycleRecoveryActionsMixin(OrderLifecycleStateReconcileOpsMixin):
         )
 
     def retry_stale_orders(
-        self,
+        self: OrderLifecycleService,
         *,
         account_label: str,
         older_than_minutes: int,
