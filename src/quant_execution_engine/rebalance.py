@@ -4,6 +4,7 @@ Provides rebalancing-related business logic, including plan generation and execu
 """
 
 import json
+import math
 from datetime import datetime
 from decimal import ROUND_HALF_UP, Decimal
 from pathlib import Path
@@ -78,12 +79,23 @@ class RebalanceService:
     @staticmethod
     def _coerce_lb_symbol(target: str | TargetEntry) -> str:
         if isinstance(target, TargetEntry):
+            if target.market == "CN" and target.symbol.endswith((".SH", ".SZ", ".BJ")):
+                return f"{target.symbol}.CN"
             return f"{target.symbol}.{target.market}"
         normalized = str(target).upper().strip()
         if "." in normalized:
+            parts = normalized.split(".")
+            if len(parts) == 3 and parts[-1] in KNOWN_MARKETS:
+                return normalized
             base, suffix = normalized.rsplit(".", 1)
             if base and suffix in KNOWN_MARKETS:
                 return f"{base}.{suffix}"
+            if suffix in {"SH", "SZ", "BJ"}:
+                return f"{base.zfill(6) if base.isdigit() else base}.{suffix}.CN"
+            if suffix == "XSHG":
+                return f"{base.zfill(6) if base.isdigit() else base}.SH.CN"
+            if suffix == "XSHE":
+                return f"{base.zfill(6) if base.isdigit() else base}.SZ.CN"
         return f"{normalized}.US"
 
     def _fetch_quotes(self, targets: list[str] | list[TargetEntry]) -> dict[str, float]:
@@ -205,7 +217,8 @@ class RebalanceService:
     ) -> tuple[Position, Order | None]:
         """Build target position and corresponding order for a symbol."""
         lot_size = client.lot_size(lb_symbol)
-        target_qty = (int(target_qty_raw) // lot_size) * lot_size
+        target_qty_int = int(math.floor(float(target_qty_raw) + 1e-9))
+        target_qty = (target_qty_int // lot_size) * lot_size
         target_qty_frac = Decimal(0)
         if price > 0 and frac_enable:
             target_qty_frac = Decimal(str(target_qty_raw)).quantize(

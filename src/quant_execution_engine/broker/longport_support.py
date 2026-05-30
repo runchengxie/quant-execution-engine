@@ -85,12 +85,23 @@ def to_lb_symbol(ticker: str, market: str | None = None) -> str:
 
     ticker_text = str(ticker).strip().upper()
     explicit_market = str(market or "").strip().upper()
+    market_aliases = {"A_SHARE": "CN", "ASHARE": "CN", "CN_A": "CN"}
+    explicit_market = market_aliases.get(explicit_market, explicit_market)
+    cn_suffix_map = {"SH": "SH", "SZ": "SZ", "BJ": "BJ", "XSHG": "SH", "XSHE": "SZ"}
     if explicit_market:
-        if "." in ticker_text and ticker_text.rsplit(".", 1)[-1] in {"US", "HK", "SG", "CN"}:
-            ticker_text = ticker_text.rsplit(".", 1)[0]
+        if "." in ticker_text:
+            base, suffix = ticker_text.rsplit(".", 1)
+            if suffix in {"US", "HK", "SG", "CN"}:
+                ticker_text = base
+            elif suffix in cn_suffix_map and explicit_market == "CN":
+                return f"{base.zfill(6) if base.isdigit() else base}.{cn_suffix_map[suffix]}.CN"
         return f"{ticker_text}.{explicit_market}"
-    if ticker_text.endswith((".US", ".HK", ".SG", ".CN")):
-        return ticker_text
+    if "." in ticker_text:
+        base, suffix = ticker_text.rsplit(".", 1)
+        if suffix in {"US", "HK", "SG", "CN"}:
+            return ticker_text
+        if suffix in cn_suffix_map:
+            return f"{base.zfill(6) if base.isdigit() else base}.{cn_suffix_map[suffix]}.CN"
     return f"{ticker_text}.US"
 
 
@@ -100,7 +111,7 @@ def market_of(symbol: str) -> str:
         return "US"
     if normalized.endswith(".HK"):
         return "HK"
-    if normalized.endswith(".CN"):
+    if normalized.endswith(".CN") or normalized.endswith((".SH.CN", ".SZ.CN", ".BJ.CN")):
         return "CN"
     if normalized.endswith(".SG"):
         return "SG"

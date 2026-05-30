@@ -103,3 +103,52 @@ def test_write_targets_json_ticker_helper_defaults_to_equal_weights(
     assert [target.key for target in parsed.targets] == ["AAPL.US", "700.HK"]
     assert parsed.targets[0].target_weight == pytest.approx(0.5)
     assert parsed.targets[1].target_weight == pytest.approx(0.5)
+
+
+def test_read_targets_json_accepts_a_share_suffixes_and_market_alias(
+    tmp_path: Path,
+) -> None:
+    target_path = tmp_path / "cn_targets.json"
+    target_path.write_text(
+        json.dumps(
+            {
+                "source": "cross-sectional-trees",
+                "asof": "2026-05-29",
+                "targets": [
+                    {"symbol": "600519.SH", "target_weight": 0.4},
+                    {"symbol": "858.SZ", "target_weight": 0.3},
+                    {"symbol": "430047.BJ", "target_weight": 0.2},
+                    {"symbol": "600000.XSHG", "target_weight": 0.1},
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    parsed = read_targets_json(target_path, default_market="a_share")
+
+    assert [target.key for target in parsed.targets] == [
+        "600519.SH.CN",
+        "000858.SZ.CN",
+        "430047.BJ.CN",
+        "600000.SH.CN",
+    ]
+    assert all(target.market == "CN" for target in parsed.targets)
+
+
+def test_write_targets_json_preserves_cn_exchange_suffix(tmp_path: Path) -> None:
+    out_path = tmp_path / "targets.json"
+
+    write_targets_json(
+        out_path,
+        targets=[
+            {"symbol": "600519.SH", "market": "CN", "target_weight": 0.6},
+            {"symbol": "000858.SZ", "market": "a_share", "target_weight": 0.4},
+        ],
+    )
+
+    raw = json.loads(out_path.read_text(encoding="utf-8"))
+    assert raw["targets"] == [
+        {"symbol": "600519.SH", "market": "CN", "target_weight": 0.6},
+        {"symbol": "000858.SZ", "market": "CN", "target_weight": 0.4},
+    ]

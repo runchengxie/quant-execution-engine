@@ -17,6 +17,10 @@ from quant_execution_engine.broker.longport import _to_lb_symbol
         ("SE.SG", "SE.SG"),
         ("nvda", "NVDA.US"),
         ("\tAMZN\n", "AMZN.US"),
+        ("600519.SH", "600519.SH.CN"),
+        ("858.SZ", "000858.SZ.CN"),
+        ("430047.BJ", "430047.BJ.CN"),
+        ("600000.XSHG", "600000.SH.CN"),
     ],
 )
 def test_to_lb_symbol(raw: str, expect: str) -> None:

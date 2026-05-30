@@ -34,6 +34,35 @@ def test_fetch_quotes() -> None:
     mock_get.assert_called_once()
 
 
+def test_coerce_lb_symbol_preserves_a_share_exchange_suffix() -> None:
+    assert RebalanceService._coerce_lb_symbol(
+        TargetEntry(symbol="600519.SH", market="CN", target_weight=1.0)
+    ) == "600519.SH.CN"
+    assert RebalanceService._coerce_lb_symbol("858.SZ") == "000858.SZ.CN"
+    assert RebalanceService._coerce_lb_symbol("600000.XSHG") == "600000.SH.CN"
+
+
+def test_plan_rebalance_cn_dry_run_lot_sizing(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("FX_CNY_USD", "0.14")
+    service = RebalanceService(env="paper")
+    client = SimpleNamespace(lot_size=lambda symbol: 100 if symbol.endswith(".CN") else 1)
+    snapshot = AccountSnapshot(env="paper", cash_usd=1400.0, positions=[])
+    targets = [TargetEntry(symbol="600519.SH", market="CN", target_weight=1.0)]
+
+    with patch.object(RebalanceService, "_get_client", return_value=client):
+        result = service.plan_rebalance(
+            targets,
+            snapshot,
+            quotes={"600519.SH.CN": 10.0},
+        )
+
+    assert result.target_positions[0].symbol == "600519.SH.CN"
+    assert result.target_positions[0].quantity == 1000
+    assert result.orders[0].symbol == "600519.SH.CN"
+    assert result.orders[0].quantity == 1000
+    assert result.orders[0].side == "BUY"
+
+
 def test_compute_effective_total() -> None:
     service = RebalanceService()
     snapshot = make_snapshot()

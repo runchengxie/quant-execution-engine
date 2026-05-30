@@ -11,26 +11,51 @@ from pathlib import Path
 from typing import Any
 
 SCHEMA_VERSION = 2
+CN_SYMBOL_SUFFIXES = {"SH", "SZ", "BJ", "XSHG", "XSHE"}
+CN_CANONICAL_SUFFIX = {"SH": "SH", "SZ": "SZ", "BJ": "BJ", "XSHG": "SH", "XSHE": "SZ"}
 KNOWN_MARKETS = {"US", "HK", "CN", "SG"}
+
+
+def _canonical_cn_symbol(base: str, suffix: str | None = None) -> str:
+    base_text = str(base or "").upper().strip()
+    suffix_text = str(suffix or "").upper().strip()
+    if suffix_text in {"XSHG", "XSHE"}:
+        suffix_text = CN_CANONICAL_SUFFIX[suffix_text]
+    if suffix_text in {"SH", "SZ", "BJ"}:
+        if base_text.isdigit():
+            base_text = base_text.zfill(6)
+        return f"{base_text}.{suffix_text}"
+    return base_text
+
+
+def _normalize_market(value: str) -> str:
+    raw = str(value or "").upper().strip()
+    return {"A_SHARE": "CN", "ASHARE": "CN", "CN_A": "CN"}.get(raw, raw)
 
 
 def _split_symbol_market(
     symbol: str, market: str | None = None, *, default_market: str = "US"
 ) -> tuple[str, str]:
     raw_symbol = str(symbol or "").upper().strip()
-    raw_market = str(market or "").upper().strip()
+    raw_market = _normalize_market(str(market or ""))
 
     if raw_market:
-        if raw_symbol.rsplit(".", 1)[-1] in KNOWN_MARKETS and "." in raw_symbol:
-            raw_symbol = raw_symbol.rsplit(".", 1)[0]
+        if "." in raw_symbol:
+            base, suffix = raw_symbol.rsplit(".", 1)
+            if suffix in KNOWN_MARKETS:
+                raw_symbol = base
+            elif suffix in CN_SYMBOL_SUFFIXES and raw_market == "CN":
+                raw_symbol = _canonical_cn_symbol(base, suffix)
         return raw_symbol, raw_market
 
     if "." in raw_symbol:
         base, suffix = raw_symbol.rsplit(".", 1)
         if suffix in KNOWN_MARKETS:
             return base, suffix
+        if suffix in CN_SYMBOL_SUFFIXES:
+            return _canonical_cn_symbol(base, suffix), "CN"
 
-    return raw_symbol, str(default_market or "US").upper().strip() or "US"
+    return raw_symbol, _normalize_market(str(default_market or "US")) or "US"
 
 
 @dataclass(slots=True)
