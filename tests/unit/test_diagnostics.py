@@ -3,8 +3,10 @@ from __future__ import annotations
 import pytest
 
 from quant_execution_engine.broker.base import BrokerOrderRecord
-from quant_execution_engine.diagnostics import diagnose_order_issue, diagnose_warning_message
-
+from quant_execution_engine.diagnostics import (
+    diagnose_order_issue,
+    diagnose_warning_message,
+)
 
 pytestmark = pytest.mark.unit
 

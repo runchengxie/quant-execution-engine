@@ -33,7 +33,6 @@ from quant_execution_engine.diagnostics import diagnose_order_issue
 from quant_execution_engine.execution import ExecutionStateStore
 from quant_execution_engine.targets import write_targets_json
 
-
 LONGPORT_SMOKE_ENV_KEYS = (
     "LONGPORT_APP_KEY",
     "LONGPORT_APP_SECRET",

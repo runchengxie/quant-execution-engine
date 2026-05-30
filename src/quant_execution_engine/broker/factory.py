@@ -3,16 +3,21 @@
 from __future__ import annotations
 
 from importlib import import_module
-from typing import Any
+from typing import Any, Protocol, cast
 
 from ..config import load_cfg
 from .base import BrokerAdapter, BrokerCapabilityMatrix, BrokerValidationError
-
 
 PAPER_BROKERS = frozenset({"alpaca", "alpaca-paper", "ibkr-paper", "longport-paper"})
 LONGPORT_BROKERS = frozenset({"longport", "longport-paper"})
 ALPACA_BROKERS = frozenset({"alpaca", "alpaca-paper"})
 IBKR_BROKERS = frozenset({"ibkr-paper"})
+
+
+class _BrokerAdapterFactory(Protocol):
+    capabilities: BrokerCapabilityMatrix
+
+    def __call__(self, *, client: Any | None = None) -> BrokerAdapter: ...
 
 
 def _broker_cfg() -> dict[str, Any]:
@@ -40,23 +45,25 @@ def resolve_broker_name(explicit: str | None = None) -> str:
     )
 
 
-def _load_alpaca_adapter_cls():
+def _load_alpaca_adapter_cls() -> _BrokerAdapterFactory:
     module = import_module(".alpaca", __package__)
-    return module.AlpacaPaperBrokerAdapter
+    return cast(_BrokerAdapterFactory, module.AlpacaPaperBrokerAdapter)
 
 
-def _load_ibkr_adapter_cls():
+def _load_ibkr_adapter_cls() -> _BrokerAdapterFactory:
     module = import_module(".ibkr", __package__)
-    return module.IbkrPaperBrokerAdapter
+    return cast(_BrokerAdapterFactory, module.IbkrPaperBrokerAdapter)
 
 
-def _load_longport_runtime() -> tuple[type[Any], type[Any], type[Any]]:
+def _load_longport_runtime() -> tuple[
+    _BrokerAdapterFactory, _BrokerAdapterFactory, type[Any]
+]:
     adapter_module = import_module(".longport_adapter", __package__)
     runtime_module = import_module(".longport", __package__)
     return (
-        adapter_module.LongPortBrokerAdapter,
-        adapter_module.LongPortPaperBrokerAdapter,
-        runtime_module.LongPortClient,
+        cast(_BrokerAdapterFactory, adapter_module.LongPortBrokerAdapter),
+        cast(_BrokerAdapterFactory, adapter_module.LongPortPaperBrokerAdapter),
+        cast(type[Any], runtime_module.LongPortClient),
     )
 
 
@@ -144,6 +151,6 @@ def get_broker_adapter(
                 "custom broker client injection is only supported for longport and ibkr backends"
             )
         AlpacaPaperBrokerAdapter = _load_alpaca_adapter_cls()
-        return AlpacaPaperBrokerAdapter()
+        return AlpacaPaperBrokerAdapter(client=None)
 
     raise BrokerValidationError(f"unsupported broker backend: {backend}")

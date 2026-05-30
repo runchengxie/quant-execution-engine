@@ -5,8 +5,12 @@ from unittest.mock import patch
 import pytest
 
 import quant_execution_engine.paths as paths
-from quant_execution_engine.logging import StrategyLogger, get_run_id, set_run_id, setup_logging
-
+from quant_execution_engine.logging import (
+    StrategyLogger,
+    get_run_id,
+    set_run_id,
+    setup_logging,
+)
 
 pytestmark = pytest.mark.unit
 

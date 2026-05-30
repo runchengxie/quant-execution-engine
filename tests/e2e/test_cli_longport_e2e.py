@@ -5,7 +5,9 @@ from pathlib import Path
 
 import pytest
 
-from quant_execution_engine.broker.longport_credentials import probe_longport_credentials
+from quant_execution_engine.broker.longport_credentials import (
+    probe_longport_credentials,
+)
 
 
 def _cli_env() -> dict[str, str]:

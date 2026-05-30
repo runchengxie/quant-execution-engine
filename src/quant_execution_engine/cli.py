@@ -37,43 +37,44 @@ from .evidence_maturity import (
     build_broker_evidence_maturity_report,
     render_broker_evidence_maturity,
 )
-from .execution import ExecutionStateStore, OrderLifecycleService
 from .execution import (
     DEFAULT_EXCEPTION_STATUSES,
     FAILURE_BROKER_STATUSES,
     OPEN_BROKER_STATUSES,
     SUCCESS_BROKER_STATUSES,
     TERMINAL_BROKER_STATUSES,
+    ExecutionStateStore,
+    OrderLifecycleService,
 )
 from .guards import validate_live_execution_guard
 from .logging import get_logger, set_run_id
 from .preflight import run_preflight_checks
 from .rebalance import RebalanceService
-from .risk import get_kill_switch_config, get_risk_config
 from .renderers.diff import render_rebalance_diff
 from .renderers.jsonout import render_json, render_multiple_account_snapshots_json
 from .renderers.table import (
     render_accept_partial_summary,
     render_broker_fill_history,
     render_broker_order_history,
-    render_bulk_cancel_summary,
     render_broker_orders,
+    render_bulk_cancel_summary,
     render_cancel_summary,
     render_exception_orders,
     render_multiple_account_snapshots,
+    render_order_trace,
     render_preflight_summary,
     render_quotes,
     render_reconcile_summary,
     render_reprice_summary,
     render_resume_remaining_summary,
     render_retry_summary,
-    render_order_trace,
+    render_stale_retry_summary,
     render_state_doctor_summary,
     render_state_prune_summary,
     render_state_repair_summary,
-    render_stale_retry_summary,
     render_tracked_order_detail,
 )
+from .risk import get_kill_switch_config, get_risk_config
 from .state_tools import StateMaintenanceService
 from .targets import read_targets_json
 
@@ -1217,7 +1218,7 @@ def main() -> int:
     if args.command == "evidence-pack":
         return _handle_command_result(
             run_evidence_pack(
-                run_id=getattr(args, "run_id"),
+                run_id=args.run_id,
                 output_dir=getattr(args, "output_dir", None),
                 operator_notes=getattr(args, "operator_note", None),
             )
@@ -1271,7 +1272,7 @@ def main() -> int:
     if args.command == "cancel":
         return _handle_command_result(
             run_cancel(
-                order_ref=getattr(args, "order_ref"),
+                order_ref=args.order_ref,
                 account=getattr(args, "account", "main"),
                 broker=getattr(args, "broker", None),
             )
@@ -1279,7 +1280,7 @@ def main() -> int:
     if args.command == "cancel-rest":
         return _handle_command_result(
             run_cancel_rest(
-                order_ref=getattr(args, "order_ref"),
+                order_ref=args.order_ref,
                 account=getattr(args, "account", "main"),
                 broker=getattr(args, "broker", None),
             )
@@ -1294,7 +1295,7 @@ def main() -> int:
     if args.command == "order":
         return _handle_command_result(
             run_order(
-                order_ref=getattr(args, "order_ref"),
+                order_ref=args.order_ref,
                 account=getattr(args, "account", "main"),
                 broker=getattr(args, "broker", None),
             )
@@ -1302,7 +1303,7 @@ def main() -> int:
     if args.command == "trace-order":
         return _handle_command_result(
             run_trace_order(
-                order_ref=getattr(args, "order_ref"),
+                order_ref=args.order_ref,
                 account=getattr(args, "account", "main"),
                 broker=getattr(args, "broker", None),
                 fmt=getattr(args, "format", "table"),
@@ -1311,7 +1312,7 @@ def main() -> int:
     if args.command == "retry":
         return _handle_command_result(
             run_retry(
-                order_ref=getattr(args, "order_ref"),
+                order_ref=args.order_ref,
                 account=getattr(args, "account", "main"),
                 broker=getattr(args, "broker", None),
             )
@@ -1319,7 +1320,7 @@ def main() -> int:
     if args.command == "resume-remaining":
         return _handle_command_result(
             run_resume_remaining(
-                order_ref=getattr(args, "order_ref"),
+                order_ref=args.order_ref,
                 account=getattr(args, "account", "main"),
                 broker=getattr(args, "broker", None),
             )
@@ -1327,7 +1328,7 @@ def main() -> int:
     if args.command == "accept-partial":
         return _handle_command_result(
             run_accept_partial(
-                order_ref=getattr(args, "order_ref"),
+                order_ref=args.order_ref,
                 account=getattr(args, "account", "main"),
                 broker=getattr(args, "broker", None),
             )
@@ -1335,8 +1336,8 @@ def main() -> int:
     if args.command == "reprice":
         return _handle_command_result(
             run_reprice(
-                order_ref=getattr(args, "order_ref"),
-                limit_price=getattr(args, "limit_price"),
+                order_ref=args.order_ref,
+                limit_price=args.limit_price,
                 account=getattr(args, "account", "main"),
                 broker=getattr(args, "broker", None),
             )

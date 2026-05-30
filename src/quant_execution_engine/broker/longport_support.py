@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from enum import Enum
 
 
-def getenv_both(name_new: str, name_old: str, default: str = None) -> str:
+def getenv_both(name_new: str, name_old: str, default: str | None = None) -> str | None:
     """Read a compatibility env var, preferring the new LONGPORT_* prefix."""
 
     return os.getenv(name_new) or os.getenv(name_old) or default
@@ -76,7 +76,7 @@ def coerce_iso(value: object) -> str:
     if value is None:
         return ""
     if hasattr(value, "isoformat"):
-        return value.isoformat()
+        return str(value.isoformat())
     return str(value)
 
 

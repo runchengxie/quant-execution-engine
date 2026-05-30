@@ -4,7 +4,6 @@ import pytest
 
 import quant_execution_engine.account as account
 
-
 pytestmark = pytest.mark.unit
 
 

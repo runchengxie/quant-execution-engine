@@ -6,7 +6,6 @@ import pytest
 
 from quant_execution_engine.broker.longport_adapter import LongPortPaperBrokerAdapter
 
-
 pytestmark = pytest.mark.unit
 
 

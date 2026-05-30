@@ -2,13 +2,14 @@ from datetime import date, timedelta
 
 import pytest
 
-
 pytestmark = [pytest.mark.integration, pytest.mark.requires_api]
 
 pytest.importorskip("longport")
 
-from quant_execution_engine.broker.longport_credentials import probe_longport_credentials
 from quant_execution_engine.broker.longport import LongPortClient, get_config
+from quant_execution_engine.broker.longport_credentials import (
+    probe_longport_credentials,
+)
 
 
 def is_runtime_network_issue(message: str) -> bool:

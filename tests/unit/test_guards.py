@@ -3,10 +3,7 @@ from pathlib import Path
 import pytest
 
 import quant_execution_engine.guards as guards
-
-
 from quant_execution_engine.guards import validate_live_execution_guard
-
 
 pytestmark = pytest.mark.unit
 

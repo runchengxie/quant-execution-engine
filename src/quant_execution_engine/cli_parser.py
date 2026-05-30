@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import argparse
 
-
 _BROKER_HELP = "Broker backend override, e.g. longport or alpaca-paper"
 _ACCOUNT_HELP = "Broker account/profile label. Unsupported labels fail fast."
 _ORDER_REF_HELP = (

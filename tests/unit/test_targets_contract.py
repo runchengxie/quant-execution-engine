@@ -7,7 +7,6 @@ import pytest
 
 from quant_execution_engine.targets import read_targets_json, write_targets_json
 
-
 pytestmark = pytest.mark.unit
 
 

@@ -8,7 +8,6 @@ from quant_execution_engine.broker.longport_credentials import (
     resolve_longport_runtime_value,
 )
 
-
 pytestmark = pytest.mark.unit
 
 

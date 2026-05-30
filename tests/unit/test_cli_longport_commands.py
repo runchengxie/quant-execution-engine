@@ -14,8 +14,11 @@ from quant_execution_engine.broker.base import (
     BrokerOrderRecord,
     ResolvedBrokerAccount,
 )
-from quant_execution_engine.execution import ExecutionExceptionRecord, ExecutionState, ExecutionStateStore
-
+from quant_execution_engine.execution import (
+    ExecutionExceptionRecord,
+    ExecutionState,
+    ExecutionStateStore,
+)
 
 pytestmark = pytest.mark.unit
 

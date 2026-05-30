@@ -7,9 +7,9 @@ from types import SimpleNamespace
 
 import pytest
 
-import quant_execution_engine.cli as cli
 import quant_execution_engine.broker.factory as factory
 import quant_execution_engine.broker.ibkr_runtime as ibkr_runtime_mod
+import quant_execution_engine.cli as cli
 from quant_execution_engine.broker.base import (
     BrokerImportError,
     BrokerOrderRequest,
@@ -21,7 +21,6 @@ from quant_execution_engine.broker.ibkr_runtime import (
     IbkrRuntimeConfig,
     resolve_ibkr_runtime_config,
 )
-
 
 pytestmark = pytest.mark.unit
 

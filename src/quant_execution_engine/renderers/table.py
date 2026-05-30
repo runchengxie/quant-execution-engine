@@ -9,11 +9,12 @@ from ..execution import (
     ExecutionAcceptPartialResult,
     ExecutionBulkCancelResult,
     ExecutionExceptionRecord,
+    ExecutionFillEvent,
+    ExecutionOrderTrace,
     ExecutionReconcileDelta,
     ExecutionRepriceResult,
     ExecutionResumeRemainingResult,
     ExecutionStaleRetryResult,
-    ExecutionOrderTrace,
     ExecutionTrackedOrder,
 )
 from ..models import AccountSnapshot, Order, Quote, RebalanceResult
@@ -615,9 +616,9 @@ def render_order_trace(trace: ExecutionOrderTrace) -> str:
             lines.append(f"    message: {record.message}")
 
     lines.append(f"- Local Fill Events: {len(trace.fill_events)}")
-    for fill in trace.fill_events:
+    for local_fill in trace.fill_events:
         lines.append(
-            f"  * {fill.fill_id}: {fill.quantity:g} @ {fill.price:g} on {fill.filled_at}"
+            f"  * {local_fill.fill_id}: {local_fill.quantity:g} @ {local_fill.price:g} on {local_fill.filled_at}"
         )
 
     lines.append(f"- Broker-side Order History: {len(trace.broker_history_orders)}")
@@ -631,9 +632,9 @@ def render_order_trace(trace: ExecutionOrderTrace) -> str:
         )
 
     lines.append(f"- Broker-side Fill History: {len(trace.broker_history_fills)}")
-    for fill in trace.broker_history_fills:
+    for broker_fill in trace.broker_history_fills:
         lines.append(
-            f"  * {fill.fill_id}: {fill.quantity:g} @ {fill.price:g} on {fill.filled_at}"
+            f"  * {broker_fill.fill_id}: {broker_fill.quantity:g} @ {broker_fill.price:g} on {broker_fill.filled_at}"
         )
 
     if trace.warnings:
@@ -728,11 +729,11 @@ def render_stale_retry_summary(outcome: ExecutionStaleRetryResult) -> str:
                     lines.append(f"    next: {diagnostic.action_hint}")
     if outcome.retry_results:
         lines.append("- Retry results:")
-        for result in outcome.retry_results:
+        for retry_result in outcome.retry_results:
             lines.append(
-                f"  * {result.order_ref} -> child {result.new_child_order_id} / broker {result.broker_order_id or '-'} / status {result.broker_status or '-'}"
+                f"  * {retry_result.order_ref} -> child {retry_result.new_child_order_id} / broker {retry_result.broker_order_id or '-'} / status {retry_result.broker_status or '-'}"
             )
-            for warning in result.warnings:
+            for warning in retry_result.warnings:
                 diagnostic = diagnose_warning_message(warning)
                 lines.append(f"    warning: [{diagnostic.code}] {diagnostic.summary}")
                 if diagnostic.action_hint:

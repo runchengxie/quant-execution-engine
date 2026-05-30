@@ -6,8 +6,8 @@ from unittest.mock import Mock, patch
 
 import pytest
 
-from quant_execution_engine.broker.base import BrokerImportError
 import quant_execution_engine.broker.longport as longport_mod
+from quant_execution_engine.broker.base import BrokerImportError
 from quant_execution_engine.broker.longport import BrokerLimits, LongPortClient
 
 

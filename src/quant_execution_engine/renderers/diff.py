@@ -92,8 +92,10 @@ def _diffstat(
     decreased = 0
     all_symbols = set(current) | set(target)
     for symbol in sorted(all_symbols):
-        cur_qty = int(current.get(symbol).quantity) if symbol in current else 0
-        tgt_qty = int(target.get(symbol).quantity) if symbol in target else 0
+        cur_pos = current.get(symbol)
+        tgt_pos = target.get(symbol)
+        cur_qty = int(cur_pos.quantity) if cur_pos is not None else 0
+        tgt_qty = int(tgt_pos.quantity) if tgt_pos is not None else 0
         if cur_qty == 0 and tgt_qty > 0:
             added += 1
         elif cur_qty > 0 and tgt_qty == 0:
@@ -335,10 +337,10 @@ def _build_rich_diff(
     if not _HAS_RICH:
         return None
 
-    from rich import box
-    from rich.console import Group
-    from rich.panel import Panel
-    from rich.table import Table
+    from rich import box  # type: ignore[import-not-found]
+    from rich.console import Group  # type: ignore[import-not-found]
+    from rich.panel import Panel  # type: ignore[import-not-found]
+    from rich.table import Table  # type: ignore[import-not-found]
 
     def _style_delta(value: float, text: str) -> str:
         if value > 0:
@@ -471,10 +473,11 @@ def _build_rich_diff(
                 order.get("detail", "") or "-",
             )
 
-    return Group(
+    rich_group: object = Group(
         Panel(header_table, border_style="cyan"),
         summary_table,
         diff_table,
         positions_table,
         orders_table,
     )
+    return rich_group

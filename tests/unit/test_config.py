@@ -5,7 +5,6 @@ import yaml
 
 import quant_execution_engine.config as config
 
-
 pytestmark = pytest.mark.unit
 
 

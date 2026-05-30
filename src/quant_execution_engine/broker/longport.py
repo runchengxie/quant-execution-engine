@@ -55,6 +55,9 @@ except Exception:  # pragma: no cover
 
 from datetime import date, datetime
 
+from ..fx import to_usd
+from ..logging import get_logger
+from ..models import Quote
 from .longport_credentials import (
     resolve_longport_credentials,
     resolve_longport_runtime_value,
@@ -70,9 +73,6 @@ from .longport_support import (
     normalize_order_status as _normalize_order_status,
     to_lb_symbol as _to_lb_symbol,
 )
-from ..fx import to_usd
-from ..logging import get_logger
-from ..models import Quote
 
 logger = get_logger(__name__)
 

@@ -4,30 +4,32 @@ from pathlib import Path
 
 import pytest
 
+import quant_execution_engine.broker.factory as broker_factory
 from quant_execution_engine.broker.base import (
     BrokerAdapter,
     BrokerCapabilityMatrix,
     BrokerFillRecord,
-    BrokerValidationError,
     BrokerOrderRecord,
     BrokerOrderRequest,
     BrokerReconcileReport,
+    BrokerValidationError,
     ResolvedBrokerAccount,
 )
-import quant_execution_engine.broker.factory as broker_factory
 from quant_execution_engine.broker.factory import get_broker_capabilities
 from quant_execution_engine.execution import (
-    ExecutionOrderTrace,
     ExecutionFillEvent,
+    ExecutionOrderTrace,
     ExecutionState,
     ExecutionStateStore,
     OrderLifecycleService,
 )
 from quant_execution_engine.models import Order, Quote
-from quant_execution_engine.renderers.table import render_order_trace, render_tracked_order_detail
+from quant_execution_engine.renderers.table import (
+    render_order_trace,
+    render_tracked_order_detail,
+)
 from quant_execution_engine.risk import RiskGateChain
 from quant_execution_engine.state_tools import StateMaintenanceService
-
 
 pytestmark = pytest.mark.unit
 

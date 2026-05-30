@@ -410,7 +410,7 @@ class IbkrRuntime:
 
     def cancel_order(self, broker_order_id: str) -> None:
         trade = self.get_trade(broker_order_id)
-        self._get_ib().cancelOrder(getattr(trade, "order"))
+        self._get_ib().cancelOrder(trade.order)
         self._sleep(0.2)
 
     def list_fills(

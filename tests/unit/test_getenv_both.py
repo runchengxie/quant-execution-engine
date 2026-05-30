@@ -2,7 +2,6 @@ import pytest
 
 from quant_execution_engine.broker.longport import getenv_both
 
-
 pytestmark = pytest.mark.unit
 
 

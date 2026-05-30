@@ -30,13 +30,11 @@ __all__ = [
     "BrokerOrderRecord",
     "BrokerOrderRequest",
     "BrokerValidationError",
-    "ResolvedBrokerAccount",
     "IbkrPaperBrokerAdapter",
     "LongPortBrokerAdapter",
-    "LongPortPaperBrokerAdapter",
     "LongPortClient",
-    "probe_ibkr_runtime_config",
-    "resolve_ibkr_runtime_config",
+    "LongPortPaperBrokerAdapter",
+    "ResolvedBrokerAccount",
     "_to_lb_symbol",
     "get_account_config",
     "get_broker_adapter",
@@ -47,8 +45,10 @@ __all__ = [
     "is_longport_broker",
     "is_paper_broker",
     "peek_broker_name",
+    "probe_ibkr_runtime_config",
     "resolve_broker_name",
     "resolve_default_account_label",
+    "resolve_ibkr_runtime_config",
 ]
 
 
@@ -69,15 +69,15 @@ def __getattr__(name: str):
             probe_ibkr_runtime_config,
             resolve_ibkr_runtime_config,
         )
-        from .longport_adapter import (
-            LongPortBrokerAdapter,
-            LongPortPaperBrokerAdapter,
-        )
         from .longport import (
             LongPortClient,
             _to_lb_symbol,
             get_config,
             getenv_both,
+        )
+        from .longport_adapter import (
+            LongPortBrokerAdapter,
+            LongPortPaperBrokerAdapter,
         )
 
         exports = {

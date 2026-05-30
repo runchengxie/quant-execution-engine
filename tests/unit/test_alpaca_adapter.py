@@ -7,7 +7,6 @@ import pytest
 import quant_execution_engine.broker.alpaca as alpaca_mod
 from quant_execution_engine.broker.base import BrokerImportError
 
-
 pytestmark = pytest.mark.unit
 
 

@@ -4,7 +4,6 @@ import os
 
 import pytest
 
-
 pytestmark = [pytest.mark.integration, pytest.mark.requires_api]
 
 pytest.importorskip("ib_insync")

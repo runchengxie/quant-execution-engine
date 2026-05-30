@@ -14,7 +14,6 @@ from quant_execution_engine.execution import ExecutionStateStore, OrderLifecycle
 from quant_execution_engine.models import Order, Quote
 from quant_execution_engine.risk import RiskGateChain
 
-
 pytestmark = pytest.mark.integration
 
 

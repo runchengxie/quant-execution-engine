@@ -8,7 +8,11 @@ from types import SimpleNamespace
 
 import pytest
 
-from quant_execution_engine.broker.base import BrokerAdapter, BrokerOrderRecord, ResolvedBrokerAccount
+from quant_execution_engine.broker.base import (
+    BrokerAdapter,
+    BrokerOrderRecord,
+    ResolvedBrokerAccount,
+)
 from quant_execution_engine.execution import (
     ChildOrder,
     ExecutionState,
@@ -17,7 +21,6 @@ from quant_execution_engine.execution import (
     ParentOrder,
 )
 from quant_execution_engine.models import AccountSnapshot, Position
-
 
 pytestmark = pytest.mark.unit
 
