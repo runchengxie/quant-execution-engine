@@ -1,6 +1,7 @@
 import os
 import time
 from collections.abc import Iterable
+from datetime import date, datetime
 from decimal import Decimal
 from typing import Any
 
@@ -53,8 +54,6 @@ try:
 except Exception:  # pragma: no cover
     ZoneInfo = None  # type: ignore
 
-from datetime import date, datetime
-
 from ..fx import to_usd
 from ..logging import get_logger
 from ..models import Quote
@@ -65,12 +64,18 @@ from .longport_credentials import (
 from .longport_support import (
     BrokerLimits,
     Env,
-    coerce_iso as _coerce_iso,
-    enum_value as _enum_value,
     getenv_both,
+)
+from .longport_support import (
+    coerce_iso as _coerce_iso,
+)
+from .longport_support import (
     market_of as _market_of,
+)
+from .longport_support import (
     market_tz as _market_tz,
-    normalize_order_status as _normalize_order_status,
+)
+from .longport_support import (
     to_lb_symbol as _to_lb_symbol,
 )
 

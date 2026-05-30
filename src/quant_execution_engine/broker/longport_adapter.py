@@ -14,7 +14,16 @@ from .base import (
     BrokerValidationError,
     ResolvedBrokerAccount,
 )
-from .longport import LongPortClient, _coerce_iso, _enum_value, _normalize_order_status
+from .longport import LongPortClient
+from .longport_support import (
+    coerce_iso as _coerce_iso,
+)
+from .longport_support import (
+    enum_value as _enum_value,
+)
+from .longport_support import (
+    normalize_order_status as _normalize_order_status,
+)
 
 
 class _BaseLongPortBrokerAdapter(BrokerAdapter):
@@ -40,7 +49,8 @@ class _BaseLongPortBrokerAdapter(BrokerAdapter):
         *,
         include_quotes: bool = True,
     ) -> AccountSnapshot:
-        resolved = account or self.resolve_account()
+        if account is None:
+            self.resolve_account()
         cash_usd, stock_position_map, net_assets, base_ccy = self.client.portfolio_snapshot()
         quotes = (
             self.client.quote_snapshot(list(stock_position_map.keys()))

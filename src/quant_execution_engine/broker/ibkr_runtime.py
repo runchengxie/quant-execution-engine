@@ -298,7 +298,7 @@ class IbkrRuntime:
                 ):
                     tickers = delayed_tickers
         results: dict[str, Any] = {}
-        for (canonical, _contract), ticker in zip(resolved, tickers):
+        for (canonical, _contract), ticker in zip(resolved, tickers, strict=False):
             results[canonical] = ticker
         return results
 

@@ -9,7 +9,6 @@ from ..execution import (
     ExecutionAcceptPartialResult,
     ExecutionBulkCancelResult,
     ExecutionExceptionRecord,
-    ExecutionFillEvent,
     ExecutionOrderTrace,
     ExecutionReconcileDelta,
     ExecutionRepriceResult,

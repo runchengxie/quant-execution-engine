@@ -186,7 +186,8 @@ class AlpacaPaperBrokerAdapter(BrokerAdapter):
         *,
         include_quotes: bool = True,
     ) -> AccountSnapshot:
-        resolved = account or self.resolve_account()
+        if account is None:
+            self.resolve_account()
         trading = self._get_trading_client()
         account_obj = trading.get_account()
         positions: list[Position] = []

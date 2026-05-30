@@ -204,7 +204,6 @@ def resolve_longport_credentials(
     When placeholders are present, local `.env` / `.env.local` values are used as a fallback.
     """
 
-    root = project_root or PROJECT_ROOT
     normalized_env = str(env_name or "real").strip().lower()
     if normalized_env not in {"real", "paper"}:
         raise ValueError(f"unsupported longport environment: {env_name}")
