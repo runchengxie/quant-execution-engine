@@ -4,7 +4,7 @@
 
 `quant_execution_engine` 定位为一个纯粹的量化执行引擎。
 
-当前支持矩阵、证据成熟度和共有限制说明以
+当前支持矩阵、证据成熟度和已知限制说明以
 [current-capabilities.md](current-capabilities.md) 为准。
 
 它负责：

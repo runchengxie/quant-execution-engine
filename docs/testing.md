@@ -51,6 +51,18 @@ uv run pytest -m integration
 uv run pytest --cov=src/quant_execution_engine --cov-report=term-missing -m 'not integration and not e2e and not slow'
 ```
 
+## 静态检查现状
+
+项目已将 Ruff 和 mypy 放入开发依赖，但当前仓库仍处于维护债收敛阶段，不能把默认 `pytest` 通过理解为完整质量门控通过。
+
+```bash
+uv run python -m compileall -q src tests project_tools
+uv run ruff check .
+uv run mypy src tests project_tools
+```
+
+建议优先清理 Ruff 的未使用导入、未定义名称、import 排序和旧式类型标注；长行可以采用预算递减方式处理。mypy 建议先从低耦合模块开始收敛，再逐步覆盖执行服务、券商适配器和渲染层。
+
 ## 券商测试与证据入口
 
 | 券商 | 默认自动化覆盖 | 按需开启的自动化覆盖 | 人工监督冒烟测试 |

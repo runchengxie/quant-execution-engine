@@ -176,6 +176,17 @@ uv run pytest -m integration
 ```
 备注：自动化测试仅负责校验程序的行为逻辑。有关真实交易网关的可靠性证明，请依靠人工监督下的实盘冒烟测试以及对应留存的审计数据。各接口的验证成熟度均记录在 docs/current-capabilities.md 文件中。
 
+当前默认测试可以作为本地行为回归入口，但它不等同于完整质量门控。维护者还应按需运行：
+
+```bash
+uv run python -m compileall -q src tests project_tools
+uv run ruff check .
+uv run mypy src tests project_tools
+uv run pytest --cov=src/quant_execution_engine --cov-report=term-missing -m 'not integration and not e2e and not slow'
+```
+
+其中 Ruff、mypy 目前仍处于维护债收敛阶段，可能暴露既有问题。默认 `pytest` 通过只说明快速行为测试通过，不代表格式、lint、类型检查和覆盖率门槛全部达标。
+
 使用冒烟测试脚手架：
 
 仓库内附带了一组脱离核心业务流的独立脚本，专门用于生成测试数据和模拟人工流转：
