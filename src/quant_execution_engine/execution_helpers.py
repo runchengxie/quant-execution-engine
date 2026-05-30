@@ -189,9 +189,9 @@ def resolve_tracked_order(
         return None
     parent = find_parent_for_child(state, child)
     intent = find_intent_for_parent(state, parent)
-    broker_order = None
+    tracked_broker_order: BrokerOrderRecord | None = None
     if child.broker_order_id:
-        broker_order = next(
+        tracked_broker_order = next(
             (
                 existing
                 for existing in state.broker_orders
@@ -199,7 +199,7 @@ def resolve_tracked_order(
             ),
             None,
         )
-    return child, parent, intent, broker_order
+    return child, parent, intent, tracked_broker_order
 
 
 def find_tracked_broker_order(

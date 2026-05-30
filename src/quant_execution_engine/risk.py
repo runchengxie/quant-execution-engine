@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -81,7 +82,7 @@ def _classify_bypass_reason(reason: str) -> str:
 
 
 def summarize_risk_decisions(
-    decisions: list[RiskDecisionLike] | tuple[RiskDecisionLike, ...],
+    decisions: Sequence[RiskDecisionLike],
 ) -> RiskDecisionSummary:
     """Group risk decisions by outcome and bypass reason class."""
 

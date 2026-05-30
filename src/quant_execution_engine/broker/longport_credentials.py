@@ -274,6 +274,7 @@ def probe_longport_credentials(
         search_order=app_search_order,
     )
 
+    token_names: tuple[str, ...]
     if normalized_env == "paper":
         token_names = ("LONGPORT_ACCESS_TOKEN_TEST", "LONGBRIDGE_ACCESS_TOKEN_TEST")
         access_token, access_token_source = _resolve_secret(
