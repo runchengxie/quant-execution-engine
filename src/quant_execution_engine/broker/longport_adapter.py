@@ -39,7 +39,8 @@ class _BaseLongPortBrokerAdapter(BrokerAdapter):
         label = str(account_label or "main").strip() or "main"
         if label != "main":
             raise BrokerValidationError(
-                f"{self.backend_name} does not support switching broker accounts via --account: {label}"
+                f"{self.backend_name} does not support switching broker accounts "
+                f"via --account: {label}"
             )
         return ResolvedBrokerAccount(label=label)
 
@@ -57,17 +58,19 @@ class _BaseLongPortBrokerAdapter(BrokerAdapter):
             if include_quotes and stock_position_map
             else {}
         )
-        positions = [
-            Position(
-                symbol=symbol,
-                quantity=int(quantity),
-                last_price=float(quotes.get(symbol).price if symbol in quotes else 0.0),
-                estimated_value=float(quotes.get(symbol).price if symbol in quotes else 0.0)
-                * int(quantity),
-                env=self.snapshot_env,
+        positions = []
+        for symbol, quantity in stock_position_map.items():
+            quote = quotes.get(symbol)
+            last_price = float(quote.price) if quote is not None else 0.0
+            positions.append(
+                Position(
+                    symbol=symbol,
+                    quantity=int(quantity),
+                    last_price=last_price,
+                    estimated_value=last_price * int(quantity),
+                    env=self.snapshot_env,
+                )
             )
-            for symbol, quantity in stock_position_map.items()
-        ]
         for symbol, (units, nav, _ccy) in self.client.fund_positions().items():
             positions.append(
                 Position(
@@ -93,9 +96,7 @@ class _BaseLongPortBrokerAdapter(BrokerAdapter):
             base_currency=str(base_ccy).upper() if base_ccy else None,
         )
 
-    def get_quotes(
-        self, symbols: list[str], *, include_depth: bool = False
-    ) -> dict[str, Quote]:
+    def get_quotes(self, symbols: list[str], *, include_depth: bool = False) -> dict[str, Quote]:
         return self.client.quote_snapshot(symbols, include_depth=include_depth)
 
     def _order_to_record(

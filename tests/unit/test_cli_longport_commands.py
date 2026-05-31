@@ -33,9 +33,7 @@ class CliAdapter(BrokerAdapter):
 def test_cli_dispatch_quote(monkeypatch: pytest.MonkeyPatch) -> None:
     called: dict[str, object] = {}
 
-    def fake_run_quote(
-        tickers: list[str], broker: str | None = None
-    ) -> cli.CommandResult:
+    def fake_run_quote(tickers: list[str], broker: str | None = None) -> cli.CommandResult:
         called["tickers"] = tickers
         called["broker"] = broker
         return cli.CommandResult(exit_code=0)
@@ -91,7 +89,16 @@ def test_main_routes_preflight() -> None:
         with patch.object(
             sys,
             "argv",
-            ["qexec", "preflight", "AAPL", "MSFT", "--account", "main", "--broker", "longport"],
+            [
+                "qexec",
+                "preflight",
+                "AAPL",
+                "MSFT",
+                "--account",
+                "main",
+                "--broker",
+                "longport",
+            ],
         ):
             result = cli.main()
 
@@ -191,7 +198,9 @@ def test_run_config_longport_reports_credential_sources(
             token_var_name="LONGPORT_ACCESS_TOKEN",
             app_key_source="repo-local .env (LONGPORT_APP_KEY)",
             app_secret_source="repo-local .env (LONGPORT_APP_SECRET)",
-            access_token_source="user-private ~/.config/qexec/longport-live.env (LONGPORT_ACCESS_TOKEN)",
+            access_token_source=(
+                "user-private ~/.config/qexec/longport-live.env (LONGPORT_ACCESS_TOKEN)"
+            ),
         ),
     )
     monkeypatch.setattr(
@@ -213,14 +222,14 @@ def test_run_config_longport_reports_credential_sources(
     assert result.stdout is not None
     assert "- Region Source:         repo-local .env (LONGPORT_REGION)" in result.stdout
     assert (
-        "- Overnight Source:      user-private ~/.config/qexec/longport-live.env (LONGPORT_ENABLE_OVERNIGHT)"
-        in result.stdout
+        "- Overnight Source:      user-private ~/.config/qexec/longport-live.env "
+        "(LONGPORT_ENABLE_OVERNIGHT)" in result.stdout
     )
     assert "- App Key Source:        repo-local .env (LONGPORT_APP_KEY)" in result.stdout
     assert "- App Secret Source:     repo-local .env (LONGPORT_APP_SECRET)" in result.stdout
     assert (
-        "- Access Token Source:   user-private ~/.config/qexec/longport-live.env (LONGPORT_ACCESS_TOKEN)"
-        in result.stdout
+        "- Access Token Source:   user-private ~/.config/qexec/longport-live.env "
+        "(LONGPORT_ACCESS_TOKEN)" in result.stdout
     )
 
 
@@ -233,7 +242,16 @@ def test_main_routes_orders() -> None:
         with patch.object(
             sys,
             "argv",
-            ["qexec", "orders", "--account", "main", "--status", "open", "--symbol", "AAPL"],
+            [
+                "qexec",
+                "orders",
+                "--account",
+                "main",
+                "--status",
+                "open",
+                "--symbol",
+                "AAPL",
+            ],
         ):
             result = cli.main()
 
@@ -440,7 +458,15 @@ def test_main_routes_trace_order() -> None:
         with patch.object(
             sys,
             "argv",
-            ["qexec", "trace-order", "fake-order-1", "--broker", "alpaca-paper", "--format", "json"],
+            [
+                "qexec",
+                "trace-order",
+                "fake-order-1",
+                "--broker",
+                "alpaca-paper",
+                "--format",
+                "json",
+            ],
         ):
             result = cli.main()
 
@@ -525,7 +551,15 @@ def test_main_routes_reprice() -> None:
         with patch.object(
             sys,
             "argv",
-            ["qexec", "reprice", "fake-order-1", "--limit-price", "9.5", "--broker", "alpaca-paper"],
+            [
+                "qexec",
+                "reprice",
+                "fake-order-1",
+                "--limit-price",
+                "9.5",
+                "--broker",
+                "alpaca-paper",
+            ],
         ):
             result = cli.main()
 
@@ -588,7 +622,15 @@ def test_main_routes_state_prune() -> None:
         with patch.object(
             sys,
             "argv",
-            ["qexec", "state-prune", "--older-than-days", "45", "--apply", "--broker", "alpaca-paper"],
+            [
+                "qexec",
+                "state-prune",
+                "--older-than-days",
+                "45",
+                "--apply",
+                "--broker",
+                "alpaca-paper",
+            ],
         ):
             result = cli.main()
 
@@ -676,7 +718,10 @@ def test_run_quote_import_error() -> None:
 
 
 def test_run_config_requires_explicit_or_configured_broker() -> None:
-    with patch("quant_execution_engine.cli.resolve_broker_name", side_effect=Exception("broker backend is not configured")):
+    with patch(
+        "quant_execution_engine.cli.resolve_broker_name",
+        side_effect=Exception("broker backend is not configured"),
+    ):
         result = cli.run_config(True, broker=None)
 
     assert result.exit_code == 1
@@ -725,8 +770,7 @@ def test_run_rebalance_live_rejects_repo_local_longport_secrets(
     target_file = tmp_path / "targets.json"
     target_file.write_text("{}", encoding="utf-8")
     (tmp_path / ".env").write_text(
-        'LONGPORT_ACCESS_TOKEN="real_token_value"\n'
-        'LONGPORT_APP_SECRET="real_secret_value"\n',
+        'LONGPORT_ACCESS_TOKEN="real_token_value"\nLONGPORT_APP_SECRET="real_secret_value"\n',
         encoding="utf-8",
     )
     monkeypatch.setenv("QEXEC_ENABLE_LIVE", "1")
@@ -913,7 +957,9 @@ def test_run_broker_orders_filters_by_status_symbol_and_order_id(
     assert "MSFT.US" not in result.stdout
 
 
-def test_run_broker_fills_filters_by_symbol_and_order_id(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_run_broker_fills_filters_by_symbol_and_order_id(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     class FakeHistoryAdapter(BrokerAdapter):
         backend_name = "fake"
 

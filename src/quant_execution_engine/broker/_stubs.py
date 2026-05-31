@@ -6,6 +6,7 @@ depending on the real third-party SDKs.  They also allow
 not installed.
 """
 
+
 class Config:
     """Placeholder configuration object with :meth:`from_env` helper."""
 

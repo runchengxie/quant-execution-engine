@@ -117,9 +117,7 @@ def render_rebalance_diff(
         before.cash_usd, result.target_positions, result.orders
     )
     total_before = buckets_before.total
-    total_after = (
-        buckets_after.total if buckets_after.total > 0 else result.total_portfolio_value
-    )
+    total_after = buckets_after.total if buckets_after.total > 0 else result.total_portfolio_value
 
     mode = "DRY-RUN" if result.dry_run else "LIVE"
     broker_label = getattr(result, "broker_name", "longport")
@@ -169,12 +167,8 @@ def render_rebalance_diff(
     )
     lines.append("-" * 90)
 
-    denom_before = (
-        total_before if total_before > 0 else max(1.0, result.total_portfolio_value)
-    )
-    denom_after = (
-        total_after if total_after > 0 else max(1.0, result.total_portfolio_value)
-    )
+    denom_before = total_before if total_before > 0 else max(1.0, result.total_portfolio_value)
+    denom_after = total_after if total_after > 0 else max(1.0, result.total_portfolio_value)
 
     positions_for_rich: list[dict[str, Any]] = []
     all_symbols = sorted(set(current_map) | set(target_map))
@@ -206,18 +200,10 @@ def render_rebalance_diff(
         rounding_loss = getattr(first_order, "rounding_loss", None)
         est_fee = getattr(first_order, "est_fees", None)
 
-        target_frac_str = (
-            f"{target_frac:.3f}" if isinstance(target_frac, float) else "   -   "
-        )
+        target_frac_str = f"{target_frac:.3f}" if isinstance(target_frac, float) else "   -   "
         rounded_str = f"{rounded:d}" if isinstance(rounded, int) else " - "
-        rounding_loss_str = (
-            f"{rounding_loss:.3f}" if isinstance(rounding_loss, float) else "  -  "
-        )
-        fee_str = (
-            _fmt_money(est_fee)
-            if isinstance(est_fee, (int | float))
-            else "$0.00"
-        )
+        rounding_loss_str = f"{rounding_loss:.3f}" if isinstance(rounding_loss, float) else "  -  "
+        fee_str = _fmt_money(est_fee) if isinstance(est_fee, (int | float)) else "$0.00"
         lines.append(
             f"{symbol[:8]:8s}  {_fmt_pct(cur_weight):>8}  "
             f"{_fmt_money(cur_val):>12},{cur_qty:>4}  →  "
@@ -226,12 +212,8 @@ def render_rebalance_diff(
             f"{rounding_loss_str:>6}  {fee_str:>8}  {action}"
         )
 
-        rounding_loss_val = (
-            rounding_loss if isinstance(rounding_loss, float) else None
-        )
-        est_fee_val = (
-            float(est_fee) if isinstance(est_fee, (int | float)) else 0.0
-        )
+        rounding_loss_val = rounding_loss if isinstance(rounding_loss, float) else None
+        est_fee_val = float(est_fee) if isinstance(est_fee, (int | float)) else 0.0
         positions_for_rich.append(
             {
                 "symbol": symbol,
@@ -288,11 +270,7 @@ def render_rebalance_diff(
             rich_detail = (
                 getattr(order, "risk_summary", None)
                 or order.error_message
-                or (
-                    f"Risk BYPASS: {risk_bypass_summary}"
-                    if risk_bypass_summary
-                    else None
-                )
+                or (f"Risk BYPASS: {risk_bypass_summary}" if risk_bypass_summary else None)
             )
             orders_for_rich.append(
                 {
@@ -392,14 +370,10 @@ def _build_rich_diff(
             _style_delta(-fees, _signed_money(-fees)),
         )
 
-    diff_table = Table(
-        title="Diffstat", show_header=True, header_style="bold", box=box.MINIMAL
-    )
+    diff_table = Table(title="Diffstat", show_header=True, header_style="bold", box=box.MINIMAL)
     diff_table.add_column("Metric")
     diff_table.add_column("Count", justify="right")
-    for label, value in zip(
-        ("Added", "Removed", "Increased", "Decreased"), diffstat, strict=True
-    ):
+    for label, value in zip(("Added", "Removed", "Increased", "Decreased"), diffstat, strict=True):
         if label in {"Added", "Increased"}:
             styled = _style_delta(value, str(value))
         else:
@@ -446,9 +420,7 @@ def _build_rich_diff(
             action,
         )
 
-    orders_table = Table(
-        title="Orders", show_header=True, header_style="bold", box=box.MINIMAL
-    )
+    orders_table = Table(title="Orders", show_header=True, header_style="bold", box=box.MINIMAL)
     orders_table.add_column("Side")
     orders_table.add_column("Symbol")
     orders_table.add_column("Qty", justify="right")

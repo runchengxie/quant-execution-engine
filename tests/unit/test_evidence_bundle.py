@@ -120,9 +120,9 @@ def test_create_evidence_bundle_collects_run_artifacts(tmp_path: Path) -> None:
     target_path = tmp_path / "outputs" / "targets" / "targets.json"
     _write_json(target_path, {"targets": []})
     audit_path = _write_audit_log(tmp_path, run_id, target_path)
-    state_path = ExecutionStateStore(
-        root_dir=tmp_path / "outputs" / "state"
-    ).path_for("longport-paper", "main")
+    state_path = ExecutionStateStore(root_dir=tmp_path / "outputs" / "state").path_for(
+        "longport-paper", "main"
+    )
     _write_json(state_path, {"broker_name": "longport-paper", "account_label": "main"})
     smoke_path = tmp_path / "outputs" / "evidence" / "smoke.json"
     _write_json(
@@ -230,9 +230,9 @@ def test_render_evidence_bundle_result_reports_trace_summary(tmp_path: Path) -> 
     target_path = tmp_path / "outputs" / "targets" / "targets.json"
     _write_json(target_path, {"targets": []})
     audit_path = _write_audit_log(tmp_path, run_id, target_path)
-    state_path = ExecutionStateStore(
-        root_dir=tmp_path / "outputs" / "state"
-    ).path_for("longport-paper", "main")
+    state_path = ExecutionStateStore(root_dir=tmp_path / "outputs" / "state").path_for(
+        "longport-paper", "main"
+    )
     _write_json(state_path, {"broker_name": "longport-paper", "account_label": "main"})
     _write_json(
         tmp_path / "outputs" / "evidence" / "smoke.json",
@@ -323,8 +323,7 @@ def test_render_evidence_bundle_result_reports_skipped_trace_summary(
     rendered = render_evidence_bundle_result(result)
 
     assert (
-        "- Trace summary: 0 trace(s) / 0 ref(s) / 0 warning(s) "
-        "[skipped_not_applicable]"
+        "- Trace summary: 0 trace(s) / 0 ref(s) / 0 warning(s) [skipped_not_applicable]"
     ) in rendered
     assert "- Trace warnings:" not in rendered
 

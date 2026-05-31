@@ -58,8 +58,7 @@ def _quote_market_data_health(
     missing_depth = [
         symbol
         for symbol, quote in quotes.items()
-        if getattr(quote, "bid", None) in (None, 0)
-        or getattr(quote, "ask", None) in (None, 0)
+        if getattr(quote, "bid", None) in (None, 0) or getattr(quote, "ask", None) in (None, 0)
     ]
     missing_volume = [
         symbol
@@ -122,10 +121,7 @@ def _risk_market_data_check(
         return PreflightCheck(
             name="risk_market_data_gates",
             outcome="PASS",
-            message=(
-                "configured market-data-dependent risk gates have required "
-                "quote fields"
-            ),
+            message=("configured market-data-dependent risk gates have required quote fields"),
             details=details,
         )
 
@@ -153,9 +149,7 @@ def run_preflight_checks(
     selected_broker = resolve_broker_name(broker_name)
     env_name = "paper" if is_paper_broker(selected_broker) else "real"
     requested_symbols = [
-        str(symbol).strip()
-        for symbol in (symbols or ["AAPL"])
-        if str(symbol).strip()
+        str(symbol).strip() for symbol in (symbols or ["AAPL"]) if str(symbol).strip()
     ]
     checks: list[PreflightCheck] = []
 
@@ -204,12 +198,7 @@ def run_preflight_checks(
             name="manual_kill_switch",
             outcome="FAIL" if manual_kill_active else "PASS",
             message=manual_kill_reason or "manual kill switch not active",
-            details={
-                "env_var": (
-                    get_kill_switch_config().get("env_var")
-                    or "QEXEC_KILL_SWITCH"
-                )
-            },
+            details={"env_var": (get_kill_switch_config().get("env_var") or "QEXEC_KILL_SWITCH")},
         )
     )
 
@@ -243,12 +232,9 @@ def run_preflight_checks(
             )
 
         state = ExecutionStateStore().load(selected_broker, resolved_account.label)
-        state_kill_message = (
-            state.kill_switch_reason
-            or (
-                "local execution state kill switch active with "
-                f"{state.consecutive_failures} consecutive failures"
-            )
+        state_kill_message = state.kill_switch_reason or (
+            "local execution state kill switch active with "
+            f"{state.consecutive_failures} consecutive failures"
         )
         checks.append(
             PreflightCheck(

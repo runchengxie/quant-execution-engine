@@ -12,7 +12,13 @@ def make_snapshot(
     positions: list[tuple[str, int, float]],
 ) -> AccountSnapshot:
     rendered_positions = [
-        Position(symbol=symbol, quantity=quantity, last_price=price, estimated_value=quantity * price, env="real")
+        Position(
+            symbol=symbol,
+            quantity=quantity,
+            last_price=price,
+            estimated_value=quantity * price,
+            env="real",
+        )
         for symbol, quantity, price in positions
     ]
     return AccountSnapshot(env="real", cash_usd=cash, positions=rendered_positions)
@@ -161,7 +167,9 @@ class TestAccountParameterValidation:
 def test_run_account_uses_paper_env_for_alpaca() -> None:
     snapshot = make_snapshot(1000.0, [])
 
-    with patch("quant_execution_engine.cli.get_account_snapshot", return_value=snapshot) as mock_get:
+    with patch(
+        "quant_execution_engine.cli.get_account_snapshot", return_value=snapshot
+    ) as mock_get:
         result = cli.run_account(broker="alpaca-paper")
 
     assert result.exit_code == 0

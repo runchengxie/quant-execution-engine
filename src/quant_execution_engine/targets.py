@@ -80,8 +80,7 @@ class TargetEntry:
         has_quantity = self.target_quantity is not None
         if has_weight == has_quantity:
             raise ValueError(
-                "each target entry must define exactly one of "
-                "target_weight or target_quantity"
+                "each target entry must define exactly one of target_weight or target_quantity"
             )
 
         if self.target_weight is not None:
@@ -241,9 +240,7 @@ def write_targets_json(
     """
 
     if targets is not None:
-        entries = [
-            _entry_from_obj(target, default_market=default_market) for target in targets
-        ]
+        entries = [_entry_from_obj(target, default_market=default_market) for target in targets]
     else:
         entries = _entries_from_ticker_list(
             list(tickers or []),
@@ -260,9 +257,7 @@ def write_targets_json(
     }
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    out_path.write_text(
-        json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8"
-    )
+    out_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
     return out_path
 
 

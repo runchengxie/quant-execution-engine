@@ -121,7 +121,7 @@ def test_resolve_longport_real_credentials_requires_real_token(
 ) -> None:
     user_env = tmp_path / "longport-live.env"
     user_env.write_text(
-        '\n'.join(
+        "\n".join(
             [
                 'LONGPORT_APP_KEY="real_app_key"',
                 'LONGPORT_APP_SECRET="real_app_secret"',
@@ -169,9 +169,7 @@ def test_probe_longport_paper_credentials_can_fall_back_to_user_env(
     assert probe.app_secret == "user_app_secret"
     assert probe.access_token == "user_paper_token"
     assert probe.app_key_source == f"user-private {user_env} (LONGPORT_APP_KEY)"
-    assert probe.access_token_source == (
-        f"user-private {user_env} (LONGPORT_ACCESS_TOKEN_TEST)"
-    )
+    assert probe.access_token_source == (f"user-private {user_env} (LONGPORT_ACCESS_TOKEN_TEST)")
 
 
 def test_resolve_longport_paper_runtime_prefers_repo_over_process_env(

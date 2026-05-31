@@ -72,9 +72,7 @@ def _code_path_state(broker_name: str) -> str:
     capabilities = get_broker_capabilities(broker_name)
     notes = getattr(capabilities, "notes", {}) or {}
     submit_mode = str(notes.get("submit_mode") or "").lower()
-    supports_broker_submit = (
-        capabilities.supports_live_submit or submit_mode == "paper"
-    )
+    supports_broker_submit = capabilities.supports_live_submit or submit_mode == "paper"
     required = (
         supports_broker_submit,
         capabilities.supports_cancel,
@@ -92,9 +90,8 @@ def build_broker_evidence_maturity_report(
     root = project_root or PROJECT_ROOT
     longport_real_evidence = _latest_evidence_path(root, "longport")
     longport_paper_evidence = _latest_evidence_path(root, "longport-paper")
-    alpaca_evidence = (
-        _latest_evidence_path(root, "alpaca-paper")
-        or _latest_evidence_path(root, "alpaca")
+    alpaca_evidence = _latest_evidence_path(root, "alpaca-paper") or _latest_evidence_path(
+        root, "alpaca"
     )
     ibkr_evidence = _latest_evidence_path(root, "ibkr-paper")
 
@@ -105,9 +102,7 @@ def build_broker_evidence_maturity_report(
             code_path_state=_code_path_state("longport"),
             evidence_state="supervised-incomplete",
             latest_evidence_path=longport_real_evidence,
-            missing_evidence=[
-                "minimal supervised live submit/query/cancel/reconcile evidence"
-            ],
+            missing_evidence=["minimal supervised live submit/query/cancel/reconcile evidence"],
             recommended_next_smoke=(
                 "Run a supervised LongPort real minimal `rebalance --execute` smoke "
                 "with audit log, evidence JSON, and operator note."
@@ -124,19 +119,14 @@ def build_broker_evidence_maturity_report(
             code_path_state=_code_path_state("longport-paper"),
             evidence_state="complete" if longport_paper_evidence else "missing",
             latest_evidence_path=longport_paper_evidence,
-            missing_evidence=(
-                [] if longport_paper_evidence else ["paper smoke evidence JSON"]
-            ),
+            missing_evidence=([] if longport_paper_evidence else ["paper smoke evidence JSON"]),
             recommended_next_smoke=None
             if longport_paper_evidence
             else (
                 "Run `smoke_operator_harness.py --broker longport-paper "
                 "--execute --evidence-output ...`."
             ),
-            notes=[
-                "Paper backend is the strongest LongPort broker-order "
-                "evidence path."
-            ],
+            notes=["Paper backend is the strongest LongPort broker-order evidence path."],
         ),
         BrokerEvidenceMaturity(
             broker_name="alpaca-paper",
@@ -145,9 +135,7 @@ def build_broker_evidence_maturity_report(
             evidence_state="baseline" if alpaca_evidence else "missing",
             latest_evidence_path=alpaca_evidence,
             missing_evidence=(
-                []
-                if alpaca_evidence
-                else ["repeatable Alpaca paper smoke evidence JSON"]
+                [] if alpaca_evidence else ["repeatable Alpaca paper smoke evidence JSON"]
             ),
             recommended_next_smoke=None
             if alpaca_evidence
@@ -163,9 +151,7 @@ def build_broker_evidence_maturity_report(
             code_path_state=_code_path_state("ibkr-paper"),
             evidence_state="incomplete",
             latest_evidence_path=ibkr_evidence,
-            missing_evidence=[
-                "effective-market-data broker submit/query/cancel or fill evidence"
-            ],
+            missing_evidence=["effective-market-data broker submit/query/cancel or fill evidence"],
             recommended_next_smoke=(
                 "Run an IBKR paper smoke with valid market data that captures "
                 "submit/query/cancel or fill evidence."

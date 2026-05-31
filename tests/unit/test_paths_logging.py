@@ -58,7 +58,9 @@ def test_setup_logging_honors_custom_level() -> None:
         assert handler.level == logging.DEBUG
 
 
-def test_strategy_logger_falls_back_to_print(capsys: pytest.CaptureFixture[str]) -> None:
+def test_strategy_logger_falls_back_to_print(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
     logger = StrategyLogger(use_logging=False)
 
     logger.info("hello")

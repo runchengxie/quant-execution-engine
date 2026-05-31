@@ -86,9 +86,7 @@ class BrokerOrderRequest:
             raise ValueError(f"unsupported order side: {self.side}")
         if self.order_type not in {"MARKET", "LIMIT"}:
             raise ValueError(f"unsupported order type: {self.order_type}")
-        if self.order_type == "LIMIT" and (
-            self.limit_price is None or self.limit_price <= 0
-        ):
+        if self.order_type == "LIMIT" and (self.limit_price is None or self.limit_price <= 0):
             raise ValueError("limit orders require a positive limit_price")
 
 
@@ -165,9 +163,7 @@ class BrokerAdapter:
             f"{self.backend_name} does not implement account snapshots"
         )
 
-    def get_quotes(
-        self, symbols: list[str], *, include_depth: bool = False
-    ) -> dict[str, Quote]:
+    def get_quotes(self, symbols: list[str], *, include_depth: bool = False) -> dict[str, Quote]:
         raise UnsupportedBrokerOperationError(
             f"{self.backend_name} does not implement quote retrieval"
         )
@@ -185,9 +181,7 @@ class BrokerAdapter:
         broker_order_id: str,
         account: ResolvedBrokerAccount | None = None,
     ) -> BrokerOrderRecord:
-        raise UnsupportedBrokerOperationError(
-            f"{self.backend_name} does not support order lookup"
-        )
+        raise UnsupportedBrokerOperationError(f"{self.backend_name} does not support order lookup")
 
     def list_open_orders(
         self,

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from types import ModuleType
 from typing import Any
 
 from .logging import get_logger
@@ -9,10 +10,11 @@ from .paths import PROJECT_ROOT
 
 logger = get_logger(__name__)
 
+yaml_module: ModuleType | None
 try:
-    import yaml
+    import yaml as yaml_module
 except ImportError:
-    yaml = None
+    yaml_module = None
 
 
 def load_cfg() -> dict[str, Any]:
@@ -26,14 +28,14 @@ def load_cfg() -> dict[str, Any]:
     if config_path is None:
         return {}
 
-    if yaml is None:
+    if yaml_module is None:
         raise ImportError(
             "PyYAML is required to read config.yaml. Install it with: pip install PyYAML"
         )
 
     try:
         with open(config_path, encoding="utf-8") as fh:
-            data = yaml.safe_load(fh) or {}
+            data = yaml_module.safe_load(fh) or {}
         return data if isinstance(data, dict) else {}
     except Exception as exc:
         logger.warning("Failed to load config.yaml: %s. Using empty configuration.", exc)

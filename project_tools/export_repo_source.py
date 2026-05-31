@@ -132,11 +132,7 @@ def process_notebook(filepath: Path) -> str | None:
             source_list = cell.get("source", [])
 
             # Ensure 'source' is a single string
-            source = (
-                "".join(source_list)
-                if isinstance(source_list, list)
-                else str(source_list)
-            )
+            source = "".join(source_list) if isinstance(source_list, list) else str(source_list)
 
             if not source.strip():
                 continue
@@ -248,14 +244,11 @@ def collect_project_tree_lines(
             child_prefix = prefix + ("    " if is_last else "|   ")
 
             if child.is_dir():
-                reason = get_directory_exclude_reason(
-                    child.name, current_path, project_root
-                )
+                reason = get_directory_exclude_reason(child.name, current_path, project_root)
                 if reason:
                     stats["excluded_directories"] += 1
                     lines.append(
-                        f"{prefix}{connector}[exclude] {child.name}/ "
-                        f"({reason}; subtree omitted)"
+                        f"{prefix}{connector}[exclude] {child.name}/ ({reason}; subtree omitted)"
                     )
                     continue
 
@@ -288,9 +281,7 @@ def collect_file_tree(
 
     for dirpath, dirnames, filenames in os.walk(project_root, topdown=True):
         current_path = Path(dirpath)
-        dirnames[:] = filter_walk_directories(
-            list(dirnames), current_path, project_root
-        )
+        dirnames[:] = filter_walk_directories(list(dirnames), current_path, project_root)
 
         for filename in sorted(filenames):
             if filename in exclude_files:
@@ -357,18 +348,14 @@ def combine_project_files(  # noqa: C901 - high complexity due to multiple neste
 
             for dirpath, dirnames, filenames in os.walk(project_root, topdown=True):
                 current_path = Path(dirpath)
-                dirnames[:] = filter_walk_directories(
-                    list(dirnames), current_path, project_root
-                )
+                dirnames[:] = filter_walk_directories(list(dirnames), current_path, project_root)
 
                 # --- FILE PROCESSING LOGIC ---
                 for filename in sorted(filenames):
                     filepath = current_path / filename
                     relative_path_str = filepath.relative_to(project_root).as_posix()
                     content: str | None = None
-                    include_in_archive, reason = get_archive_file_status(
-                        filepath, exclude_files
-                    )
+                    include_in_archive, reason = get_archive_file_status(filepath, exclude_files)
 
                     if not include_in_archive:
                         logging.info(
@@ -382,18 +369,12 @@ def combine_project_files(  # noqa: C901 - high complexity due to multiple neste
                     try:
                         # Step 1: Specifically handle Jupyter Notebooks.
                         if filepath.suffix.lower() == ".ipynb":
-                            logging.info(
-                                "  + Processing Notebook: %s", relative_path_str
-                            )
+                            logging.info("  + Processing Notebook: %s", relative_path_str)
                             content = process_notebook(filepath)
                         # Step 2: Handle general text files.
                         elif is_likely_text_file(filepath):
-                            logging.info(
-                                "  + Processing Text File: %s", relative_path_str
-                            )
-                            with open(
-                                filepath, encoding="utf-8", errors="replace"
-                            ) as infile:
+                            logging.info("  + Processing Text File: %s", relative_path_str)
+                            with open(filepath, encoding="utf-8", errors="replace") as infile:
                                 content = infile.read()
                         # Step 3: The inclusion classifier should have filtered
                         # everything else already, but keep a safe fallback.
@@ -413,21 +394,15 @@ def combine_project_files(  # noqa: C901 - high complexity due to multiple neste
                             files_processed_count += 1
                         else:
                             files_skipped_count += 1
-                            logging.info(
-                                "    No content extracted from %s", relative_path_str
-                            )
+                            logging.info("    No content extracted from %s", relative_path_str)
 
                     except Exception as e:
                         files_skipped_count += 1
-                        logging.error(
-                            "Could not read file %s: %s", relative_path_str, e
-                        )
+                        logging.error("Could not read file %s: %s", relative_path_str, e)
 
         logging.info("\n--- Summary ---")
         logging.info("Successfully processed %d files.", files_processed_count)
-        logging.info(
-            "Skipped %d binary, excluded, or unreadable files.", files_skipped_count
-        )
+        logging.info("Skipped %d binary, excluded, or unreadable files.", files_skipped_count)
         logging.info("Combined output saved to: %s", output_filepath)
 
     except OSError as e:

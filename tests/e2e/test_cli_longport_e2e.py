@@ -14,9 +14,7 @@ def _cli_env() -> dict[str, str]:
     env = os.environ.copy()
     src_path = str(Path.cwd() / "src")
     existing = env.get("PYTHONPATH")
-    env["PYTHONPATH"] = (
-        src_path if not existing else f"{src_path}{os.pathsep}{existing}"
-    )
+    env["PYTHONPATH"] = src_path if not existing else f"{src_path}{os.pathsep}{existing}"
     return env
 
 
@@ -154,7 +152,13 @@ def test_cli_quote_without_credentials() -> None:
 @pytest.mark.e2e
 def test_cli_rebalance_file_not_found() -> None:
     result = subprocess.run(
-        [sys.executable, "-m", "quant_execution_engine.cli", "rebalance", "missing.json"],
+        [
+            sys.executable,
+            "-m",
+            "quant_execution_engine.cli",
+            "rebalance",
+            "missing.json",
+        ],
         capture_output=True,
         text=True,
         cwd=Path.cwd(),
@@ -171,7 +175,13 @@ def test_cli_rebalance_rejects_legacy_workbook(tmp_path: Path) -> None:
     legacy_file.write_text("legacy workbook placeholder", encoding="utf-8")
 
     result = subprocess.run(
-        [sys.executable, "-m", "quant_execution_engine.cli", "rebalance", str(legacy_file)],
+        [
+            sys.executable,
+            "-m",
+            "quant_execution_engine.cli",
+            "rebalance",
+            str(legacy_file),
+        ],
         capture_output=True,
         text=True,
         cwd=Path.cwd(),
@@ -220,7 +230,11 @@ def test_cli_quote_with_credentials() -> None:
 @pytest.mark.e2e
 def test_cli_module_can_be_imported() -> None:
     result = subprocess.run(
-        [sys.executable, "-c", "import quant_execution_engine.cli; print('Import successful')"],
+        [
+            sys.executable,
+            "-c",
+            "import quant_execution_engine.cli; print('Import successful')",
+        ],
         capture_output=True,
         text=True,
         cwd=Path.cwd(),
@@ -237,7 +251,8 @@ def test_cli_app_entry_point_function() -> None:
         [
             sys.executable,
             "-c",
-            "from quant_execution_engine.cli import app; import sys; sys.argv=['test', '--help']; app()",
+            "from quant_execution_engine.cli import app; "
+            "import sys; sys.argv=['test', '--help']; app()",
         ],
         capture_output=True,
         text=True,

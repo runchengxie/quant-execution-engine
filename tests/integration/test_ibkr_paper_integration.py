@@ -8,8 +8,8 @@ pytestmark = [pytest.mark.integration, pytest.mark.requires_api]
 
 pytest.importorskip("ib_insync")
 
-from quant_execution_engine.broker.base import BrokerOrderRequest
-from quant_execution_engine.broker.ibkr import IbkrPaperBrokerAdapter
+from quant_execution_engine.broker.base import BrokerOrderRequest  # noqa: E402
+from quant_execution_engine.broker.ibkr import IbkrPaperBrokerAdapter  # noqa: E402
 
 
 def _integration_enabled() -> bool:

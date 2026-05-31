@@ -19,7 +19,11 @@ def _ibkr_import(path: str):
         module = importlib.import_module(module_name)
     except ImportError as exc:  # pragma: no cover - depends on optional package
         missing = getattr(exc, "name", None)
-        if missing and missing not in {module_name, module_name.split(".")[0], "ib_insync"}:
+        if missing and missing not in {
+            module_name,
+            module_name.split(".")[0],
+            "ib_insync",
+        }:
             raise BrokerImportError(
                 "ib_insync import failed because dependency "
                 f"'{missing}' is missing. Install/update it with: uv sync --extra ibkr"
@@ -80,9 +84,7 @@ def resolve_ibkr_runtime_config() -> IbkrRuntimeConfig:
     port, port_source = _int_env(("IBKR_PORT", "IBKR_PORT_PAPER"), default=4002)
     client_id, client_id_source = _int_env(("IBKR_CLIENT_ID",), default=1)
     account_id, account_id_source = _env_value(("IBKR_ACCOUNT_ID",), None)
-    timeout, timeout_source = _float_env(
-        ("IBKR_CONNECT_TIMEOUT_SECONDS",), default=5.0
-    )
+    timeout, timeout_source = _float_env(("IBKR_CONNECT_TIMEOUT_SECONDS",), default=5.0)
     return IbkrRuntimeConfig(
         host=str(host or "127.0.0.1"),
         port=port,
@@ -247,8 +249,7 @@ class IbkrRuntime:
             raise BrokerValidationError(f"invalid symbol: {symbol}")
         if suffix != "US":
             raise BrokerValidationError(
-                "ibkr-paper only supports US equities in the initial slice: "
-                f"{cleaned}"
+                f"ibkr-paper only supports US equities in the initial slice: {cleaned}"
             )
         return f"{base}.US"
 
@@ -293,9 +294,7 @@ class IbkrRuntime:
             if callable(market_data_type):
                 market_data_type(3)
                 delayed_tickers = list(ib.reqTickers(*contracts) or [])
-                if any(
-                    _ticker_has_valid_price(ticker) for ticker in delayed_tickers
-                ):
+                if any(_ticker_has_valid_price(ticker) for ticker in delayed_tickers):
                     tickers = delayed_tickers
         results: dict[str, Any] = {}
         for (canonical, _contract), ticker in zip(resolved, tickers, strict=False):
@@ -334,9 +333,7 @@ class IbkrRuntime:
     ) -> Any:
         quantity = float(request.quantity)
         if float(int(quantity)) != quantity:
-            raise BrokerValidationError(
-                "ibkr-paper currently only supports whole-share quantities"
-            )
+            raise BrokerValidationError("ibkr-paper currently only supports whole-share quantities")
         qty = int(quantity)
         if request.order_type == "LIMIT":
             LimitOrder = _ibkr_import("ib_insync.LimitOrder")

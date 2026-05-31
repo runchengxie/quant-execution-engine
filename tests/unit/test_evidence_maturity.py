@@ -34,17 +34,11 @@ def test_build_broker_evidence_maturity_report_uses_local_evidence(
             supports_cancel=True,
             supports_order_query=True,
             supports_reconcile=True,
-            notes=(
-                {"submit_mode": "paper"}
-                if broker_name == "longport-paper"
-                else {}
-            ),
+            notes=({"submit_mode": "paper"} if broker_name == "longport-paper" else {}),
         ),
     )
 
-    records = evidence_maturity.build_broker_evidence_maturity_report(
-        project_root=tmp_path
-    )
+    records = evidence_maturity.build_broker_evidence_maturity_report(project_root=tmp_path)
 
     by_broker = {record.broker_name: record for record in records}
     assert by_broker["longport"].evidence_state == "supervised-incomplete"

@@ -54,9 +54,7 @@ class FakeAdapter(BrokerAdapter):
         label = account_label or "main"
         return ResolvedBrokerAccount(label=label)
 
-    def get_quotes(
-        self, symbols: list[str], *, include_depth: bool = False
-    ) -> dict[str, Quote]:
+    def get_quotes(self, symbols: list[str], *, include_depth: bool = False) -> dict[str, Quote]:
         return {
             symbol: Quote(
                 symbol=symbol,
@@ -236,7 +234,9 @@ def test_idempotent_submission_reuses_existing_open_order(tmp_path: Path) -> Non
     assert adapter.submit_calls == 1
 
 
-def test_market_order_intent_ignores_preview_price_for_idempotency(tmp_path: Path) -> None:
+def test_market_order_intent_ignores_preview_price_for_idempotency(
+    tmp_path: Path,
+) -> None:
     adapter = FakeAdapter()
     store = ExecutionStateStore(root_dir=tmp_path)
     service = OrderLifecycleService(
@@ -253,11 +253,27 @@ def test_market_order_intent_ignores_preview_price_for_idempotency(tmp_path: Pat
     }
 
     first = service.execute_orders(
-        [Order(symbol="AAPL.US", quantity=10, side="BUY", price=10.0, order_type="MARKET")],
+        [
+            Order(
+                symbol="AAPL.US",
+                quantity=10,
+                side="BUY",
+                price=10.0,
+                order_type="MARKET",
+            )
+        ],
         **base_kwargs,
     )
     second = service.execute_orders(
-        [Order(symbol="AAPL.US", quantity=10, side="BUY", price=10.5, order_type="MARKET")],
+        [
+            Order(
+                symbol="AAPL.US",
+                quantity=10,
+                side="BUY",
+                price=10.5,
+                order_type="MARKET",
+            )
+        ],
         **base_kwargs,
     )
     state = store.load("fake", "main")
@@ -392,7 +408,9 @@ def test_get_tracked_order_returns_lifecycle_details(tmp_path: Path) -> None:
     assert tracked.broker_order.broker_order_id == result.broker_order_id
 
 
-def test_cancel_all_open_orders_only_targets_tracked_open_orders(tmp_path: Path) -> None:
+def test_cancel_all_open_orders_only_targets_tracked_open_orders(
+    tmp_path: Path,
+) -> None:
     adapter = FakeAdapter()
     store = ExecutionStateStore(root_dir=tmp_path)
     service = OrderLifecycleService(
@@ -490,7 +508,15 @@ def test_reprice_open_limit_order_creates_new_attempt(tmp_path: Path) -> None:
     }
 
     original = service.execute_orders(
-        [Order(symbol="AAPL.US", quantity=10, side="BUY", price=10.0, order_type="LIMIT")],
+        [
+            Order(
+                symbol="AAPL.US",
+                quantity=10,
+                side="BUY",
+                price=10.0,
+                order_type="LIMIT",
+            )
+        ],
         **base_kwargs,
     )[0]
 
@@ -561,7 +587,15 @@ def test_render_tracked_order_detail_includes_target_context_and_reprice_metadat
     }
 
     original = service.execute_orders(
-        [Order(symbol="AAPL.US", quantity=10, side="BUY", price=10.0, order_type="LIMIT")],
+        [
+            Order(
+                symbol="AAPL.US",
+                quantity=10,
+                side="BUY",
+                price=10.0,
+                order_type="LIMIT",
+            )
+        ],
         **base_kwargs,
     )[0]
     repriced = service.reprice_order(
@@ -584,7 +618,9 @@ def test_render_tracked_order_detail_includes_target_context_and_reprice_metadat
     assert "Last Reprice From Limit: 10.0" in rendered
 
 
-def test_get_order_trace_merges_local_attempts_and_broker_history(tmp_path: Path) -> None:
+def test_get_order_trace_merges_local_attempts_and_broker_history(
+    tmp_path: Path,
+) -> None:
     adapter = HistoryAdapter()
     store = ExecutionStateStore(root_dir=tmp_path)
     service = OrderLifecycleService(
@@ -601,7 +637,15 @@ def test_get_order_trace_merges_local_attempts_and_broker_history(tmp_path: Path
     }
 
     original = service.execute_orders(
-        [Order(symbol="AAPL.US", quantity=10, side="BUY", price=10.0, order_type="LIMIT")],
+        [
+            Order(
+                symbol="AAPL.US",
+                quantity=10,
+                side="BUY",
+                price=10.0,
+                order_type="LIMIT",
+            )
+        ],
         **base_kwargs,
     )[0]
     original_order_id = str(original.broker_order_id)
@@ -651,7 +695,10 @@ def test_get_order_trace_merges_local_attempts_and_broker_history(tmp_path: Path
         original_order_id,
         new_order_id,
     }
-    assert {fill.fill_id for fill in trace.broker_history_fills} == {"fill-old", "fill-new"}
+    assert {fill.fill_id for fill in trace.broker_history_fills} == {
+        "fill-old",
+        "fill-new",
+    }
     assert trace.warnings == []
 
     rendered = render_order_trace(trace)
@@ -683,7 +730,9 @@ def test_get_order_trace_reports_unavailable_broker_history(tmp_path: Path) -> N
 
     trace = service.get_order_trace(account_label="main", order_ref=str(result.broker_order_id))
 
-    assert any("does not support broker-side order history" in warning for warning in trace.warnings)
+    assert any(
+        "does not support broker-side order history" in warning for warning in trace.warnings
+    )
     assert any("does not support broker-side fill history" in warning for warning in trace.warnings)
 
 
@@ -953,7 +1002,9 @@ def test_accept_partial_fill_marks_parent_complete_locally(tmp_path: Path) -> No
     assert refreshed.parent_orders[0].metadata["manual_resolution"] == "accepted_partial"
 
 
-def test_state_doctor_reports_duplicate_fill_and_orphan_broker_order(tmp_path: Path) -> None:
+def test_state_doctor_reports_duplicate_fill_and_orphan_broker_order(
+    tmp_path: Path,
+) -> None:
     store = ExecutionStateStore(root_dir=tmp_path)
     state = ExecutionState(broker_name="fake", account_label="main")
     state.broker_orders = [
@@ -1195,7 +1246,9 @@ def test_state_repair_recomputes_parent_aggregates(tmp_path: Path) -> None:
     assert refreshed.parent_orders[0].status == "PARTIALLY_FILLED"
 
 
-def test_list_exception_orders_includes_local_blocked_and_failed(tmp_path: Path) -> None:
+def test_list_exception_orders_includes_local_blocked_and_failed(
+    tmp_path: Path,
+) -> None:
     store = ExecutionStateStore(root_dir=tmp_path)
     blocked_service = OrderLifecycleService(
         FakeAdapter(),
@@ -1358,7 +1411,9 @@ class PendingCancelRefreshAdapter(FakeAdapter):
         return super().get_order(broker_order_id, account)
 
 
-def test_manual_reconcile_recovers_fill_for_closed_tracked_order(tmp_path: Path) -> None:
+def test_manual_reconcile_recovers_fill_for_closed_tracked_order(
+    tmp_path: Path,
+) -> None:
     adapter = ClosedFillAdapter()
     store = ExecutionStateStore(root_dir=tmp_path)
     service = OrderLifecycleService(
@@ -1487,7 +1542,15 @@ def test_cancel_order_records_pending_cancel_when_refresh_fails(tmp_path: Path) 
     )
 
     result = service.execute_orders(
-        [Order(symbol="AAPL.US", quantity=10, side="BUY", price=10.0, order_type="LIMIT")],
+        [
+            Order(
+                symbol="AAPL.US",
+                quantity=10,
+                side="BUY",
+                price=10.0,
+                order_type="LIMIT",
+            )
+        ],
         account_label="main",
         dry_run=False,
         target_source="unit",
@@ -1519,7 +1582,15 @@ def test_reprice_rejects_pending_cancel_order(tmp_path: Path) -> None:
     )
 
     result = service.execute_orders(
-        [Order(symbol="AAPL.US", quantity=10, side="BUY", price=10.0, order_type="LIMIT")],
+        [
+            Order(
+                symbol="AAPL.US",
+                quantity=10,
+                side="BUY",
+                price=10.0,
+                order_type="LIMIT",
+            )
+        ],
         account_label="main",
         dry_run=False,
         target_source="unit",

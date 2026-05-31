@@ -6,9 +6,7 @@ import argparse
 
 _BROKER_HELP = "Broker backend override, e.g. longport or alpaca-paper"
 _ACCOUNT_HELP = "Broker account/profile label. Unsupported labels fail fast."
-_ORDER_REF_HELP = (
-    "Tracked order reference: broker_order_id, client_order_id, or child_order_id"
-)
+_ORDER_REF_HELP = "Tracked order reference: broker_order_id, client_order_id, or child_order_id"
 
 
 def _add_broker_arg(parser: argparse.ArgumentParser) -> None:

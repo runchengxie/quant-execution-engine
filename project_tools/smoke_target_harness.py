@@ -41,7 +41,9 @@ def scenario_targets(scenario: str) -> list[dict[str, object]]:
 
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description="Write deterministic target-driven smoke scenarios and optionally run qexec rebalance.",
+        description=(
+            "Write deterministic target-driven smoke scenarios and optionally run qexec rebalance."
+        ),
     )
     parser.add_argument(
         "--scenario",

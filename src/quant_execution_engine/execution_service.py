@@ -116,13 +116,18 @@ class OrderLifecycleService(OrderLifecycleRecoveryMixin):
                     child,
                     reason=state.kill_switch_reason or "kill switch active",
                 )
-                self._mark_order_blocked(order, reason=state.kill_switch_reason or "kill switch active")
+                self._mark_order_blocked(
+                    order, reason=state.kill_switch_reason or "kill switch active"
+                )
                 executed_orders.append(order)
                 continue
 
             decisions = self.risk_chain.evaluate(order, quote=market_data.get(order.symbol))
             order.risk_decisions = [decision.to_payload() for decision in decisions]
-            blocked = next((decision for decision in decisions if decision.outcome == "BLOCK"), None)
+            blocked = next(
+                (decision for decision in decisions if decision.outcome == "BLOCK"),
+                None,
+            )
             if blocked is not None:
                 self._mark_tracked_order_blocked(parent, child, reason=blocked.reason)
                 self._mark_order_blocked(order, reason=blocked.reason)
@@ -192,7 +197,9 @@ class OrderLifecycleService(OrderLifecycleRecoveryMixin):
         before_orders = {
             broker_order.broker_order_id: broker_order for broker_order in state.broker_orders
         }
-        before_fill_counts = Counter(fill.broker_order_id for fill in state.fill_events if fill.broker_order_id)
+        before_fill_counts = Counter(
+            fill.broker_order_id for fill in state.fill_events if fill.broker_order_id
+        )
         before_fills = len(state.fill_events)
         report, refreshed_orders = self._fetch_and_merge_reconcile_report(state, account)
         changed_orders = build_reconcile_deltas(
@@ -226,7 +233,8 @@ class OrderLifecycleService(OrderLifecycleRecoveryMixin):
         target = find_tracked_broker_order(state, order_ref)
         if target is None:
             raise ValueError(
-                f"tracked order not found for ref '{order_ref}' in {self.adapter.backend_name}/{account.label}"
+                f"tracked order not found for ref '{order_ref}' in "
+                f"{self.adapter.backend_name}/{account.label}"
             )
         outcome = self._cancel_tracked_broker_order(
             state=state,
@@ -254,7 +262,11 @@ class OrderLifecycleService(OrderLifecycleRecoveryMixin):
                 for broker_order in state.broker_orders
                 if broker_order.status in OPEN_BROKER_STATUSES
             ),
-            key=lambda record: (record.updated_at, record.submitted_at, record.broker_order_id),
+            key=lambda record: (
+                record.updated_at,
+                record.submitted_at,
+                record.broker_order_id,
+            ),
             reverse=True,
         )
 
@@ -326,9 +338,7 @@ class OrderLifecycleService(OrderLifecycleRecoveryMixin):
             )
         elif parent is not None:
             fills.extend(
-                fill
-                for fill in state.fill_events
-                if fill.parent_order_id == parent.parent_order_id
+                fill for fill in state.fill_events if fill.parent_order_id == parent.parent_order_id
             )
         state_path = self.state_store.path_for(self.adapter.backend_name, account.label)
         return ExecutionTrackedOrder(
@@ -400,7 +410,11 @@ class OrderLifecycleService(OrderLifecycleRecoveryMixin):
                 for record in state.broker_orders
                 if record.broker_order_id in broker_order_ids
             ],
-            key=lambda record: (record.submitted_at, record.updated_at, record.broker_order_id),
+            key=lambda record: (
+                record.submitted_at,
+                record.updated_at,
+                record.broker_order_id,
+            ),
         )
 
         if parent is not None:
@@ -414,11 +428,7 @@ class OrderLifecycleService(OrderLifecycleRecoveryMixin):
             )
         else:
             fill_events = sorted(
-                [
-                    fill
-                    for fill in state.fill_events
-                    if fill.broker_order_id in broker_order_ids
-                ],
+                [fill for fill in state.fill_events if fill.broker_order_id in broker_order_ids],
                 key=lambda fill: (fill.filled_at, fill.fill_id),
             )
 
@@ -469,7 +479,9 @@ class OrderLifecycleService(OrderLifecycleRecoveryMixin):
 
         for parent in state.parent_orders:
             children = [
-                child for child in state.child_orders if child.parent_order_id == parent.parent_order_id
+                child
+                for child in state.child_orders
+                if child.parent_order_id == parent.parent_order_id
             ]
             if not children:
                 continue
@@ -491,10 +503,16 @@ class OrderLifecycleService(OrderLifecycleRecoveryMixin):
                     status=status,
                     parent_order_id=parent.parent_order_id,
                     child_order_id=latest_child.child_order_id,
-                    broker_order_id=broker_order.broker_order_id if broker_order is not None else None,
-                    client_order_id=broker_order.client_order_id if broker_order is not None else latest_child.client_order_id,
+                    broker_order_id=broker_order.broker_order_id
+                    if broker_order is not None
+                    else None,
+                    client_order_id=broker_order.client_order_id
+                    if broker_order is not None
+                    else latest_child.client_order_id,
                     source="broker" if broker_order is not None else "local",
-                    message=broker_order.message if broker_order is not None else latest_child.message,
+                    message=broker_order.message
+                    if broker_order is not None
+                    else latest_child.message,
                     filled_quantity=(
                         float(broker_order.filled_quantity or 0.0)
                         if broker_order is not None
@@ -568,20 +586,28 @@ class OrderLifecycleService(OrderLifecycleRecoveryMixin):
             )
 
         unique_orders: dict[str, BrokerOrderRecord] = {}
-        for record in broker_history_orders:
-            unique_orders[record.broker_order_id] = record
+        for order_record in broker_history_orders:
+            unique_orders[order_record.broker_order_id] = order_record
         unique_fills: dict[str, BrokerFillRecord] = {}
-        for record in broker_history_fills:
-            unique_fills[record.fill_id] = record
+        for fill_record in broker_history_fills:
+            unique_fills[fill_record.fill_id] = fill_record
 
         return (
             sorted(
                 unique_orders.values(),
-                key=lambda record: (record.submitted_at, record.updated_at, record.broker_order_id),
+                key=lambda record: (
+                    record.submitted_at,
+                    record.updated_at,
+                    record.broker_order_id,
+                ),
             ),
             sorted(
                 unique_fills.values(),
-                key=lambda record: (record.filled_at, record.broker_order_id, record.fill_id),
+                key=lambda record: (
+                    record.filled_at,
+                    record.broker_order_id,
+                    record.fill_id,
+                ),
             ),
             warnings,
         )

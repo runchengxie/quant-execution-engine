@@ -109,9 +109,7 @@ class SmokeWorkflowStepError(RuntimeError):
 
     def __init__(self, payload: dict[str, object]) -> None:
         self.payload = payload
-        super().__init__(
-            f"{payload['name']} failed with exit code {payload['exit_code']}"
-        )
+        super().__init__(f"{payload['name']} failed with exit code {payload['exit_code']}")
 
 
 def capture_broker_env(broker: str) -> dict[str, str | None]:
@@ -281,7 +279,11 @@ def latest_tracked_order_ref(
     allowed = None if not symbol_filter else {str(symbol_filter).strip().upper()}
     records = sorted(
         state.broker_orders,
-        key=lambda record: (record.updated_at, record.submitted_at, record.broker_order_id),
+        key=lambda record: (
+            record.updated_at,
+            record.submitted_at,
+            record.broker_order_id,
+        ),
         reverse=True,
     )
     for record in records:
@@ -302,9 +304,7 @@ def latest_operator_outcome(
     store = state_store or ExecutionStateStore()
     state = store.load(broker_name, account_label)
     allowed = None if not symbol_filter else {str(symbol_filter).strip().upper()}
-    normalized_target_input = (
-        None if target_input_path is None else str(target_input_path).strip()
-    )
+    normalized_target_input = None if target_input_path is None else str(target_input_path).strip()
 
     intents = [
         intent
@@ -334,9 +334,7 @@ def latest_operator_outcome(
         reverse=True,
     )[0]
     children = [
-        child
-        for child in state.child_orders
-        if child.parent_order_id == parent.parent_order_id
+        child for child in state.child_orders if child.parent_order_id == parent.parent_order_id
     ]
     child = (
         sorted(
@@ -496,9 +494,7 @@ def discover_audit_log(
     if not candidates:
         return None, None
 
-    normalized_target_input = (
-        None if target_input_path is None else str(target_input_path).strip()
-    )
+    normalized_target_input = None if target_input_path is None else str(target_input_path).strip()
     ranked: list[tuple[int, float, str, Path, dict[str, object] | None]] = []
     for path in candidates:
         summary = read_audit_summary(path)
@@ -629,29 +625,19 @@ def write_evidence(
             operator_outcome.get("category") if operator_outcome is not None else None
         ),
         "operator_next_step_hint": (
-            operator_outcome.get("next_step_hint")
-            if operator_outcome is not None
-            else None
+            operator_outcome.get("next_step_hint") if operator_outcome is not None else None
         ),
         "operator_outcome_parent_order_id": (
-            operator_outcome.get("parent_order_id")
-            if operator_outcome is not None
-            else None
+            operator_outcome.get("parent_order_id") if operator_outcome is not None else None
         ),
         "operator_outcome_child_order_id": (
-            operator_outcome.get("child_order_id")
-            if operator_outcome is not None
-            else None
+            operator_outcome.get("child_order_id") if operator_outcome is not None else None
         ),
         "operator_outcome_broker_order_id": (
-            operator_outcome.get("broker_order_id")
-            if operator_outcome is not None
-            else None
+            operator_outcome.get("broker_order_id") if operator_outcome is not None else None
         ),
         "operator_outcome_client_order_id": (
-            operator_outcome.get("client_order_id")
-            if operator_outcome is not None
-            else None
+            operator_outcome.get("client_order_id") if operator_outcome is not None else None
         ),
         "steps": steps,
     }
@@ -848,9 +834,7 @@ def run_operator_smoke_workflow(args: argparse.Namespace) -> int:
             print("\n== order ==\nNo tracked broker order found after rebalance")
             skip_reason = "no tracked order reference available after rebalance"
             if operator_outcome is not None and operator_outcome.get("status") == "BLOCKED":
-                skip_reason = (
-                    "latest tracked outcome is BLOCKED and has no broker order reference"
-                )
+                skip_reason = "latest tracked outcome is BLOCKED and has no broker order reference"
             append_skipped_step(
                 skipped_steps,
                 name="order",

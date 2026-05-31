@@ -109,7 +109,8 @@ class IbkrPaperBrokerAdapter(BrokerAdapter):
         label = str(account_label or "main").strip() or "main"
         if label != "main":
             raise BrokerValidationError(
-                f"{self.backend_name} does not support switching broker accounts via --account: {label}"
+                f"{self.backend_name} does not support switching broker accounts "
+                f"via --account: {label}"
             )
         broker_account_id = self.client.resolve_account_id()
         metadata = {"runtime": "IB Gateway via TWS API", "scope": "US equities only"}
@@ -196,9 +197,7 @@ class IbkrPaperBrokerAdapter(BrokerAdapter):
             base_currency=base_currency,
         )
 
-    def get_quotes(
-        self, symbols: list[str], *, include_depth: bool = False
-    ) -> dict[str, Quote]:
+    def get_quotes(self, symbols: list[str], *, include_depth: bool = False) -> dict[str, Quote]:
         tickers = self.client.request_tickers(symbols)
         results: dict[str, Quote] = {}
         for canonical, ticker in tickers.items():
@@ -213,9 +212,7 @@ class IbkrPaperBrokerAdapter(BrokerAdapter):
                 timestamp=coerce_iso(time_value),
                 bid=_as_float(getattr(ticker, "bid", None)) if include_depth else None,
                 ask=_as_float(getattr(ticker, "ask", None)) if include_depth else None,
-                daily_volume=_as_float(getattr(ticker, "volume", None))
-                if include_depth
-                else None,
+                daily_volume=_as_float(getattr(ticker, "volume", None)) if include_depth else None,
             )
         return results
 
@@ -383,8 +380,7 @@ class IbkrPaperBrokerAdapter(BrokerAdapter):
                     broker_name=self.backend_name,
                     account_label=resolved.label,
                     filled_at=_time_or_now(
-                        getattr(fill, "time", None)
-                        or getattr(execution, "time", None)
+                        getattr(fill, "time", None) or getattr(execution, "time", None)
                     ),
                     raw={
                         "exchange": str(getattr(execution, "exchange", "")).strip(),

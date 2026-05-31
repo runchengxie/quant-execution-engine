@@ -73,4 +73,3 @@ def test_diagnose_warning_message_classifies_network_failures() -> None:
 
     assert diagnostic.code == "BROKER_NETWORK_WARNING"
     assert "Retry" in str(diagnostic.action_hint)
-

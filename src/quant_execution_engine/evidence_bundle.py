@@ -7,7 +7,7 @@ import shutil
 from dataclasses import asdict, dataclass, field, is_dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from .broker import get_broker_adapter
 from .execution import OrderLifecycleService
@@ -72,11 +72,7 @@ class EvidenceBundleResult:
 
     @property
     def skipped_count(self) -> int:
-        return sum(
-            1
-            for artifact in self.artifacts
-            if artifact.status.startswith("skipped")
-        )
+        return sum(1 for artifact in self.artifacts if artifact.status.startswith("skipped"))
 
 
 def _outputs_dir(project_root: Path) -> Path:
@@ -152,9 +148,7 @@ def _find_run_audit(
         )
     if len(matches) > 1:
         paths = ", ".join(str(path) for path, _ in matches)
-        raise EvidenceBundleError(
-            f"run id matched multiple audit logs: {run_id}; {paths}"
-        )
+        raise EvidenceBundleError(f"run id matched multiple audit logs: {run_id}; {paths}")
     return matches[0][0], matches[0][1], sorted(set(candidates))
 
 
@@ -222,17 +216,10 @@ def _copy_artifact(
             artifact_type=artifact_type,
             status="skipped_sensitive",
             source_path=str(source_path),
-            reason=(
-                "credential or environment files are not copied into "
-                "evidence bundles"
-            ),
+            reason=("credential or environment files are not copied into evidence bundles"),
         )
     if not source_path.exists() or not source_path.is_file():
-        reason = (
-            "required artifact was missing"
-            if required
-            else "optional artifact was missing"
-        )
+        reason = "required artifact was missing" if required else "optional artifact was missing"
         return EvidenceArtifact(
             name=name,
             artifact_type=artifact_type,
@@ -259,7 +246,7 @@ def _copy_artifact(
 
 def _jsonable(value: Any) -> Any:
     if is_dataclass(value):
-        return {key: _jsonable(item) for key, item in asdict(value).items()}
+        return {key: _jsonable(item) for key, item in asdict(cast(Any, value)).items()}
     if isinstance(value, list):
         return [_jsonable(item) for item in value]
     if isinstance(value, dict):
@@ -317,9 +304,7 @@ def _summarize_order_trace(trace: ExecutionOrderTrace) -> dict[str, Any]:
         "parent_order_id": trace.parent.parent_order_id if trace.parent else None,
         "parent_status": trace.parent.status if trace.parent else None,
         "child_order_id": trace.child.child_order_id if trace.child else None,
-        "broker_order_id": (
-            trace.broker_order.broker_order_id if trace.broker_order else None
-        ),
+        "broker_order_id": (trace.broker_order.broker_order_id if trace.broker_order else None),
         "broker_status": trace.broker_order.status if trace.broker_order else None,
         "child_attempt_count": len(trace.child_orders),
         "tracked_broker_order_count": len(trace.tracked_broker_orders),
@@ -430,11 +415,7 @@ def _build_order_trace_artifact(
             "warnings": warnings,
             "traces": traces,
         }
-        reason = (
-            f"{len(warnings)} trace(s) could not be resolved"
-            if warnings
-            else None
-        )
+        reason = f"{len(warnings)} trace(s) could not be resolved" if warnings else None
         artifact = _write_generated_artifact(
             bundle_path=bundle_path,
             artifact_type="trace",
@@ -478,30 +459,22 @@ def create_evidence_bundle(
         raise EvidenceBundleError("run id is required")
     audit_log_path, audit_records, _ = _find_run_audit(root, normalized_run_id)
     matching_records = [
-        record
-        for record in audit_records
-        if str(record.get("run_id") or "") == normalized_run_id
+        record for record in audit_records if str(record.get("run_id") or "") == normalized_run_id
     ]
     summary = next(
-        (
-            record
-            for record in matching_records
-            if record.get("record_type") == "rebalance_summary"
-        ),
+        (record for record in matching_records if record.get("record_type") == "rebalance_summary"),
         matching_records[0],
     )
     broker_name = str(summary.get("broker_name") or "") or None
     account_label = str(summary.get("account_label") or "") or None
     target_input_path = (
-        str(summary.get("target_input_path"))
-        if summary.get("target_input_path")
-        else None
+        str(summary.get("target_input_path")) if summary.get("target_input_path") else None
     )
     state_path = None
     if broker_name and account_label:
-        state_path = ExecutionStateStore(
-            root_dir=_outputs_dir(root) / "state"
-        ).path_for(broker_name, account_label)
+        state_path = ExecutionStateStore(root_dir=_outputs_dir(root) / "state").path_for(
+            broker_name, account_label
+        )
     smoke_path = _find_smoke_evidence(
         root,
         run_id=normalized_run_id,
@@ -513,11 +486,7 @@ def create_evidence_bundle(
     bundle_path = bundle_root / normalized_run_id
     bundle_path.mkdir(parents=True, exist_ok=True)
     generated_at = created_at or datetime.now(timezone.utc).isoformat()
-    dry_run = (
-        bool(summary.get("dry_run"))
-        if summary.get("dry_run") is not None
-        else None
-    )
+    dry_run = bool(summary.get("dry_run")) if summary.get("dry_run") is not None else None
 
     trace_capture = _build_order_trace_artifact(
         project_root=root,
@@ -569,10 +538,7 @@ def create_evidence_bundle(
         except (OSError, json.JSONDecodeError):
             smoke_payload = {}
         if isinstance(smoke_payload, dict):
-            note_values.extend(
-                str(item)
-                for item in (smoke_payload.get("operator_notes") or [])
-            )
+            note_values.extend(str(item) for item in (smoke_payload.get("operator_notes") or []))
     if note_values:
         notes_path = bundle_path / "operator_notes.json"
         notes_payload = {"operator_notes": note_values}
@@ -633,9 +599,7 @@ def create_evidence_bundle(
 def render_evidence_bundle_result(result: EvidenceBundleResult) -> str:
     """Render an evidence bundle result for operator review."""
 
-    broker_account = (
-        f"{result.broker_name or '-'} / {result.account_label or '-'}"
-    )
+    broker_account = f"{result.broker_name or '-'} / {result.account_label or '-'}"
     trace_summary = result.trace_summary or {}
     trace_count = int(trace_summary.get("trace_count") or 0)
     trace_order_ref_count = int(trace_summary.get("trace_order_ref_count") or 0)

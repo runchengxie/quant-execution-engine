@@ -29,9 +29,7 @@ __all__ = [
 _DEFAULT_FMT = "[%(asctime)s] %(levelname)s %(name)s [run=%(run_id)s]: %(message)s"
 _DEFAULT_DATEFMT = "%Y-%m-%d %H:%M:%S"
 
-_RUN_ID: ContextVar[str | None] = ContextVar(
-    "quant_execution_engine_run_id", default=None
-)
+_RUN_ID: ContextVar[str | None] = ContextVar("quant_execution_engine_run_id", default=None)
 
 
 def get_run_id() -> str:

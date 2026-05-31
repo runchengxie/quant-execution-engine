@@ -12,9 +12,7 @@ pytestmark = pytest.mark.unit
 
 
 def make_snapshot() -> AccountSnapshot:
-    position = Position(
-        symbol="AAA.US", quantity=1, last_price=10.0, estimated_value=10.0
-    )
+    position = Position(symbol="AAA.US", quantity=1, last_price=10.0, estimated_value=10.0)
     return AccountSnapshot(env="test", cash_usd=100.0, positions=[position])
 
 
@@ -25,9 +23,7 @@ def test_fetch_quotes() -> None:
         patch("quant_execution_engine.rebalance.get_quotes") as mock_get,
         patch.object(RebalanceService, "_get_client", return_value=object()),
     ):
-        mock_get.return_value = {
-            "AAA.US": Quote(symbol="AAA.US", price=10.0, timestamp="")
-        }
+        mock_get.return_value = {"AAA.US": Quote(symbol="AAA.US", price=10.0, timestamp="")}
         quotes = service._fetch_quotes(["AAA"])
 
     assert quotes == {"AAA.US": 10.0}
@@ -35,9 +31,12 @@ def test_fetch_quotes() -> None:
 
 
 def test_coerce_lb_symbol_preserves_a_share_exchange_suffix() -> None:
-    assert RebalanceService._coerce_lb_symbol(
-        TargetEntry(symbol="600519.SH", market="CN", target_weight=1.0)
-    ) == "600519.SH.CN"
+    assert (
+        RebalanceService._coerce_lb_symbol(
+            TargetEntry(symbol="600519.SH", market="CN", target_weight=1.0)
+        )
+        == "600519.SH.CN"
+    )
     assert RebalanceService._coerce_lb_symbol("858.SZ") == "000858.SZ.CN"
     assert RebalanceService._coerce_lb_symbol("600000.XSHG") == "600000.SH.CN"
 
@@ -111,9 +110,7 @@ def test_plan_rebalance_honors_target_weights() -> None:
             quotes={"AAA.US": 10.0, "BBB.US": 10.0},
         )
 
-    target_map = {
-        position.symbol: position.quantity for position in result.target_positions
-    }
+    target_map = {position.symbol: position.quantity for position in result.target_positions}
     assert target_map["AAA.US"] == 2
     assert target_map["BBB.US"] == 8
 

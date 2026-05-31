@@ -6,7 +6,7 @@ import json
 import re
 from dataclasses import asdict, dataclass, field, is_dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from .broker.base import (
     BrokerFillRecord,
@@ -328,7 +328,7 @@ def _state_dir_from_config() -> Path:
 
 def _jsonable(obj: Any) -> Any:
     if is_dataclass(obj):
-        return {key: _jsonable(value) for key, value in asdict(obj).items()}
+        return {key: _jsonable(value) for key, value in asdict(cast(Any, obj)).items()}
     if isinstance(obj, list):
         return [_jsonable(item) for item in obj]
     if isinstance(obj, dict):

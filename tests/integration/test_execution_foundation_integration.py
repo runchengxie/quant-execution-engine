@@ -35,9 +35,7 @@ class IntegrationFakeAdapter(BrokerAdapter):
     def resolve_account(self, account_label: str | None = None) -> ResolvedBrokerAccount:
         return ResolvedBrokerAccount(label=account_label or "main")
 
-    def get_quotes(
-        self, symbols: list[str], *, include_depth: bool = False
-    ) -> dict[str, Quote]:
+    def get_quotes(self, symbols: list[str], *, include_depth: bool = False) -> dict[str, Quote]:
         return {
             symbol: Quote(
                 symbol=symbol,
@@ -77,9 +75,7 @@ class IntegrationFakeAdapter(BrokerAdapter):
         account: ResolvedBrokerAccount | None = None,
     ) -> list[BrokerOrderRecord]:
         return [
-            record
-            for record in self.orders.values()
-            if record.status not in {"CANCELED", "FILLED"}
+            record for record in self.orders.values() if record.status not in {"CANCELED", "FILLED"}
         ]
 
     def cancel_order(
@@ -117,7 +113,9 @@ def test_restart_recovery_reuses_open_order(tmp_path) -> None:
         state_store=store,
         risk_chain=RiskGateChain({}),
     )
-    service_a.execute_orders([Order(symbol="AAPL.US", quantity=10, side="BUY", price=10.0)], **kwargs)
+    service_a.execute_orders(
+        [Order(symbol="AAPL.US", quantity=10, side="BUY", price=10.0)], **kwargs
+    )
 
     service_b = OrderLifecycleService(
         adapter,

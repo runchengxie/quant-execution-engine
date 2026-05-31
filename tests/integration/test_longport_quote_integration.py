@@ -6,8 +6,8 @@ pytestmark = [pytest.mark.integration, pytest.mark.requires_api]
 
 pytest.importorskip("longport")
 
-from quant_execution_engine.broker.longport import LongPortClient, get_config
-from quant_execution_engine.broker.longport_credentials import (
+from quant_execution_engine.broker.longport import LongPortClient, get_config  # noqa: E402
+from quant_execution_engine.broker.longport_credentials import (  # noqa: E402
     probe_longport_credentials,
 )
 

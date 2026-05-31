@@ -7,14 +7,14 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from .broker.base import utc_now_iso
+from .broker.base import BrokerOrderRecord, utc_now_iso
 from .execution import (
     OPEN_BROKER_STATUSES,
     TERMINAL_BROKER_STATUSES,
     ExecutionState,
     ExecutionStateStore,
 )
-from .execution_state import ParentOrder
+from .execution_state import ChildOrder, OrderIntent, ParentOrder
 
 TERMINAL_PARENT_STATUSES = TERMINAL_BROKER_STATUSES | {
     "BLOCKED",
@@ -97,8 +97,8 @@ class _ExpectedParentAggregate:
 def _latest_child_status(
     *,
     parent: ParentOrder,
-    child_orders: list,
-    broker_orders_by_id: dict[str, object],
+    child_orders: list[ChildOrder],
+    broker_orders_by_id: dict[str, BrokerOrderRecord],
 ) -> str:
     latest_child = max(
         child_orders,
@@ -121,19 +121,21 @@ def _derive_parent_aggregate(
     *,
     state: ExecutionState,
     parent: ParentOrder,
-    child_orders: list,
-    broker_orders_by_id: dict[str, object],
+    child_orders: list[ChildOrder],
+    broker_orders_by_id: dict[str, BrokerOrderRecord],
 ) -> _ExpectedParentAggregate:
     child_broker_order_ids = {
         child.broker_order_id for child in child_orders if child.broker_order_id
     }
-    fill_quantity_by_broker_order = Counter()
+    fill_quantity_by_broker_order: dict[str, float] = {}
     unmatched_parent_fill_quantity = 0.0
     for fill in state.fill_events:
         if fill.parent_order_id != parent.parent_order_id:
             continue
         if fill.broker_order_id in child_broker_order_ids:
-            fill_quantity_by_broker_order[fill.broker_order_id] += float(fill.quantity or 0.0)
+            fill_quantity_by_broker_order[fill.broker_order_id] = fill_quantity_by_broker_order.get(
+                fill.broker_order_id, 0.0
+            ) + float(fill.quantity or 0.0)
         else:
             unmatched_parent_fill_quantity += float(fill.quantity or 0.0)
 
@@ -144,9 +146,7 @@ def _derive_parent_aggregate(
             broker_orders_by_id.get(child.broker_order_id) if child.broker_order_id else None
         )
         child_status = (
-            str(broker_order.status)
-            if broker_order is not None
-            else str(child.status or "")
+            str(broker_order.status) if broker_order is not None else str(child.status or "")
         ).upper()
         if child_status in OPEN_BROKER_STATUSES:
             has_open_child = True
@@ -199,14 +199,14 @@ def _parent_aggregate_mismatch(
 @dataclass(slots=True)
 class _StateIndexes:
     parents_by_id: dict[str, ParentOrder]
-    intents_by_id: dict[str, object]
-    child_records_by_parent: dict[str, list]
+    intents_by_id: dict[str, OrderIntent]
+    child_records_by_parent: dict[str, list[ChildOrder]]
     referenced_broker_order_ids: set[str]
-    broker_orders_by_id: dict[str, object]
+    broker_orders_by_id: dict[str, BrokerOrderRecord]
 
 
 def _build_state_indexes(state: ExecutionState) -> _StateIndexes:
-    child_records_by_parent: dict[str, list] = {}
+    child_records_by_parent: dict[str, list[ChildOrder]] = {}
     referenced_broker_order_ids: set[str] = set()
     for child in state.child_orders:
         child_records_by_parent.setdefault(child.parent_order_id, []).append(child)
@@ -218,8 +218,7 @@ def _build_state_indexes(state: ExecutionState) -> _StateIndexes:
         child_records_by_parent=child_records_by_parent,
         referenced_broker_order_ids=referenced_broker_order_ids,
         broker_orders_by_id={
-            broker_order.broker_order_id: broker_order
-            for broker_order in state.broker_orders
+            broker_order.broker_order_id: broker_order for broker_order in state.broker_orders
         },
     )
 
@@ -235,10 +234,7 @@ def _child_reference_issues(
                 StateDoctorIssue(
                     severity="ERROR",
                     code="ORPHAN_CHILD",
-                    message=(
-                        f"child {child.child_order_id} has no parent "
-                        f"{child.parent_order_id}"
-                    ),
+                    message=(f"child {child.child_order_id} has no parent {child.parent_order_id}"),
                 )
             )
         if child.broker_order_id and child.broker_order_id not in indexes.broker_orders_by_id:
@@ -359,8 +355,7 @@ def _parent_aggregate_issues(
         )
         if (
             abs(float(parent.filled_quantity or 0.0) - expected.filled_quantity) > 1e-9
-            or abs(float(parent.remaining_quantity or 0.0) - expected.remaining_quantity)
-            > 1e-9
+            or abs(float(parent.remaining_quantity or 0.0) - expected.remaining_quantity) > 1e-9
         ):
             issues.append(
                 StateDoctorIssue(
@@ -408,10 +403,7 @@ def _fill_event_issues(state: ExecutionState) -> list[StateDoctorIssue]:
     }
     parent_order_ids = {parent.parent_order_id for parent in state.parent_orders}
     for fill in state.fill_events:
-        if (
-            fill.parent_order_id in parent_order_ids
-            or fill.broker_order_id in child_order_ids
-        ):
+        if fill.parent_order_id in parent_order_ids or fill.broker_order_id in child_order_ids:
             continue
         issues.append(
             StateDoctorIssue(
@@ -457,9 +449,7 @@ def _build_prune_plan(state: ExecutionState, cutoff: datetime) -> _PrunePlan:
         <= cutoff
     }
     prunable_children = [
-        child
-        for child in state.child_orders
-        if child.parent_order_id in prunable_parent_ids
+        child for child in state.child_orders if child.parent_order_id in prunable_parent_ids
     ]
     prunable_broker_order_ids = {
         child.broker_order_id for child in prunable_children if child.broker_order_id
@@ -520,9 +510,7 @@ def _drop_orphan_fill_events(state: ExecutionState) -> int:
 
 
 def _drop_orphan_terminal_broker_orders(state: ExecutionState) -> int:
-    referenced = {
-        child.broker_order_id for child in state.child_orders if child.broker_order_id
-    }
+    referenced = {child.broker_order_id for child in state.child_orders if child.broker_order_id}
     kept = []
     removed = 0
     for broker_order in state.broker_orders:
@@ -689,8 +677,8 @@ class StateMaintenanceService:
             result.orphan_fills_removed = _drop_orphan_fill_events(state)
 
         if drop_orphan_terminal_broker_orders:
-            result.orphan_terminal_broker_orders_removed = (
-                _drop_orphan_terminal_broker_orders(state)
+            result.orphan_terminal_broker_orders_removed = _drop_orphan_terminal_broker_orders(
+                state
             )
 
         if recompute_parent_aggregates:

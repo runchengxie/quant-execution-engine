@@ -224,17 +224,11 @@ class OrderLifecycleStateReconcileOpsMixin:
             self._sync_child_from_broker_order(state, broker_order)
 
         tracked_broker_order_ids = sorted(
-            {
-                child.broker_order_id
-                for child in state.child_orders
-                if child.broker_order_id
-            }
+            {child.broker_order_id for child in state.child_orders if child.broker_order_id}
         )
         open_order_ids = {order.broker_order_id for order in report.open_orders}
         broker_orders_by_id = {
-            order.broker_order_id: order
-            for order in state.broker_orders
-            if order.broker_order_id
+            order.broker_order_id: order for order in state.broker_orders if order.broker_order_id
         }
         for broker_order_id in tracked_broker_order_ids:
             if broker_order_id in open_order_ids:
@@ -245,20 +239,14 @@ class OrderLifecycleStateReconcileOpsMixin:
             try:
                 broker_order = self.adapter.get_order(broker_order_id, account)
             except Exception as exc:
-                report.warnings.append(
-                    f"failed to refresh tracked order {broker_order_id}: {exc}"
-                )
+                report.warnings.append(f"failed to refresh tracked order {broker_order_id}: {exc}")
                 continue
             self._upsert_broker_order(state, broker_order)
             self._sync_child_from_broker_order(state, broker_order)
             refreshed_orders += 1
 
         fill_query_ids = sorted(
-            {
-                broker_order_id
-                for broker_order_id in tracked_broker_order_ids
-                if broker_order_id
-            }
+            {broker_order_id for broker_order_id in tracked_broker_order_ids if broker_order_id}
         )
         for broker_order_id in fill_query_ids:
             try:
@@ -354,7 +342,8 @@ class OrderLifecycleStateReconcileOpsMixin:
             timestamp = self._timestamp_for_stale_retry(broker_order)
             if timestamp is None:
                 warnings.append(
-                    f"{broker_order.broker_order_id}: skipped stale retry because timestamp is missing or invalid"
+                    f"{broker_order.broker_order_id}: skipped stale retry because "
+                    "timestamp is missing or invalid"
                 )
                 continue
             if timestamp > cutoff:
@@ -500,7 +489,9 @@ class OrderLifecycleStateReconcileOpsMixin:
         if matching_child is None:
             return
         matching_child.broker_order_id = broker_order.broker_order_id
-        matching_child.client_order_id = broker_order.client_order_id or matching_child.client_order_id
+        matching_child.client_order_id = (
+            broker_order.client_order_id or matching_child.client_order_id
+        )
         matching_child.status = broker_order.status
         matching_child.message = broker_order.message
         matching_child.updated_at = utc_now_iso()

@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any
 
 from .account import get_quotes
-from .broker.base import BrokerAdapter
+from .broker.base import BrokerAdapter, BrokerReconcileReport
 from .broker.factory import (
     get_broker_adapter,
     peek_broker_name,
@@ -51,7 +51,7 @@ class RebalanceService:
         self.client = client
         self.broker_name = peek_broker_name(broker_name) or ""
         self.account_label = resolve_default_account_label(account_label)
-        self._last_reconcile_report = None
+        self._last_reconcile_report: BrokerReconcileReport | None = None
 
     def _resolved_broker_name(self) -> str:
         return self.broker_name or resolve_broker_name()
@@ -143,10 +143,7 @@ class RebalanceService:
                 position.last_price = price
                 position.estimated_value = price * float(position.quantity)
                 continue
-            if (
-                position.quantity > 0
-                and self._quote_currency(position.symbol) != "USD"
-            ):
+            if position.quantity > 0 and self._quote_currency(position.symbol) != "USD":
                 raise ValueError(
                     "positive quote required to value existing non-USD position "
                     f"in USD: {position.symbol}"
@@ -191,11 +188,7 @@ class RebalanceService:
             denom = max(1.0, abs(b))
             return abs(a - b) <= 0.01 * denom
 
-        if (
-            snapshot_total > 0
-            and _close(snapshot_total, recomputed_total)
-            and not any_zero_priced
-        ):
+        if snapshot_total > 0 and _close(snapshot_total, recomputed_total) and not any_zero_priced:
             effective_total = snapshot_total
         else:
             effective_total = recomputed_total
@@ -234,9 +227,7 @@ class RebalanceService:
 
         delta_qty = target_qty - current_qty
         if abs(delta_qty) < lot_size:
-            logger.info(
-                f"跳过 {lb_symbol}：差额 {delta_qty} 小于最小交易单位 {lot_size}"
-            )
+            logger.info(f"跳过 {lb_symbol}：差额 {delta_qty} 小于最小交易单位 {lot_size}")
             return target_position, None
 
         side = "BUY" if delta_qty > 0 else "SELL"
@@ -293,9 +284,7 @@ class RebalanceService:
         quotes = self._normalize_quotes_to_usd(quotes)
         self._refresh_positions_from_usd_quotes(account_snapshot, quotes)
 
-        weighted_targets = [
-            target for target in targets if target.target_weight is not None
-        ]
+        weighted_targets = [target for target in targets if target.target_weight is not None]
 
         effective_total = self._compute_effective_total(
             account_snapshot, quotes, target_gross_exposure
@@ -321,9 +310,7 @@ class RebalanceService:
             fractional_cap_lt1=float(fees_cfg.get("fractional_cap_lt1", 0.99) or 0.0),
             sell_reg_fees_bps=float(fees_cfg.get("sell_reg_fees_bps", 0.0) or 0.0),
         )
-        frac_cfg = (
-            (cfg.get("fractional_preview") or {}) if isinstance(cfg, dict) else {}
-        )
+        frac_cfg = (cfg.get("fractional_preview") or {}) if isinstance(cfg, dict) else {}
         frac_enable = bool(frac_cfg.get("enable", True))
         frac_step = Decimal(str(frac_cfg.get("default_step", 0.001)))
 
@@ -342,9 +329,7 @@ class RebalanceService:
             if target.target_quantity is not None:
                 target_qty_raw = float(target.target_quantity)
             else:
-                target_qty_raw = (
-                    effective_total * float(target.target_weight or 0.0) / price
-                )
+                target_qty_raw = effective_total * float(target.target_weight or 0.0) / price
 
             target_position, order = self._build_order(
                 lb_symbol,
@@ -455,9 +440,7 @@ class RebalanceService:
                 order.error_message = str(e)
             return orders
 
-    def save_audit_log(
-        self, rebalance_result: RebalanceResult, dry_run: bool = True
-    ) -> Path:
+    def save_audit_log(self, rebalance_result: RebalanceResult, dry_run: bool = True) -> Path:
         """Save audit log
 
         Args:
@@ -481,9 +464,7 @@ class RebalanceService:
                 for order in rebalance_result.orders
                 for decision in (order.risk_decisions or [])
             ]
-            risk_decision_summary = summarize_risk_decisions(
-                all_risk_decisions
-            ).to_payload()
+            risk_decision_summary = summarize_risk_decisions(all_risk_decisions).to_payload()
             summary = {
                 "record_type": "rebalance_summary",
                 "env": self.env,
@@ -524,9 +505,7 @@ class RebalanceService:
                     "risk_summary": order.risk_summary,
                     "risk_decisions": list(order.risk_decisions or []),
                     "risk_decision_summary": order_risk_decision_summary,
-                    "timestamp": order.timestamp.isoformat()
-                    if order.timestamp
-                    else None,
+                    "timestamp": order.timestamp.isoformat() if order.timestamp else None,
                     "error_message": order.error_message,
                     "env": self.env,
                     "dry_run": dry_run,

@@ -27,9 +27,7 @@ pytestmark = pytest.mark.unit
 
 def _load_smoke_operator_module():
     script_path = (
-        Path(__file__).resolve().parents[2]
-        / "project_tools"
-        / "smoke_operator_harness.py"
+        Path(__file__).resolve().parents[2] / "project_tools" / "smoke_operator_harness.py"
     )
     spec = importlib.util.spec_from_file_location("smoke_operator_harness", script_path)
     assert spec is not None
@@ -385,7 +383,9 @@ def test_ibkr_list_open_orders_and_cancel() -> None:
     assert runtime.cancelled == ["11"]
 
 
-def test_run_config_ibkr_reports_runtime_fields(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_run_config_ibkr_reports_runtime_fields(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setattr(
         cli,
         "probe_ibkr_runtime_config",

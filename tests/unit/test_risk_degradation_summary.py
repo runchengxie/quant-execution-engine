@@ -149,9 +149,7 @@ def test_preflight_surfaces_market_data_dependent_risk_bypasses(
         symbols=["AAPL.US"],
     )
 
-    check = next(
-        item for item in result.checks if item.name == "risk_market_data_gates"
-    )
+    check = next(item for item in result.checks if item.name == "risk_market_data_gates")
     assert check.outcome == "WARN"
     assert "spread_guard" in check.message
     assert "participation_guard" in check.message
@@ -219,10 +217,7 @@ def test_rebalance_audit_and_output_include_risk_bypass_summary(
         AccountSnapshot(env="paper", cash_usd=1000.0, positions=[]),
     ).text
 
-    records = [
-        json.loads(line)
-        for line in audit_path.read_text(encoding="utf-8").splitlines()
-    ]
+    records = [json.loads(line) for line in audit_path.read_text(encoding="utf-8").splitlines()]
     summary, audit_order = records
     assert summary["risk_decision_summary"]["market_data_bypass_count"] == 3
     assert audit_order["risk_decision_summary"]["bypass_count"] == 3

@@ -41,7 +41,8 @@ def resolve_broker_name(explicit: str | None = None) -> str:
     if backend:
         return backend
     raise BrokerValidationError(
-        "broker backend is not configured. Set broker.backend in config.yaml or pass --broker explicitly."
+        "broker backend is not configured. Set broker.backend in config.yaml "
+        "or pass --broker explicitly."
     )
 
 
@@ -55,9 +56,7 @@ def _load_ibkr_adapter_cls() -> _BrokerAdapterFactory:
     return cast(_BrokerAdapterFactory, module.IbkrPaperBrokerAdapter)
 
 
-def _load_longport_runtime() -> tuple[
-    _BrokerAdapterFactory, _BrokerAdapterFactory, type[Any]
-]:
+def _load_longport_runtime() -> tuple[_BrokerAdapterFactory, _BrokerAdapterFactory, type[Any]]:
     adapter_module = import_module(".longport_adapter", __package__)
     runtime_module = import_module(".longport", __package__)
     return (

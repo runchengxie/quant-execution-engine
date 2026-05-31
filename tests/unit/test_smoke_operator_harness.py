@@ -27,9 +27,7 @@ pytestmark = pytest.mark.unit
 
 def load_smoke_operator_module():
     script_path = (
-        Path(__file__).resolve().parents[2]
-        / "project_tools"
-        / "smoke_operator_harness.py"
+        Path(__file__).resolve().parents[2] / "project_tools" / "smoke_operator_harness.py"
     )
     spec = importlib.util.spec_from_file_location("smoke_operator_harness", script_path)
     assert spec is not None
@@ -67,7 +65,9 @@ def test_build_operator_smoke_targets_is_minimal_delta() -> None:
     assert targets[0]["target_quantity"] == 4
 
 
-def test_latest_tracked_order_ref_prefers_latest_matching_symbol(tmp_path: Path) -> None:
+def test_latest_tracked_order_ref_prefers_latest_matching_symbol(
+    tmp_path: Path,
+) -> None:
     module = load_smoke_operator_module()
     store = ExecutionStateStore(root_dir=tmp_path)
     state = ExecutionState(broker_name="alpaca-paper", account_label="main")
@@ -225,7 +225,10 @@ def test_latest_tracked_order_ref_uses_current_target_input_path_over_stale_symb
         "source": "local",
         "message": "QEXEC_KILL_SWITCH=true",
         "category": "RISK_BLOCKED",
-        "next_step_hint": "Adjust size, price, spread/impact thresholds, or clear the kill switch before retrying.",
+        "next_step_hint": (
+            "Adjust size, price, spread/impact thresholds, or clear the kill "
+            "switch before retrying."
+        ),
         "parent_order_id": "parent-current",
         "child_order_id": "child-current_1",
         "broker_order_id": None,
@@ -280,7 +283,9 @@ def test_discover_audit_log_prefers_matching_target_input_path(tmp_path: Path) -
     assert summary["order_count"] == 2
 
 
-def test_write_evidence_includes_audit_summary_and_operator_notes(tmp_path: Path) -> None:
+def test_write_evidence_includes_audit_summary_and_operator_notes(
+    tmp_path: Path,
+) -> None:
     module = load_smoke_operator_module()
     output_path = tmp_path / "smoke-operator.json"
     evidence_path = tmp_path / "smoke-evidence.json"
@@ -492,7 +497,11 @@ def test_run_operator_smoke_workflow_accepts_longport_paper_as_paper_backend(
     monkeypatch.setattr(module, "run_config", ok("config"))
     monkeypatch.setattr(module, "run_account", ok("account"))
     monkeypatch.setattr(module, "run_quote", ok("quote"))
-    monkeypatch.setattr(module, "get_broker_adapter", lambda broker_name=None: DummyLongPortPaperAdapter())
+    monkeypatch.setattr(
+        module,
+        "get_broker_adapter",
+        lambda broker_name=None: DummyLongPortPaperAdapter(),
+    )
 
     args = argparse.Namespace(
         broker="longport-paper",
@@ -541,7 +550,11 @@ def test_run_operator_smoke_workflow_reapplies_longport_env_between_steps(
     monkeypatch.setattr(module, "run_config", ok("config", mutate_region="hk"))
     monkeypatch.setattr(module, "run_account", ok("account", mutate_region="us"))
     monkeypatch.setattr(module, "run_quote", ok("quote"))
-    monkeypatch.setattr(module, "get_broker_adapter", lambda broker_name=None: DummyLongPortPaperAdapter())
+    monkeypatch.setattr(
+        module,
+        "get_broker_adapter",
+        lambda broker_name=None: DummyLongPortPaperAdapter(),
+    )
 
     args = argparse.Namespace(
         broker="longport-paper",
@@ -587,14 +600,54 @@ def test_run_operator_smoke_workflow_uses_subprocess_cleanup_for_longport(
     monkeypatch.setattr(module, "run_config", ok("config"))
     monkeypatch.setattr(module, "run_account", ok("account"))
     monkeypatch.setattr(module, "run_quote", ok("quote"))
-    monkeypatch.setattr(module, "run_rebalance", lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("run_rebalance should not be called for longport execute path")))
-    monkeypatch.setattr(module, "run_orders", lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("run_orders should not be called for longport execute path")))
-    monkeypatch.setattr(module, "run_order", lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("run_order should not be called for longport execute path")))
-    monkeypatch.setattr(module, "run_reconcile", lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("run_reconcile should not be called for longport execute path")))
-    monkeypatch.setattr(module, "run_exceptions", lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("run_exceptions should not be called for longport execute path")))
-    monkeypatch.setattr(module, "run_cancel_all", lambda **kwargs: (_ for _ in ()).throw(AssertionError("run_cancel_all should not be called for longport cleanup")))
+    monkeypatch.setattr(
+        module,
+        "run_rebalance",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            AssertionError("run_rebalance should not be called for longport execute path")
+        ),
+    )
+    monkeypatch.setattr(
+        module,
+        "run_orders",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            AssertionError("run_orders should not be called for longport execute path")
+        ),
+    )
+    monkeypatch.setattr(
+        module,
+        "run_order",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            AssertionError("run_order should not be called for longport execute path")
+        ),
+    )
+    monkeypatch.setattr(
+        module,
+        "run_reconcile",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            AssertionError("run_reconcile should not be called for longport execute path")
+        ),
+    )
+    monkeypatch.setattr(
+        module,
+        "run_exceptions",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            AssertionError("run_exceptions should not be called for longport execute path")
+        ),
+    )
+    monkeypatch.setattr(
+        module,
+        "run_cancel_all",
+        lambda **kwargs: (_ for _ in ()).throw(
+            AssertionError("run_cancel_all should not be called for longport cleanup")
+        ),
+    )
     monkeypatch.setattr(module.subprocess, "run", fake_subprocess_run)
-    monkeypatch.setattr(module, "get_broker_adapter", lambda broker_name=None: DummyLongPortPaperAdapter())
+    monkeypatch.setattr(
+        module,
+        "get_broker_adapter",
+        lambda broker_name=None: DummyLongPortPaperAdapter(),
+    )
     monkeypatch.setattr(
         module,
         "get_account_snapshot",
@@ -699,7 +752,12 @@ def test_run_operator_smoke_workflow_writes_evidence_json(
     assert evidence["operator_outcome_category"] is None
     assert evidence["operator_next_step_hint"] is None
     assert evidence["targets_output"] == str(output_path)
-    assert [step["name"] for step in evidence["steps"]] == ["config", "account", "quote", "rebalance"]
+    assert [step["name"] for step in evidence["steps"]] == [
+        "config",
+        "account",
+        "quote",
+        "rebalance",
+    ]
 
 
 def test_run_operator_smoke_workflow_writes_failure_evidence_for_longport_subprocess_step(
@@ -727,7 +785,11 @@ def test_run_operator_smoke_workflow_writes_failure_evidence_for_longport_subpro
     monkeypatch.setattr(module, "run_account", ok("account"))
     monkeypatch.setattr(module, "run_quote", ok("quote"))
     monkeypatch.setattr(module.subprocess, "run", fake_subprocess_run)
-    monkeypatch.setattr(module, "get_broker_adapter", lambda broker_name=None: DummyLongPortPaperAdapter())
+    monkeypatch.setattr(
+        module,
+        "get_broker_adapter",
+        lambda broker_name=None: DummyLongPortPaperAdapter(),
+    )
     monkeypatch.setattr(
         module,
         "get_account_snapshot",
@@ -806,7 +868,11 @@ def test_run_operator_smoke_workflow_writes_failure_evidence_when_rebalance_step
     monkeypatch.setattr(module, "run_account", ok("account"))
     monkeypatch.setattr(module, "run_quote", ok("quote"))
     monkeypatch.setattr(module.subprocess, "run", fake_subprocess_run)
-    monkeypatch.setattr(module, "get_broker_adapter", lambda broker_name=None: DummyLongPortPaperAdapter())
+    monkeypatch.setattr(
+        module,
+        "get_broker_adapter",
+        lambda broker_name=None: DummyLongPortPaperAdapter(),
+    )
     monkeypatch.setattr(
         module,
         "get_account_snapshot",
@@ -819,7 +885,9 @@ def test_run_operator_smoke_workflow_writes_failure_evidence_when_rebalance_step
     monkeypatch.setattr(
         module,
         "latest_tracked_order_ref",
-        lambda **kwargs: (_ for _ in ()).throw(AssertionError("latest_tracked_order_ref should not run")),
+        lambda **kwargs: (_ for _ in ()).throw(
+            AssertionError("latest_tracked_order_ref should not run")
+        ),
     )
 
     output_path = tmp_path / "smoke-operator.json"
@@ -887,7 +955,11 @@ def test_run_operator_smoke_workflow_skips_order_step_when_no_tracked_order_exis
     monkeypatch.setattr(module, "run_account", ok("account"))
     monkeypatch.setattr(module, "run_quote", ok("quote"))
     monkeypatch.setattr(module.subprocess, "run", fake_subprocess_run)
-    monkeypatch.setattr(module, "get_broker_adapter", lambda broker_name=None: DummyLongPortPaperAdapter())
+    monkeypatch.setattr(
+        module,
+        "get_broker_adapter",
+        lambda broker_name=None: DummyLongPortPaperAdapter(),
+    )
     monkeypatch.setattr(
         module,
         "get_account_snapshot",
@@ -1056,7 +1128,11 @@ def test_run_operator_smoke_workflow_writes_blocked_operator_outcome_evidence(
     monkeypatch.setattr(module, "run_account", ok("account"))
     monkeypatch.setattr(module, "run_quote", ok("quote"))
     monkeypatch.setattr(module.subprocess, "run", fake_subprocess_run)
-    monkeypatch.setattr(module, "get_broker_adapter", lambda broker_name=None: DummyLongPortPaperAdapter())
+    monkeypatch.setattr(
+        module,
+        "get_broker_adapter",
+        lambda broker_name=None: DummyLongPortPaperAdapter(),
+    )
     monkeypatch.setattr(
         module,
         "get_account_snapshot",
@@ -1115,7 +1191,13 @@ def test_run_operator_smoke_workflow_writes_blocked_operator_outcome_evidence(
 
 
 @pytest.mark.parametrize(
-    ("failed_step", "cleanup_open_orders", "expected_step_names", "expected_skipped_names", "expected_category"),
+    (
+        "failed_step",
+        "cleanup_open_orders",
+        "expected_step_names",
+        "expected_skipped_names",
+        "expected_category",
+    ),
     [
         (
             "orders",
@@ -1134,7 +1216,16 @@ def test_run_operator_smoke_workflow_writes_blocked_operator_outcome_evidence(
         (
             "exceptions",
             False,
-            ["config", "account", "quote", "rebalance", "orders", "order", "reconcile", "exceptions"],
+            [
+                "config",
+                "account",
+                "quote",
+                "rebalance",
+                "orders",
+                "order",
+                "reconcile",
+                "exceptions",
+            ],
             [],
             "EXCEPTION_VIEW_FAILED",
         ),
@@ -1188,7 +1279,11 @@ def test_run_operator_smoke_workflow_writes_failure_evidence_for_downstream_step
     monkeypatch.setattr(module, "run_account", ok("account"))
     monkeypatch.setattr(module, "run_quote", ok("quote"))
     monkeypatch.setattr(module.subprocess, "run", fake_subprocess_run)
-    monkeypatch.setattr(module, "get_broker_adapter", lambda broker_name=None: DummyLongPortPaperAdapter())
+    monkeypatch.setattr(
+        module,
+        "get_broker_adapter",
+        lambda broker_name=None: DummyLongPortPaperAdapter(),
+    )
     monkeypatch.setattr(
         module,
         "get_account_snapshot",

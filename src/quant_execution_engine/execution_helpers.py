@@ -43,7 +43,9 @@ def build_reconcile_deltas(
     before_fill_counts: Counter[str],
     fill_events: list[ExecutionFillEvent],
 ) -> list[ExecutionReconcileDelta]:
-    after_fill_counts = Counter(fill.broker_order_id for fill in fill_events if fill.broker_order_id)
+    after_fill_counts = Counter(
+        fill.broker_order_id for fill in fill_events if fill.broker_order_id
+    )
     deltas: list[ExecutionReconcileDelta] = []
     for after in sorted(after_orders, key=lambda item: item.broker_order_id):
         before = before_orders.get(after.broker_order_id)
@@ -133,11 +135,7 @@ def find_intent_for_parent(
     if parent is None:
         return None
     return next(
-        (
-            intent
-            for intent in state.intents
-            if intent.intent_id == parent.intent_id
-        ),
+        (intent for intent in state.intents if intent.intent_id == parent.intent_id),
         None,
     )
 
@@ -151,11 +149,7 @@ def resolve_tracked_order(
         return None
 
     child = next(
-        (
-            candidate
-            for candidate in state.child_orders
-            if candidate.child_order_id == normalized
-        ),
+        (candidate for candidate in state.child_orders if candidate.child_order_id == normalized),
         None,
     )
     for broker_order in state.broker_orders:
@@ -222,7 +216,8 @@ def resolve_tracked_order_context(
     resolved = resolve_tracked_order(state, order_ref)
     if resolved is None:
         raise ValueError(
-            f"tracked order not found for ref '{order_ref}' in {adapter.backend_name}/{account.label}"
+            f"tracked order not found for ref '{order_ref}' in "
+            f"{adapter.backend_name}/{account.label}"
         )
     child, parent, intent, broker_order = resolved
     return TrackedOrderContext(
@@ -262,7 +257,8 @@ def require_latest_child_attempt(
     if latest is None or latest.child_order_id == child.child_order_id:
         return
     raise ValueError(
-        f"{action_name} only supports the latest tracked child attempt; newer attempt exists: {latest.child_order_id}"
+        f"{action_name} only supports the latest tracked child attempt; "
+        f"newer attempt exists: {latest.child_order_id}"
     )
 
 
@@ -277,11 +273,7 @@ def find_parent_for_fill(
     fill: Any,
 ) -> ParentOrder | None:
     matching_child = next(
-        (
-            child
-            for child in state.child_orders
-            if child.broker_order_id == fill.broker_order_id
-        ),
+        (child for child in state.child_orders if child.broker_order_id == fill.broker_order_id),
         None,
     )
     if matching_child is not None:

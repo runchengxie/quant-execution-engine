@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
-from typing import TYPE_CHECKING
 
 from .broker.base import BrokerOrderRequest, ResolvedBrokerAccount, utc_now_iso
 from .execution_helpers import (
@@ -32,15 +31,32 @@ from .execution_state import (
 from .logging import get_logger
 from .models import Order
 
-if TYPE_CHECKING:
-    from .execution_service import OrderLifecycleService
-
 logger = get_logger(__name__)
 
 
 class OrderLifecycleRecoveryActionsMixin(OrderLifecycleStateReconcileOpsMixin):
+    def execute_orders(
+        self,
+        orders: list[Order],
+        *,
+        account_label: str,
+        dry_run: bool,
+        target_source: str | None = None,
+        target_asof: str | None = None,
+        target_input_path: str | None = None,
+    ) -> list[Order]:
+        raise NotImplementedError
+
+    def cancel_order(
+        self,
+        *,
+        account_label: str,
+        order_ref: str,
+    ) -> ExecutionCancelResult:
+        raise NotImplementedError
+
     def retry_order(
-        self: OrderLifecycleService,
+        self,
         *,
         account_label: str,
         order_ref: str,
@@ -110,7 +126,7 @@ class OrderLifecycleRecoveryActionsMixin(OrderLifecycleStateReconcileOpsMixin):
         )
 
     def cancel_remaining_order(
-        self: OrderLifecycleService,
+        self,
         *,
         account_label: str,
         order_ref: str,
@@ -142,7 +158,7 @@ class OrderLifecycleRecoveryActionsMixin(OrderLifecycleStateReconcileOpsMixin):
         return self.cancel_order(account_label=account_label, order_ref=order_ref)
 
     def resume_remaining_order(
-        self: OrderLifecycleService,
+        self,
         *,
         account_label: str,
         order_ref: str,
@@ -177,12 +193,15 @@ class OrderLifecycleRecoveryActionsMixin(OrderLifecycleStateReconcileOpsMixin):
         )
         if broker_order_is_open(broker_order):
             raise ValueError(
-                "tracked broker order is still open; cancel the remaining quantity before resubmitting it"
+                "tracked broker order is still open; cancel the remaining quantity "
+                "before resubmitting it"
             )
 
         quantity = remaining_quantity
         if not quantity.is_integer():
-            raise ValueError("resume-remaining currently only supports integer-share tracked orders")
+            raise ValueError(
+                "resume-remaining currently only supports integer-share tracked orders"
+            )
 
         order = Order(
             symbol=intent.symbol,
@@ -218,7 +237,7 @@ class OrderLifecycleRecoveryActionsMixin(OrderLifecycleStateReconcileOpsMixin):
         )
 
     def accept_partial_fill(
-        self: OrderLifecycleService,
+        self,
         *,
         account_label: str,
         order_ref: str,
@@ -250,7 +269,8 @@ class OrderLifecycleRecoveryActionsMixin(OrderLifecycleStateReconcileOpsMixin):
         )
         if broker_order_is_open(broker_order):
             raise ValueError(
-                "tracked broker order is still open; cancel the remaining quantity before accepting the partial fill"
+                "tracked broker order is still open; cancel the remaining quantity "
+                "before accepting the partial fill"
             )
 
         resolved_at = utc_now_iso()
@@ -273,7 +293,7 @@ class OrderLifecycleRecoveryActionsMixin(OrderLifecycleStateReconcileOpsMixin):
         )
 
     def _submit_child_attempt(
-        self: OrderLifecycleService,
+        self,
         *,
         state: ExecutionState,
         parent: ParentOrder,
@@ -319,7 +339,7 @@ class OrderLifecycleRecoveryActionsMixin(OrderLifecycleStateReconcileOpsMixin):
             return None, child.status
 
     def reprice_order(
-        self: OrderLifecycleService,
+        self,
         *,
         account_label: str,
         order_ref: str,
@@ -356,7 +376,10 @@ class OrderLifecycleRecoveryActionsMixin(OrderLifecycleStateReconcileOpsMixin):
             raise ValueError(f"tracked order is not open: {broker_order.status}")
         if broker_order.status in STALE_RETRY_EXCLUDED_STATUSES:
             raise ValueError(f"tracked order is already pending cancel: {broker_order.status}")
-        if float(parent.filled_quantity or 0.0) > 0 or float(broker_order.filled_quantity or 0.0) > 0:
+        if (
+            float(parent.filled_quantity or 0.0) > 0
+            or float(broker_order.filled_quantity or 0.0) > 0
+        ):
             raise ValueError("reprice for partially filled orders is not supported yet")
 
         current_limit = float(intent.limit_price or 0.0)
@@ -383,7 +406,9 @@ class OrderLifecycleRecoveryActionsMixin(OrderLifecycleStateReconcileOpsMixin):
             if quantity <= 0:
                 warnings.append("replacement skipped because tracked remaining_quantity is 0")
             elif not quantity.is_integer():
-                warnings.append("replacement skipped because fractional tracked quantity is not supported yet")
+                warnings.append(
+                    "replacement skipped because fractional tracked quantity is not supported yet"
+                )
             else:
                 intent.limit_price = next_limit
                 intent.metadata["last_reprice_at"] = utc_now_iso()
@@ -429,7 +454,7 @@ class OrderLifecycleRecoveryActionsMixin(OrderLifecycleStateReconcileOpsMixin):
         )
 
     def retry_stale_orders(
-        self: OrderLifecycleService,
+        self,
         *,
         account_label: str,
         older_than_minutes: int,
@@ -449,7 +474,8 @@ class OrderLifecycleRecoveryActionsMixin(OrderLifecycleStateReconcileOpsMixin):
         targets = sorted(
             self._find_stale_retry_targets(state, cutoff=cutoff, warnings=warnings),
             key=lambda record: (
-                self._timestamp_for_stale_retry(record) or datetime.min.replace(tzinfo=timezone.utc),
+                self._timestamp_for_stale_retry(record)
+                or datetime.min.replace(tzinfo=timezone.utc),
                 record.broker_order_id,
             ),
         )
@@ -476,7 +502,8 @@ class OrderLifecycleRecoveryActionsMixin(OrderLifecycleStateReconcileOpsMixin):
             cancel_results.append(cancel_outcome)
             if cancel_outcome.status != "CANCELED":
                 warnings.append(
-                    f"{target.broker_order_id}: skipped retry because post-cancel status is {cancel_outcome.status}"
+                    f"{target.broker_order_id}: skipped retry because post-cancel "
+                    f"status is {cancel_outcome.status}"
                 )
                 continue
             try:

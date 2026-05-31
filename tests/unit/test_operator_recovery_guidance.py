@@ -105,9 +105,7 @@ def test_orders_and_retry_stale_render_normalized_next_steps(tmp_path: Path) -> 
                     client_order_id=None,
                     status="PENDING_CANCEL",
                     state_path=tmp_path / "state.json",
-                    warnings=[
-                        "cancel submitted but post-cancel refresh failed: timeout"
-                    ],
+                    warnings=["cancel submitted but post-cancel refresh failed: timeout"],
                 )
             ],
         )

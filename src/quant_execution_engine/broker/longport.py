@@ -21,6 +21,7 @@ try:  # pragma: no cover - depends on external package
         TimeInForceType,
         TradeContext,
     )
+
     _LONGPORT_SDK_SOURCE = "longport"
 except ImportError as exc:  # pragma: no cover - executed when longport not available
     _LONGPORT_SDK_IMPORT_ERROR = exc
@@ -34,6 +35,7 @@ except ImportError as exc:  # pragma: no cover - executed when longport not avai
             TimeInForceType,
             TradeContext,
         )
+
         _LONGPORT_SDK_SOURCE = "longbridge"
         _LONGPORT_SDK_IMPORT_ERROR = None
     except ImportError as fallback_exc:  # pragma: no cover - executed when neither SDK installed
@@ -54,28 +56,28 @@ try:
 except Exception:  # pragma: no cover
     ZoneInfo = None  # type: ignore
 
-from ..fx import to_usd
-from ..logging import get_logger
-from ..models import Quote
-from .longport_credentials import (
+from ..fx import to_usd  # noqa: E402
+from ..logging import get_logger  # noqa: E402
+from ..models import Quote  # noqa: E402
+from .longport_credentials import (  # noqa: E402
     resolve_longport_credentials,
     resolve_longport_runtime_value,
 )
-from .longport_support import (
+from .longport_support import (  # noqa: E402
     BrokerLimits,
     Env,
     getenv_both,
 )
-from .longport_support import (
+from .longport_support import (  # noqa: E402
     coerce_iso as _coerce_iso,
 )
-from .longport_support import (
+from .longport_support import (  # noqa: E402
     market_of as _market_of,
 )
-from .longport_support import (
+from .longport_support import (  # noqa: E402
     market_tz as _market_tz,
 )
-from .longport_support import (
+from .longport_support import (  # noqa: E402
     to_lb_symbol as _to_lb_symbol,
 )
 
@@ -225,9 +227,7 @@ def _cash_snapshot_from_asset(
 
     for account_balance in assets_seq:
         ci_list = (
-            _field(account_balance, "cash_infos")
-            or _field(account_balance, "cash_info")
-            or []
+            _field(account_balance, "cash_infos") or _field(account_balance, "cash_info") or []
         )
         for ci in ci_list:
             ccy = str(_field(ci, "currency", "") or _field(ci, "ccy", "")).upper()
@@ -261,9 +261,7 @@ def _cash_snapshot_from_asset(
             )
 
     if totals:
-        logger.debug(
-            "现金分币种: " + ", ".join(f"{k}={v:.2f}" for k, v in totals.items())
-        )
+        logger.debug("现金分币种: " + ", ".join(f"{k}={v:.2f}" for k, v in totals.items()))
 
     cash_usd = totals.get("USD", 0.0)
     if cash_usd == 0.0:
@@ -327,7 +325,7 @@ def _push_stock_position(
     if symbol is None or quantity is None:
         return
     try:
-        qty = int(float(quantity))
+        qty = int(float(str(quantity)))
     except Exception:
         return
     normalized_symbol = str(symbol).upper()
@@ -382,9 +380,7 @@ class LongPortClient:
     Provides a unified interface to access LongPort's trading and quote functionality.
     """
 
-    def __init__(
-        self, env: str | None = None, limits: BrokerLimits | None = None, config=None
-    ):
+    def __init__(self, env: str | None = None, limits: BrokerLimits | None = None, config=None):
         """Initialize LongPort client.
 
         Args:
@@ -402,9 +398,9 @@ class LongPortClient:
         self.app_key = credentials.app_key
         self.app_secret = credentials.app_secret
         self.token_test = (
-            credentials.access_token if self.env == Env.PAPER else getenv_both(
-                "LONGPORT_ACCESS_TOKEN_TEST", "LONGBRIDGE_ACCESS_TOKEN_TEST"
-            )
+            credentials.access_token
+            if self.env == Env.PAPER
+            else getenv_both("LONGPORT_ACCESS_TOKEN_TEST", "LONGBRIDGE_ACCESS_TOKEN_TEST")
         )
         self.token_real = (
             credentials.access_token
@@ -437,12 +433,8 @@ class LongPortClient:
         # Use lightweight wrappers that only create the underlying contexts
         # when a method is actually invoked.
 
-        self.quote = _LazyContext(
-            _make_longport_context_factory(self.region, "quote")
-        )
-        self.trade = _LazyContext(
-            _make_longport_context_factory(self.region, "trade")
-        )
+        self.quote = _LazyContext(_make_longport_context_factory(self.region, "quote"))
+        self.trade = _LazyContext(_make_longport_context_factory(self.region, "trade"))
         # Backward compatible attribute names expected by older code/tests
         self.q = self.quote
         self.t = self.trade
@@ -525,12 +517,12 @@ class LongPortClient:
         ret = quote_ctx.quote(symbol_list)
         for i in ret:
             # Prefer last_done, fallback to prev_close if missing/zero
-            px = float((getattr(i, "last_done", 0) or 0) or 0)
+            px = float(str((getattr(i, "last_done", 0) or 0) or 0))
             if px <= 0:
                 prev = getattr(i, "prev_close", None)
                 if prev not in (None, 0):
                     try:
-                        px = float(prev)
+                        px = float(str(prev))
                     except Exception:
                         px = 0.0
             bars[i.symbol] = (px, getattr(i, "timestamp", "") or "")
@@ -564,11 +556,11 @@ class LongPortClient:
 
         result: dict[str, Quote] = {}
         for item in quotes:
-            price = float((getattr(item, "last_done", 0) or 0) or 0)
+            price = float(str((getattr(item, "last_done", 0) or 0) or 0))
             if price <= 0:
                 prev_close = getattr(item, "prev_close", None)
                 if prev_close not in (None, 0):
-                    price = float(prev_close)
+                    price = float(str(prev_close))
             bid, ask = depth_map.get(item.symbol, (None, None))
             result[item.symbol] = Quote(
                 symbol=item.symbol,
@@ -598,9 +590,7 @@ class LongPortClient:
         quote_ctx = self._quote_context()
         lb_symbol = _to_lb_symbol(symbol)
         market = _market_enum(_market_of(lb_symbol))
-        return quote_ctx.history_candlesticks_by_date(
-            lb_symbol, period, market, start, end, adjust
-        )
+        return quote_ctx.history_candlesticks_by_date(lb_symbol, period, market, start, end, adjust)
 
     def submit_limit(
         self,
@@ -897,13 +887,9 @@ class LongPortClient:
                 if kind == "Regular":
                     return True
                 # Pre/Post/Overnight: only allow when extended hours are enabled
-                return self.allow_extended and (
-                    kind in {"Pre", "Post", "Overnight", "Other"}
-                )
+                return self.allow_extended and (kind in {"Pre", "Post", "Overnight", "Other"})
 
-            in_any = any(
-                beg <= hhmm <= end and allowed(kind) for beg, end, kind in sessions
-            )
+            in_any = any(beg <= hhmm <= end and allowed(kind) for beg, end, kind in sessions)
             if not in_any:
                 allowed_kinds = {k for _, _, k in sessions if allowed(k)}
                 win = (
@@ -921,13 +907,11 @@ class LongPortClient:
 
         # 3) Fallback: rough local time string check (original logic)
         now_local = datetime.now().strftime("%H:%M")
-        if not (
-            self.limits.trading_window_start
-            <= now_local
-            <= self.limits.trading_window_end
-        ):
+        if not (self.limits.trading_window_start <= now_local <= self.limits.trading_window_end):
             raise RuntimeError(
-                f"不在交易时段 {self.limits.trading_window_start}-{self.limits.trading_window_end}（降级判定）"
+                "不在交易时段 "
+                f"{self.limits.trading_window_start}-{self.limits.trading_window_end}"
+                "（降级判定）"
             )
 
     def _check_lot(self, symbol: str, qty: int) -> None:
@@ -966,9 +950,7 @@ class LongPortClient:
         if dry_run:
             lot = self.lot_size(symbol_formatted)
             if qty % lot != 0:
-                raise RuntimeError(
-                    f"{symbol_formatted} 数量需为最小交易单位 {lot} 的整数倍"
-                )
+                raise RuntimeError(f"{symbol_formatted} 数量需为最小交易单位 {lot} 的整数倍")
             px = (
                 float(est_px)
                 if est_px is not None

@@ -216,7 +216,8 @@ def resolve_longport_credentials(
     if not probe.app_key or not probe.app_secret:
         if probe.env_name == "paper":
             raise RuntimeError(
-                "缺少 LONGPORT_APP_KEY/SECRET。请通过系统环境变量、本地 .env 或用户级私有 env 注入。"
+                "缺少 LONGPORT_APP_KEY/SECRET。"
+                "请通过系统环境变量、本地 .env 或用户级私有 env 注入。"
             )
         raise RuntimeError(
             "缺少 LONGPORT_APP_KEY/SECRET。请通过系统环境变量或用户级私有 env 注入。"

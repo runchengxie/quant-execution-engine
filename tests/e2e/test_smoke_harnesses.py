@@ -11,9 +11,7 @@ def _cli_env() -> dict[str, str]:
     env = os.environ.copy()
     src_path = str(Path.cwd() / "src")
     existing = env.get("PYTHONPATH")
-    env["PYTHONPATH"] = (
-        src_path if not existing else f"{src_path}{os.pathsep}{existing}"
-    )
+    env["PYTHONPATH"] = src_path if not existing else f"{src_path}{os.pathsep}{existing}"
     return env
 
 

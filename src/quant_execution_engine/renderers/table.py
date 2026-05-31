@@ -38,9 +38,7 @@ def render_quotes(quotes: list[Quote]) -> str:
     lines.append("-" * 50)
 
     for quote in quotes:
-        lines.append(
-            f"{quote.symbol:12} | Price: {quote.price:>10.2f} | Time: {quote.timestamp}"
-        )
+        lines.append(f"{quote.symbol:12} | Price: {quote.price:>10.2f} | Time: {quote.timestamp}")
 
     return "\n".join(lines)
 
@@ -181,7 +179,9 @@ def render_rebalance_plan(result: RebalanceResult) -> str:
         lines.append("\nNote: this is a dry run, no orders were placed")
         lines.append("Use --execute to run broker-backed submission with risk gates and reconcile")
     else:
-        lines.append("\nLive mode used the selected broker adapter; inspect audit logs for lifecycle details")
+        lines.append(
+            "\nLive mode used the selected broker adapter; inspect audit logs for lifecycle details"
+        )
 
     return "\n".join(lines)
 
@@ -227,7 +227,8 @@ def render_broker_orders(records: list[BrokerOrderRecord]) -> str:
     lines = []
     lines.append("Tracked broker orders:")
     lines.append(
-        "Broker ID           | Symbol      | Side | Qty      | Filled   | Status           | Client ID"
+        "Broker ID           | Symbol      | Side | Qty      | Filled   | "
+        "Status           | Client ID"
     )
     lines.append("-" * 108)
 
@@ -262,7 +263,8 @@ def render_broker_order_history(records: list[BrokerOrderRecord]) -> str:
     lines = []
     lines.append("Broker-side order history:")
     lines.append(
-        "Broker ID           | Symbol      | Side | Qty      | Filled   | Status           | Updated At"
+        "Broker ID           | Symbol      | Side | Qty      | Filled   | "
+        "Status           | Updated At"
     )
     lines.append("-" * 110)
 
@@ -319,7 +321,8 @@ def render_exception_orders(records: list[ExecutionExceptionRecord]) -> str:
     lines = []
     lines.append("Tracked execution exceptions:")
     lines.append(
-        "Status           | Symbol      | Side | Source | Parent                | Child                 | Broker ID           "
+        "Status           | Symbol      | Side | Source | Parent                | "
+        "Child                 | Broker ID           "
     )
     lines.append("-" * 120)
 
@@ -476,7 +479,8 @@ def render_tracked_order_detail(tracked: ExecutionTrackedOrder) -> str:
     if tracked.intent is not None:
         lines.extend(
             [
-                f"- Intent: {tracked.intent.intent_id} {tracked.intent.side} {tracked.intent.quantity:g} {tracked.intent.symbol}",
+                f"- Intent: {tracked.intent.intent_id} {tracked.intent.side} "
+                f"{tracked.intent.quantity:g} {tracked.intent.symbol}",
                 f"- Intent Order Type: {tracked.intent.order_type}",
                 f"- Target Source: {tracked.intent.target_source or '-'}",
                 f"- Target Asof: {tracked.intent.target_asof or '-'}",
@@ -484,9 +488,10 @@ def render_tracked_order_detail(tracked: ExecutionTrackedOrder) -> str:
             ]
         )
         if str(tracked.intent.order_type).upper() == "LIMIT":
-            lines.append(
-                f"- Intent Limit Price: {tracked.intent.limit_price if tracked.intent.limit_price is not None else '-'}"
+            limit_price = (
+                tracked.intent.limit_price if tracked.intent.limit_price is not None else "-"
             )
+            lines.append(f"- Intent Limit Price: {limit_price}")
         last_reprice_at = tracked.intent.metadata.get("last_reprice_at")
         if last_reprice_at:
             lines.append(f"- Last Reprice At: {last_reprice_at}")
@@ -500,7 +505,9 @@ def render_tracked_order_detail(tracked: ExecutionTrackedOrder) -> str:
             [
                 f"- Parent: {tracked.parent.parent_order_id}",
                 f"- Parent Status: {tracked.parent.status}",
-                f"- Parent Filled / Remaining: {tracked.parent.filled_quantity:g} / {tracked.parent.remaining_quantity:g}",
+                "- Parent Filled / Remaining: "
+                f"{tracked.parent.filled_quantity:g} / "
+                f"{tracked.parent.remaining_quantity:g}",
             ]
         )
         manual_resolution = tracked.parent.metadata.get("manual_resolution")
@@ -525,7 +532,9 @@ def render_tracked_order_detail(tracked: ExecutionTrackedOrder) -> str:
                 f"- Broker Order ID: {tracked.broker_order.broker_order_id}",
                 f"- Broker Status: {tracked.broker_order.status}",
                 f"- Client Order ID: {tracked.broker_order.client_order_id or '-'}",
-                f"- Broker Filled / Remaining: {float(tracked.broker_order.filled_quantity or 0.0):g} / {float(tracked.broker_order.remaining_quantity or 0.0):g}",
+                "- Broker Filled / Remaining: "
+                f"{float(tracked.broker_order.filled_quantity or 0.0):g} / "
+                f"{float(tracked.broker_order.remaining_quantity or 0.0):g}",
             ]
         )
         diagnostic = diagnose_order_issue(tracked.broker_order)
@@ -541,9 +550,7 @@ def render_tracked_order_detail(tracked: ExecutionTrackedOrder) -> str:
                 lines.append(f"- Suggested Next Step: {diagnostic.action_hint}")
     lines.append(f"- Fill Events: {len(tracked.fill_events)}")
     for fill in tracked.fill_events:
-        lines.append(
-            f"  * {fill.fill_id}: {fill.quantity:g} @ {fill.price:g} on {fill.filled_at}"
-        )
+        lines.append(f"  * {fill.fill_id}: {fill.quantity:g} @ {fill.price:g} on {fill.filled_at}")
     return "\n".join(lines)
 
 
@@ -559,7 +566,8 @@ def render_order_trace(trace: ExecutionOrderTrace) -> str:
     if trace.intent is not None:
         lines.extend(
             [
-                f"- Intent: {trace.intent.intent_id} {trace.intent.side} {trace.intent.quantity:g} {trace.intent.symbol}",
+                f"- Intent: {trace.intent.intent_id} {trace.intent.side} "
+                f"{trace.intent.quantity:g} {trace.intent.symbol}",
                 f"- Intent Order Type: {trace.intent.order_type}",
                 f"- Intent Run ID: {trace.intent.run_id}",
             ]
@@ -571,12 +579,15 @@ def render_order_trace(trace: ExecutionOrderTrace) -> str:
             [
                 f"- Parent: {trace.parent.parent_order_id}",
                 f"- Parent Status: {trace.parent.status}",
-                f"- Parent Filled / Remaining: {trace.parent.filled_quantity:g} / {trace.parent.remaining_quantity:g}",
+                "- Parent Filled / Remaining: "
+                f"{trace.parent.filled_quantity:g} / "
+                f"{trace.parent.remaining_quantity:g}",
             ]
         )
     if trace.child is not None:
         lines.append(
-            f"- Selected Child: {trace.child.child_order_id} (attempt {trace.child.attempt}, status {trace.child.status})"
+            f"- Selected Child: {trace.child.child_order_id} "
+            f"(attempt {trace.child.attempt}, status {trace.child.status})"
         )
     if trace.broker_order is not None:
         lines.append(
@@ -617,7 +628,8 @@ def render_order_trace(trace: ExecutionOrderTrace) -> str:
     lines.append(f"- Local Fill Events: {len(trace.fill_events)}")
     for local_fill in trace.fill_events:
         lines.append(
-            f"  * {local_fill.fill_id}: {local_fill.quantity:g} @ {local_fill.price:g} on {local_fill.filled_at}"
+            f"  * {local_fill.fill_id}: {local_fill.quantity:g} @ "
+            f"{local_fill.price:g} on {local_fill.filled_at}"
         )
 
     lines.append(f"- Broker-side Order History: {len(trace.broker_history_orders)}")
@@ -633,7 +645,8 @@ def render_order_trace(trace: ExecutionOrderTrace) -> str:
     lines.append(f"- Broker-side Fill History: {len(trace.broker_history_fills)}")
     for broker_fill in trace.broker_history_fills:
         lines.append(
-            f"  * {broker_fill.fill_id}: {broker_fill.quantity:g} @ {broker_fill.price:g} on {broker_fill.filled_at}"
+            f"  * {broker_fill.fill_id}: {broker_fill.quantity:g} @ "
+            f"{broker_fill.price:g} on {broker_fill.filled_at}"
         )
 
     if trace.warnings:
@@ -682,13 +695,14 @@ def render_retry_summary(
 def render_reprice_summary(outcome: ExecutionRepriceResult) -> str:
     """Render tracked-order reprice summary."""
 
+    old_limit_price = outcome.old_limit_price if outcome.old_limit_price is not None else "-"
     lines = [
         "Reprice summary:",
         f"- Broker / Account: {outcome.broker_name} / {outcome.account_label}",
         f"- Requested Ref: {outcome.order_ref}",
         f"- Old Broker Order ID: {outcome.old_broker_order_id}",
         f"- Cancel Status: {outcome.cancel_status}",
-        f"- Old Limit Price: {outcome.old_limit_price if outcome.old_limit_price is not None else '-'}",
+        f"- Old Limit Price: {old_limit_price}",
         f"- New Limit Price: {outcome.new_limit_price}",
         f"- New Child Order ID: {outcome.new_child_order_id or '-'}",
         f"- New Broker Order ID: {outcome.broker_order_id or '-'}",
@@ -730,7 +744,10 @@ def render_stale_retry_summary(outcome: ExecutionStaleRetryResult) -> str:
         lines.append("- Retry results:")
         for retry_result in outcome.retry_results:
             lines.append(
-                f"  * {retry_result.order_ref} -> child {retry_result.new_child_order_id} / broker {retry_result.broker_order_id or '-'} / status {retry_result.broker_status or '-'}"
+                f"  * {retry_result.order_ref} -> "
+                f"child {retry_result.new_child_order_id} / "
+                f"broker {retry_result.broker_order_id or '-'} / "
+                f"status {retry_result.broker_status or '-'}"
             )
             for warning in retry_result.warnings:
                 diagnostic = diagnose_warning_message(warning)
@@ -744,11 +761,7 @@ def render_stale_retry_summary(outcome: ExecutionStaleRetryResult) -> str:
             lines.append(f"  * [{diagnostic.code}] {diagnostic.summary}")
             if diagnostic.action_hint:
                 lines.append(f"    next: {diagnostic.action_hint}")
-    if (
-        not outcome.cancel_results
-        and not outcome.retry_results
-        and not outcome.warnings
-    ):
+    if not outcome.cancel_results and not outcome.retry_results and not outcome.warnings:
         lines.append("- No stale tracked open orders were eligible for retry")
     return "\n".join(lines)
 
@@ -801,10 +814,17 @@ def render_accept_partial_summary(outcome: ExecutionAcceptPartialResult) -> str:
 def render_preflight_summary(result: PreflightResult) -> str:
     """Render broker/account readiness checks."""
 
-    readiness = "BLOCKED" if result.has_failures else "READY_WITH_WARNINGS" if result.has_warnings else "READY"
+    readiness = (
+        "BLOCKED"
+        if result.has_failures
+        else "READY_WITH_WARNINGS"
+        if result.has_warnings
+        else "READY"
+    )
     lines = [
         "Preflight summary:",
-        f"- Broker / Account / Env: {result.broker_name} / {result.account_label} / {result.env_name}",
+        f"- Broker / Account / Env: "
+        f"{result.broker_name} / {result.account_label} / {result.env_name}",
         f"- Symbols: {', '.join(result.symbols)}",
         f"- Readiness: {readiness}",
     ]
@@ -857,7 +877,8 @@ def render_state_repair_summary(result: StateRepairResult) -> str:
             f"- Cleared Kill Switch: {'yes' if result.cleared_kill_switch else 'no'}",
             f"- Duplicate Fills Removed: {result.duplicate_fills_removed}",
             f"- Orphan Fills Removed: {result.orphan_fills_removed}",
-            f"- Orphan Terminal Broker Orders Removed: {result.orphan_terminal_broker_orders_removed}",
+            "- Orphan Terminal Broker Orders Removed: "
+            f"{result.orphan_terminal_broker_orders_removed}",
             f"- Parent Aggregates Recomputed: {result.parent_aggregates_recomputed}",
             f"- State file: {result.state_path}",
         ]

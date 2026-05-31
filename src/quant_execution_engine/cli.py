@@ -108,7 +108,14 @@ _BROKER_STATUS_GROUPS: dict[str, set[str]] = {
     "TERMINAL": set(TERMINAL_BROKER_STATUSES),
     "FAILURE": set(FAILURE_BROKER_STATUSES),
     "SUCCESS": set(SUCCESS_BROKER_STATUSES),
-    "EXCEPTION": {"PARTIALLY_FILLED", "PENDING_CANCEL", "WAIT_TO_CANCEL", "REJECTED", "EXPIRED", "FAILED"},
+    "EXCEPTION": {
+        "PARTIALLY_FILLED",
+        "PENDING_CANCEL",
+        "WAIT_TO_CANCEL",
+        "REJECTED",
+        "EXPIRED",
+        "FAILED",
+    },
 }
 _EXCEPTION_STATUS_GROUPS: dict[str, set[str]] = {
     "DEFAULT": set(DEFAULT_EXCEPTION_STATUSES),
@@ -116,6 +123,7 @@ _EXCEPTION_STATUS_GROUPS: dict[str, set[str]] = {
     "OPEN": {"PARTIALLY_FILLED", "PENDING_CANCEL", "WAIT_TO_CANCEL"},
     "FAILURE": {"BLOCKED", "FAILED", "REJECTED", "EXPIRED"},
 }
+
 
 def _handle_command_result(result: int | CommandResult) -> int:
     if isinstance(result, CommandResult):
@@ -233,6 +241,7 @@ def run_config(show: bool = True, broker: str | None = None) -> CommandResult:
         except Exception:
             return str(value)
         return f"{value}"
+
     try:
         selected_broker = resolve_broker_name(broker)
         capabilities = get_broker_capabilities(selected_broker)
@@ -277,8 +286,7 @@ def run_config(show: bool = True, broker: str | None = None) -> CommandResult:
             "- Risk Max Quantity:     "
             + _fmt_unlimited(int(float(risk_cfg.get("max_qty_per_order", 0) or 0))),
             "- Risk Max Spread (bps): " + str(risk_cfg.get("max_spread_bps", 0) or 0),
-            "- Risk Participation:    "
-            + str(risk_cfg.get("max_participation_rate", 0) or 0),
+            "- Risk Participation:    " + str(risk_cfg.get("max_participation_rate", 0) or 0),
             "- Kill Switch Env:       "
             + str(kill_switch_cfg.get("env_var") or "QEXEC_KILL_SWITCH"),
             "- Submit Mode:           "
@@ -308,7 +316,9 @@ def run_config(show: bool = True, broker: str | None = None) -> CommandResult:
                 "LONGPORT_MAX_QTY_PER_ORDER", "LONGBRIDGE_MAX_QTY_PER_ORDER", "0"
             )
             tw_start = _getenv_both(
-                "LONGPORT_TRADING_WINDOW_START", "LONGBRIDGE_TRADING_WINDOW_START", "09:30"
+                "LONGPORT_TRADING_WINDOW_START",
+                "LONGBRIDGE_TRADING_WINDOW_START",
+                "09:30",
             )
             tw_end = _getenv_both(
                 "LONGPORT_TRADING_WINDOW_END", "LONGBRIDGE_TRADING_WINDOW_END", "16:00"
@@ -422,7 +432,11 @@ def run_orders(
         state = ExecutionStateStore().load(adapter.backend_name, resolved.label)
         records = sorted(
             state.broker_orders,
-            key=lambda record: (record.updated_at, record.submitted_at, record.broker_order_id),
+            key=lambda record: (
+                record.updated_at,
+                record.submitted_at,
+                record.broker_order_id,
+            ),
             reverse=True,
         )
         allowed_statuses = _resolve_broker_status_filter(status_filter)
@@ -430,11 +444,19 @@ def run_orders(
         if allowed_statuses is not None:
             records = [record for record in records if record.status in allowed_statuses]
         if allowed_symbols is not None:
-            records = [record for record in records if _symbol_matches_filter(record.symbol, allowed_symbols)]
+            records = [
+                record
+                for record in records
+                if _symbol_matches_filter(record.symbol, allowed_symbols)
+            ]
         if not records and (allowed_statuses is not None or allowed_symbols is not None):
+            filter_summary = _format_filter_summary(
+                status_filter=status_filter,
+                symbol_filter=symbol_filter,
+            )
             return CommandResult(
                 exit_code=0,
-                stdout=f"No tracked broker orders matching filters: {_format_filter_summary(status_filter=status_filter, symbol_filter=symbol_filter)}",
+                stdout=f"No tracked broker orders matching filters: {filter_summary}",
             )
         return CommandResult(exit_code=0, stdout=render_broker_orders(records))
     except Exception as exc:
@@ -464,24 +486,38 @@ def run_broker_orders(
         records = adapter.list_order_history(
             resolved,
             symbol=symbol_filter if symbol_filter and "," not in symbol_filter else None,
-            broker_order_id=next(iter(broker_order_ids)) if broker_order_ids and len(broker_order_ids) == 1 else None,
+            broker_order_id=next(iter(broker_order_ids))
+            if broker_order_ids and len(broker_order_ids) == 1
+            else None,
         )
         allowed_statuses = _resolve_broker_status_filter(status_filter)
         allowed_symbols = _resolve_symbol_filter(symbol_filter)
         if allowed_statuses is not None:
             records = [record for record in records if record.status in allowed_statuses]
         if allowed_symbols is not None:
-            records = [record for record in records if _symbol_matches_filter(record.symbol, allowed_symbols)]
+            records = [
+                record
+                for record in records
+                if _symbol_matches_filter(record.symbol, allowed_symbols)
+            ]
         if broker_order_ids is not None:
             records = [record for record in records if record.broker_order_id in broker_order_ids]
         records = sorted(
             records,
-            key=lambda record: (record.updated_at, record.submitted_at, record.broker_order_id),
+            key=lambda record: (
+                record.updated_at,
+                record.submitted_at,
+                record.broker_order_id,
+            ),
             reverse=True,
         )
         if fmt == "json":
             return CommandResult(exit_code=0, stdout=render_json(records))
-        if not records and (allowed_statuses is not None or allowed_symbols is not None or broker_order_ids is not None):
+        if not records and (
+            allowed_statuses is not None
+            or allowed_symbols is not None
+            or broker_order_ids is not None
+        ):
             return CommandResult(
                 exit_code=0,
                 stdout=(
@@ -524,16 +560,26 @@ def run_broker_fills(
         records = adapter.list_fill_history(
             resolved,
             symbol=symbol_filter if symbol_filter and "," not in symbol_filter else None,
-            broker_order_id=next(iter(broker_order_ids)) if broker_order_ids and len(broker_order_ids) == 1 else None,
+            broker_order_id=next(iter(broker_order_ids))
+            if broker_order_ids and len(broker_order_ids) == 1
+            else None,
         )
         allowed_symbols = _resolve_symbol_filter(symbol_filter)
         if allowed_symbols is not None:
-            records = [record for record in records if _symbol_matches_filter(record.symbol, allowed_symbols)]
+            records = [
+                record
+                for record in records
+                if _symbol_matches_filter(record.symbol, allowed_symbols)
+            ]
         if broker_order_ids is not None:
             records = [record for record in records if record.broker_order_id in broker_order_ids]
         records = sorted(
             records,
-            key=lambda record: (record.filled_at, record.broker_order_id, record.fill_id),
+            key=lambda record: (
+                record.filled_at,
+                record.broker_order_id,
+                record.fill_id,
+            ),
             reverse=True,
         )
         if fmt == "json":
@@ -583,11 +629,19 @@ def run_exceptions(
             statuses=statuses,
         )
         if allowed_symbols is not None:
-            records = [record for record in records if _symbol_matches_filter(record.symbol, allowed_symbols)]
+            records = [
+                record
+                for record in records
+                if _symbol_matches_filter(record.symbol, allowed_symbols)
+            ]
         if not records and (status_filter or symbol_filter):
+            filter_summary = _format_filter_summary(
+                status_filter=status_filter,
+                symbol_filter=symbol_filter,
+            )
             return CommandResult(
                 exit_code=0,
-                stdout=f"No tracked execution exceptions matching filters: {_format_filter_summary(status_filter=status_filter, symbol_filter=symbol_filter)}",
+                stdout=f"No tracked execution exceptions matching filters: {filter_summary}",
             )
         return CommandResult(exit_code=0, stdout=render_exception_orders(records))
     except Exception as exc:
@@ -1023,9 +1077,7 @@ def run_rebalance(
             account_label=account,
         )
 
-        target_symbols = {
-            f"{target.symbol}.{target.market}" for target in targets_doc.targets
-        }
+        target_symbols = {f"{target.symbol}.{target.market}" for target in targets_doc.targets}
         held_symbols = {position.symbol for position in account_snapshot.positions}
         all_symbols = sorted(target_symbols | held_symbols)
         if all_symbols:
@@ -1044,10 +1096,14 @@ def run_rebalance(
                 if price > 0:
                     position.last_price = price
                     position.estimated_value = float(price) * float(position.quantity)
-            total_market_value = sum(float(position.estimated_value) for position in account_snapshot.positions)
+            total_market_value = sum(
+                float(position.estimated_value) for position in account_snapshot.positions
+            )
             account_snapshot.total_market_value = total_market_value
             if not account_snapshot.total_portfolio_value:
-                account_snapshot.total_portfolio_value = float(account_snapshot.cash_usd) + total_market_value
+                account_snapshot.total_portfolio_value = (
+                    float(account_snapshot.cash_usd) + total_market_value
+                )
 
         try:
             effective_exposure = targets_doc.target_gross_exposure
@@ -1176,9 +1232,7 @@ def main() -> int:
         return 0
 
     if args.command == "quote":
-        return _handle_command_result(
-            run_quote(args.tickers, broker=getattr(args, "broker", None))
-        )
+        return _handle_command_result(run_quote(args.tickers, broker=getattr(args, "broker", None)))
     if args.command == "preflight":
         return _handle_command_result(
             run_preflight(
@@ -1212,9 +1266,7 @@ def main() -> int:
             run_config(getattr(args, "show", True), broker=getattr(args, "broker", None))
         )
     if args.command == "evidence-maturity":
-        return _handle_command_result(
-            run_evidence_maturity(fmt=getattr(args, "format", "table"))
-        )
+        return _handle_command_result(run_evidence_maturity(fmt=getattr(args, "format", "table")))
     if args.command == "evidence-pack":
         return _handle_command_result(
             run_evidence_pack(
@@ -1375,9 +1427,7 @@ def main() -> int:
                 drop_orphan_terminal_broker_orders=getattr(
                     args, "drop_orphan_terminal_broker_orders", False
                 ),
-                recompute_parent_aggregates=getattr(
-                    args, "recompute_parent_aggregates", False
-                ),
+                recompute_parent_aggregates=getattr(args, "recompute_parent_aggregates", False),
                 account=getattr(args, "account", "main"),
                 broker=getattr(args, "broker", None),
             )

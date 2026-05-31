@@ -51,17 +51,22 @@ uv run pytest -m integration
 uv run pytest --cov=src/quant_execution_engine --cov-report=term-missing -m 'not integration and not e2e and not slow'
 ```
 
-## 静态检查现状
+## 静态检查
 
-项目已将 Ruff 和 mypy 放入开发依赖，但当前仓库仍处于维护债收敛阶段，不能把默认 `pytest` 通过理解为完整质量门控通过。
+基础质量门禁由 Ruff、mypy 和默认快速测试组成。默认 `pytest`
+只代表行为快回归通过；合并前至少同时运行以下命令：
 
 ```bash
-uv run python -m compileall -q src tests project_tools
-uv run ruff check .
-uv run mypy src tests project_tools
+uv run python -m ruff check .
+uv run python -m mypy src/quant_execution_engine
+uv run pytest
 ```
 
-建议优先清理 Ruff 的未使用导入、未定义名称、import 排序和旧式类型标注；长行可以采用预算递减方式处理。mypy 建议先从低耦合模块开始收敛，再逐步覆盖执行服务、券商适配器和渲染层。
+Ruff 行宽与工作区其他 Python 仓库保持一致，为 100 列。mypy 覆盖
+`src/quant_execution_engine`，并只对 optional SDK / UI 依赖
+`longport.*`、`longbridge.*`、`rich.*` 使用 `ignore_missing_imports`。
+新增 mypy override、Ruff ignore 或 `# type: ignore` 前，应优先确认它是否是
+optional dependency 边界、兼容 shim，或确实无法用更明确的类型表达。
 
 ## 券商测试与证据入口
 

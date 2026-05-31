@@ -96,9 +96,7 @@ def summarize_risk_decisions(
             summary.pass_count += 1
         elif outcome == "BLOCK":
             summary.block_count += 1
-            summary.block_reasons.append(
-                {"gate": gate, "reason": reason, "metrics": dict(metrics)}
-            )
+            summary.block_reasons.append({"gate": gate, "reason": reason, "metrics": dict(metrics)})
         elif outcome == "BYPASS":
             summary.bypass_count += 1
             classification = _classify_bypass_reason(reason)
@@ -124,11 +122,7 @@ def format_risk_bypass_summary(
 ) -> str | None:
     """Return a compact operator-facing bypass summary."""
 
-    payload = (
-        summary.to_payload()
-        if isinstance(summary, RiskDecisionSummary)
-        else summary
-    )
+    payload = summary.to_payload() if isinstance(summary, RiskDecisionSummary) else summary
     bypass_count = int(payload.get("bypass_count") or 0)
     if bypass_count <= 0:
         return None
@@ -144,9 +138,7 @@ def format_risk_bypass_summary(
         parts.append(f"{other_count} other")
     reasons = payload.get("bypass_reasons") or []
     reason_text = "; ".join(
-        f"{item.get('gate')}: {item.get('reason')}"
-        for item in reasons
-        if item.get("gate")
+        f"{item.get('gate')}: {item.get('reason')}" for item in reasons if item.get("gate")
     )
     if reason_text:
         parts.append(reason_text)
@@ -177,10 +169,7 @@ def is_manual_kill_switch_active() -> tuple[bool, str | None]:
     """Check whether a manual kill switch has been activated."""
 
     cfg = get_kill_switch_config()
-    env_var = (
-        str(cfg.get("env_var") or "QEXEC_KILL_SWITCH").strip()
-        or "QEXEC_KILL_SWITCH"
-    )
+    env_var = str(cfg.get("env_var") or "QEXEC_KILL_SWITCH").strip() or "QEXEC_KILL_SWITCH"
     raw_env = os.getenv(env_var)
     if raw_env and str(raw_env).strip().lower() in {"1", "true", "yes", "on"}:
         return True, f"{env_var}=true"
@@ -226,9 +215,7 @@ class RiskGateChain:
                     "required_fields": ["bid", "ask"],
                 }
             )
-        participation_threshold = float(
-            self.config.get("max_participation_rate", 0.0) or 0.0
-        )
+        participation_threshold = float(self.config.get("max_participation_rate", 0.0) or 0.0)
         if participation_threshold > 0:
             dependencies.append(
                 {
@@ -350,9 +337,7 @@ class RiskGateChain:
             return RiskDecision(
                 gate="participation_guard",
                 outcome="BLOCK",
-                reason=(
-                    f"participation {participation:.4f} exceeds limit {threshold:.4f}"
-                ),
+                reason=(f"participation {participation:.4f} exceeds limit {threshold:.4f}"),
                 metrics={
                     "quantity": order.quantity,
                     "daily_volume": daily_volume,
@@ -379,9 +364,7 @@ class RiskGateChain:
                 reason="market impact guard disabled",
             )
         daily_volume = float(getattr(quote, "daily_volume", 0.0) or 0.0)
-        last_price = float(getattr(quote, "price", 0.0) or 0.0) or float(
-            order.price or 0.0
-        )
+        last_price = float(getattr(quote, "price", 0.0) or 0.0) or float(order.price or 0.0)
         if daily_volume <= 0 or last_price <= 0:
             return RiskDecision(
                 gate="market_impact_guard",
@@ -394,10 +377,7 @@ class RiskGateChain:
             return RiskDecision(
                 gate="market_impact_guard",
                 outcome="BLOCK",
-                reason=(
-                    f"impact estimate {impact_bps:.2f}bps exceeds limit "
-                    f"{threshold:.2f}bps"
-                ),
+                reason=(f"impact estimate {impact_bps:.2f}bps exceeds limit {threshold:.2f}bps"),
                 metrics={
                     "estimated_impact_bps": impact_bps,
                     "participation_rate": participation,

@@ -33,7 +33,9 @@ def build_signal_target(symbol: str, market: str) -> list[dict[str, object]]:
 
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description="Write a deterministic signal-driven targets.json and optionally run qexec rebalance.",
+        description=(
+            "Write a deterministic signal-driven targets.json and optionally run qexec rebalance."
+        ),
     )
     parser.add_argument("--symbol", default="AAPL", help="Base symbol, default: AAPL")
     parser.add_argument("--market", default="US", help="Market suffix, default: US")

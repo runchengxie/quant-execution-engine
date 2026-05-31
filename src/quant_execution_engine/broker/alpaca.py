@@ -28,7 +28,11 @@ def _alpaca_import(path: str):
         module = importlib.import_module(module_name)
     except ImportError as exc:  # pragma: no cover - depends on optional package
         missing = getattr(exc, "name", None)
-        if missing and missing not in {module_name, module_name.split(".")[0], "alpaca"}:
+        if missing and missing not in {
+            module_name,
+            module_name.split(".")[0],
+            "alpaca",
+        }:
             raise BrokerImportError(
                 "alpaca-py import failed because dependency "
                 f"'{missing}' is missing. Install/update it with: uv sync --extra alpaca"
@@ -175,9 +179,7 @@ class AlpacaPaperBrokerAdapter(BrokerAdapter):
     def resolve_account(self, account_label: str | None = None) -> ResolvedBrokerAccount:
         label = account_label or "main"
         if label != "main":
-            raise BrokerValidationError(
-                f"alpaca-paper does not support account selection: {label}"
-            )
+            raise BrokerValidationError(f"alpaca-paper does not support account selection: {label}")
         return ResolvedBrokerAccount(label=label)
 
     def get_account_snapshot(
@@ -208,22 +210,14 @@ class AlpacaPaperBrokerAdapter(BrokerAdapter):
             env="paper",
             cash_usd=_as_float(getattr(account_obj, "cash", None)),
             positions=positions,
-            total_portfolio_value=_as_float(
-                getattr(account_obj, "portfolio_value", None)
-            ),
+            total_portfolio_value=_as_float(getattr(account_obj, "portfolio_value", None)),
             base_currency="USD",
         )
 
-    def get_quotes(
-        self, symbols: list[str], *, include_depth: bool = False
-    ) -> dict[str, Quote]:
+    def get_quotes(self, symbols: list[str], *, include_depth: bool = False) -> dict[str, Quote]:
         data_client = self._get_data_client()
-        StockLatestTradeRequest = _alpaca_import(
-            "alpaca.data.requests.StockLatestTradeRequest"
-        )
-        StockLatestQuoteRequest = _alpaca_import(
-            "alpaca.data.requests.StockLatestQuoteRequest"
-        )
+        StockLatestTradeRequest = _alpaca_import("alpaca.data.requests.StockLatestTradeRequest")
+        StockLatestQuoteRequest = _alpaca_import("alpaca.data.requests.StockLatestQuoteRequest")
 
         request_symbols = [_strip_market(symbol) for symbol in symbols]
         trades = data_client.get_stock_latest_trade(
@@ -244,12 +238,8 @@ class AlpacaPaperBrokerAdapter(BrokerAdapter):
                 symbol=symbol,
                 price=_as_float(getattr(trade, "price", None)),
                 timestamp=str(getattr(trade, "timestamp", "")),
-                bid=_as_float(getattr(quote_payload, "bid_price", None))
-                if quote_payload
-                else None,
-                ask=_as_float(getattr(quote_payload, "ask_price", None))
-                if quote_payload
-                else None,
+                bid=_as_float(getattr(quote_payload, "bid_price", None)) if quote_payload else None,
+                ask=_as_float(getattr(quote_payload, "ask_price", None)) if quote_payload else None,
                 daily_volume=None,
             )
         return results
@@ -274,9 +264,7 @@ class AlpacaPaperBrokerAdapter(BrokerAdapter):
                 extended_hours=request.extended_hours,
             )
         else:
-            MarketOrderRequest = _alpaca_import(
-                "alpaca.trading.requests.MarketOrderRequest"
-            )
+            MarketOrderRequest = _alpaca_import("alpaca.trading.requests.MarketOrderRequest")
             order_req = MarketOrderRequest(
                 symbol=_strip_market(request.symbol),
                 qty=request.quantity,
@@ -309,8 +297,7 @@ class AlpacaPaperBrokerAdapter(BrokerAdapter):
             broker_name=self.backend_name,
             account_label=resolved.label,
             client_order_id=getattr(order, "client_order_id", None),
-            avg_fill_price=_as_float(getattr(order, "filled_avg_price", None))
-            or None,
+            avg_fill_price=_as_float(getattr(order, "filled_avg_price", None)) or None,
             submitted_at=str(getattr(order, "submitted_at", "")),
             updated_at=str(
                 getattr(order, "updated_at", None) or getattr(order, "submitted_at", "")
