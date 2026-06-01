@@ -16,7 +16,7 @@
 | 我想做盈透模拟盘冒烟演练 | `ibkr-paper-smoke.md` |
 | 我想复现长桥模拟盘失败场景 | `longport-paper-failure-smoke.md` |
 | 我想谨慎验证长桥实盘路径 | `longport-real-smoke.md` |
-| 我想看历史开发清单 | `execution-checklist.md` |
+| 我想看历史开发清单或迁移记录 | `archive/README.md` |
 
 ## 推荐阅读路径
 
@@ -32,6 +32,8 @@
 - `cli.md`：`qexec` 命令、参数和操作语义。
 - `configuration.md`：环境变量、本地配置文件、实盘保护和配置加载顺序。
 - `targets.md`：执行输入文件格式。
-- `testing.md`：默认测试、集成测试、端到端测试和人工监督冒烟测试。
-- `architecture.md`、`execution-foundation.md`：架构和执行底座设计。
+- `testing.md`：默认测试、pytest 标记、集成测试、端到端测试和人工监督冒烟测试。
+- `architecture.md`：包结构、模块边界和责任分层。
+- `execution-foundation.md`：订单生命周期、本地状态、对账、风控和恢复链路。
 - `*-smoke.md`：具体券商的专项演练步骤。
+- `archive/`：已完成阶段清单和历史迁移记录。

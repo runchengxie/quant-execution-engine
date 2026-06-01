@@ -6,11 +6,11 @@
 
 | 券商后端 | 当前运行路径 | 运行环境要求 | 证据成熟度 | 当前缺口 |
 | --- | --- | --- | --- | --- |
-| Alpaca 模拟盘 | 纯模拟盘适配器，支持提交、查询、撤单与对账链路。 | 环境变量 `ALPACA_API_KEY` 或 `APCA_API_KEY_ID`，以及 `ALPACA_SECRET_KEY` 或 `APCA_API_SECRET_KEY`。 | 作为稳定且低成本的模拟盘基线，用于反复运行回归与冒烟测试。默认测试使用伪造数据，无需网络连接。 | 暂不支持 Alpaca 实盘路径。 |
-| 长桥模拟盘 | 长桥模拟盘后端，支持真实的券商端提交、查询、撤单与对账链路。 | 需配置 `LONGPORT_APP_KEY`、`LONGPORT_APP_SECRET` 以及 `LONGPORT_ACCESS_TOKEN_TEST`。允许在项目本地的 `.env` 和 `.env.local` 文件中配置模拟盘凭证。 | 人工监督下的模拟盘冒烟测试已覆盖基础的提交、查询、对账与撤单流程。 | 失败场景的测试证据仍需持续补充。 |
-| 长桥实盘 | 长桥实盘后端，在实盘保护机制下提供真实的券商端读取与执行链路。 | 需配置 `LONGPORT_APP_KEY`、`LONGPORT_APP_SECRET`、`LONGPORT_ACCESS_TOKEN`，且在执行实盘下单（`--execute`）时需要显式设置环境变量 `QEXEC_ENABLE_LIVE=1`。实盘凭证必须来自当前进程环境或用户私有文件 `~/.config/qexec/longport-live.env`，严禁存放在项目本地的 `.env*` 或 `.envrc*` 文件中。 | 人工监督下的只读检查已验证配置加载、预检、账户查询、行情获取、私有实盘配置路由以及实盘保护机制的表现。 | 完整的实盘提交、查询、撤单与对账证据目前仍弱于模拟盘冒烟测试，必须继续在人工监督下谨慎推进。 |
-| 盈透模拟盘 | 依赖本地运行的盈透网关的模拟盘后端，目前仅支持美股正股的最小切片。 | 已启动并成功登录的本地盈透网关；环境变量 `IBKR_HOST`、`IBKR_PORT` 或 `IBKR_PORT_PAPER`、`IBKR_CLIENT_ID`，以及可选的 `IBKR_ACCOUNT_ID`。 | 无报单级别的证据已证明网关连接、账户、行情、调仓、对账与全部撤单链路的连通性。 | 仍缺乏在有效市场行情下，真实的券商端报单、撤单与成交证据。 |
-| A 股 / CN 文件契约 | `targets.json` 可解析 `market: CN` 目标，适合作为中国大陆市场研究到执行的 dry-run 合约验收。`local-dry-run` 后端只提供离线现金、合成报价和手数规则，用于无网络文件契约预演。 | 由 `cstree export-targets` 生成的 `.SH`、`.SZ`、`.BJ` 标的应保留交易所后缀；`.XSHG`、`.XSHE` 会标准化为 `.SH`、`.SZ`。估值前必须提供 `FX_CNY_USD` 或 `fx.to_usd.CNY`。不带 `--execute` 的 `qexec rebalance` 不会提交订单。 | 仅是文件契约级别能力，不代表已连接真实券商。 | 当前券商后端没有宣称中国大陆市场真实报单能力；真实账户权限、券商接口、港股通或 A 股账户能力必须单独验证。 |
+| Alpaca 模拟盘（`alpaca-paper`，兼容别名 `alpaca`） | 纯模拟盘适配器，支持提交、查询、撤单与对账链路。 | 环境变量 `ALPACA_API_KEY` 或 `APCA_API_KEY_ID`，以及 `ALPACA_SECRET_KEY` 或 `APCA_API_SECRET_KEY`。 | 作为稳定且低成本的模拟盘基线，用于反复运行回归与冒烟测试。默认测试使用伪造数据，无需网络连接。 | 暂不支持 Alpaca 实盘路径。 |
+| 长桥模拟盘（`longport-paper`） | 长桥模拟盘后端，支持真实的券商端提交、查询、撤单与对账链路。 | 需配置 `LONGPORT_APP_KEY`、`LONGPORT_APP_SECRET` 以及 `LONGPORT_ACCESS_TOKEN_TEST`。允许在项目本地的 `.env` 和 `.env.local` 文件中配置模拟盘凭证。 | 人工监督下的模拟盘冒烟测试已覆盖基础的提交、查询、对账与撤单流程。 | 失败场景的测试证据仍需持续补充。 |
+| 长桥实盘（`longport`） | 长桥实盘后端，在实盘保护机制下提供真实的券商端读取与执行链路。 | 需配置 `LONGPORT_APP_KEY`、`LONGPORT_APP_SECRET`、`LONGPORT_ACCESS_TOKEN`，且在执行实盘下单（`--execute`）时需要显式设置环境变量 `QEXEC_ENABLE_LIVE=1`。实盘凭证必须来自当前进程环境或用户私有文件 `~/.config/qexec/longport-live.env`，严禁存放在项目本地的 `.env*` 或 `.envrc*` 文件中。 | 人工监督下的只读检查已验证配置加载、预检、账户查询、行情获取、私有实盘配置路由以及实盘保护机制的表现。 | 完整的实盘提交、查询、撤单与对账证据目前仍弱于模拟盘冒烟测试，必须继续在人工监督下谨慎推进。 |
+| 盈透模拟盘（`ibkr-paper`） | 依赖本地运行的盈透网关的模拟盘后端，目前仅支持美股正股的最小切片。 | 已启动并成功登录的本地盈透网关；环境变量 `IBKR_HOST`、`IBKR_PORT` 或 `IBKR_PORT_PAPER`、`IBKR_CLIENT_ID`，以及可选的 `IBKR_ACCOUNT_ID`。 | 无报单级别的证据已证明网关连接、账户、行情、调仓、对账与全部撤单链路的连通性。 | 仍缺乏在有效市场行情下，真实的券商端报单、撤单与成交证据。 |
+| A 股 / CN 文件契约（`local-dry-run`） | `targets.json` 可解析 `market: CN` 目标，适合作为中国大陆市场研究到执行的 dry-run 合约验收。`local-dry-run` 后端只提供离线现金、合成报价和手数规则，用于无网络文件契约预演。 | 由 `cstree export-targets` 生成的 `.SH`、`.SZ`、`.BJ` 标的应保留交易所后缀；`.XSHG`、`.XSHE` 会标准化为 `.SH`、`.SZ`。估值前必须提供 `FX_CNY_USD` 或 `fx.to_usd.CNY`。不带 `--execute` 的 `qexec rebalance` 不会提交订单。 | 当前完成文件契约级验收；中国大陆市场真实报单能力需要另行提供券商证据。 | 当前券商后端没有宣称中国大陆市场真实报单能力；真实账户权限、券商接口、港股通或 A 股账户能力必须单独验证。 |
 
 ## 共享执行语义
 

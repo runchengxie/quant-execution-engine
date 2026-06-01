@@ -6,6 +6,9 @@
 
 当前支持矩阵、证据成熟度和已知限制说明以
 [current-capabilities.md](current-capabilities.md) 为准。
+本文负责说明包结构、模块边界和责任分层。订单生命周期与执行底座细节见
+[execution-foundation.md](execution-foundation.md)；阶段性完成清单见
+[archive/execution-checklist.md](archive/execution-checklist.md)。
 
 它负责：
 

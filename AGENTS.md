@@ -19,7 +19,7 @@
   - `uv run pytest -m e2e`
 - 覆盖率是按需视角，不应绑死在默认 `pytest` 入口。
 - Ruff 与 Pyright 是当前 hard gate；mypy 在迁移后的一个发布周期内保留为 advisory。默认
-  `pytest` 通过不代表完整质量门控通过。
+  `pytest` 只说明快速行为回归通过，合并前仍需按改动范围运行完整质量门控。
 - 优先写行为测试，不要堆源码字符串、文件存在性之类的低价值静态断言。
 
 ## Current Functional Caveats
@@ -35,7 +35,7 @@
 - `qexec rebalance --account` 当前只做 account/profile 标签解析与快速失败校验，不提供多账户路由。
 - LongPort real、`longport-paper`、Alpaca paper 和 `ibkr-paper` 当前 adapter 仍按单账户语义运行；不支持的标签会直接报错。
 - `retry` 只支持零成交的终态本地追踪订单；部分成交要走 `cancel-rest`、`resume-remaining` 或 `accept-partial`。
-- `orders` / `exceptions` / `order` 都是本地追踪状态视图，不是券商全量订单视图。
+- `orders` / `exceptions` / `order` 都是本地追踪状态视图；券商全量订单视图使用只读券商查询命令。
 - 调仓输入只接受标准 `targets.json`。
 
 ## Outputs

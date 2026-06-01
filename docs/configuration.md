@@ -218,7 +218,7 @@ fx:
 
 `qexec rebalance` 统一以 USD 计算组合价值、目标手数和名义金额风控。对于
 `HK`、`CN`、`SG` 市场，执行引擎会在调仓计划生成前使用相应 FX 配置将
-行情换算为 USD；缺少汇率时会拒绝生成计划，而不是以混合币种继续计算。
+行情换算为 USD；缺少汇率时会拒绝生成计划，避免以混合币种继续计算。
 因此港股 `targets.json` 通过 `longport-paper` 或 `longport` 调仓前，必须
 配置 `FX_HKD_USD`（或上面的 `fx.to_usd.HKD` / `fx.rates.HKDUSD`）。
 
