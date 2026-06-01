@@ -4,12 +4,12 @@ from unittest.mock import patch
 
 import pytest
 
-from quant_execution_engine.models import AccountSnapshot, Position, Quote
 from quant_execution_engine.broker.factory import (
     get_broker_adapter,
     get_broker_capabilities,
     is_paper_broker,
 )
+from quant_execution_engine.models import AccountSnapshot, Position, Quote
 from quant_execution_engine.rebalance import FeeSchedule, RebalanceService
 from quant_execution_engine.targets import TargetEntry
 

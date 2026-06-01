@@ -6,6 +6,7 @@ from collections import Counter
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from .broker.base import BrokerOrderRecord, utc_now_iso
 from .execution import (
@@ -15,6 +16,9 @@ from .execution import (
     ExecutionStateStore,
 )
 from .execution_state import ChildOrder, OrderIntent, ParentOrder
+
+if TYPE_CHECKING:
+    from .execution_state import ExecutionStateStore as ExecutionStateStoreType
 
 TERMINAL_PARENT_STATUSES = TERMINAL_BROKER_STATUSES | {
     "BLOCKED",
@@ -548,7 +552,7 @@ def _recompute_parent_aggregates(state: ExecutionState) -> int:
 class StateMaintenanceService:
     """Inspect and maintain local execution state files."""
 
-    def __init__(self, *, state_store: ExecutionStateStore | None = None) -> None:
+    def __init__(self, *, state_store: ExecutionStateStoreType | None = None) -> None:
         self.state_store = state_store or ExecutionStateStore()
 
     def doctor(self, *, broker_name: str, account_label: str) -> StateDoctorResult:

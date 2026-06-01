@@ -67,11 +67,11 @@ def __getattr__(name: str):
         "getenv_both",
     }:
         from .ibkr import IbkrPaperBrokerAdapter
-        from .local_dry_run import LocalDryRunBrokerAdapter
         from .ibkr_runtime import (
             probe_ibkr_runtime_config,
             resolve_ibkr_runtime_config,
         )
+        from .local_dry_run import LocalDryRunBrokerAdapter
         from .longport import (
             LongPortClient,
             _to_lb_symbol,

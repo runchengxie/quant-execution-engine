@@ -10,7 +10,7 @@ from .base import BrokerAdapter, BrokerCapabilityMatrix, ResolvedBrokerAccount, 
 
 def _env_float(name: str, default: float) -> float:
     raw = os.getenv(name)
-    if raw in (None, ""):
+    if raw is None or raw == "":
         return default
     try:
         value = float(raw)

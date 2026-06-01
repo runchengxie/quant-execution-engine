@@ -53,12 +53,14 @@ uv run pytest --cov=src/quant_execution_engine --cov-report=term-missing -m 'not
 
 ## 静态检查
 
-基础质量门禁由 Ruff、mypy 和默认快速测试组成。默认 `pytest`
+基础质量门禁由 Ruff、mypy 和默认快速测试组成。Pyright 作为 advisory compatibility
+检查单独运行，不替代 mypy。默认 `pytest`
 只代表行为快回归通过；合并前至少同时运行以下命令：
 
 ```bash
 uv run python -m ruff check .
 uv run python -m mypy src/quant_execution_engine
+uv run pyright
 uv run pytest
 ```
 
@@ -67,6 +69,28 @@ Ruff 行宽与工作区其他 Python 仓库保持一致，为 100 列。mypy 覆
 `longport.*`、`longbridge.*`、`rich.*` 使用 `ignore_missing_imports`。
 新增 mypy override、Ruff ignore 或 `# type: ignore` 前，应优先确认它是否是
 optional dependency 边界、兼容 shim，或确实无法用更明确的类型表达。
+
+Pyright 当前使用 Python 3.10、`basic` mode，并忽略 optional broker SDK 的 missing-import /
+stub 噪声。发现结果先按 advisory 记录：能稳定复现且涉及执行、风控、状态或 targets contract
+的报告应修复；只来自 optional SDK 动态边界的报告应在边界模型明确后再处理。只有在一段复核
+周期内，Pyright 的有效发现不少于 mypy 且噪声可控，才评估 hard gate 迁移。工作区委托入口：
+
+```bash
+python ../scripts/run_submodule_checks.py \
+  --profile pyright_advisory \
+  --submodule quant-execution-engine
+```
+
+2026-06-01 的 advisory 基线是 `8 errors, 11 warnings`。本次评估已修复
+`state_tools.py` 中兼容 shim 的运行时 `Any` 导出被直接用作类型表达式的问题。剩余结果按
+以下边界处理：
+
+- `broker/ibkr.py`、`broker/ibkr_runtime.py` 与 `broker/longport_support.py` 的 8 个 error
+  都位于 optional SDK 动态对象归一化边界，后续应通过窄化 helper 或协议类型逐步处理。
+- `broker/__init__.py` 的 10 个 warning 来自延迟导出列表；兼容导出仍需保留。
+- `config.py` 的 1 个 warning 是 PyYAML source 可见性提示，不影响 mypy hard gate。
+
+Pyright 当前保持 advisory；不能因为这份基线而绕过 Ruff、mypy 或默认 pytest。
 
 ## 券商测试与证据入口
 

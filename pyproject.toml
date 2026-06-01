@@ -13,6 +13,7 @@ dev = [
   "pytest-cov",
   "ruff>=0.5",
   "mypy>=1.10",
+  "pyright>=1.1.390",
   "types-PyYAML",
 ]
 
@@ -65,6 +66,19 @@ quote-style = "double"
 python_version = "3.10"
 warn_return_any = true
 warn_unused_configs = true
+
+[tool.pyright]
+include = ["src/quant_execution_engine"]
+exclude = [
+  ".venv",
+  "outputs",
+  "build",
+  "dist",
+]
+pythonVersion = "3.10"
+typeCheckingMode = "basic"
+reportMissingImports = false
+reportMissingTypeStubs = false
 
 [[tool.mypy.overrides]]
 module = [

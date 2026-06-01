@@ -8,7 +8,9 @@ from typing import Any, Protocol, cast
 from ..config import load_cfg
 from .base import BrokerAdapter, BrokerCapabilityMatrix, BrokerValidationError
 
-PAPER_BROKERS = frozenset({"alpaca", "alpaca-paper", "ibkr-paper", "longport-paper", "local-dry-run"})
+PAPER_BROKERS = frozenset(
+    {"alpaca", "alpaca-paper", "ibkr-paper", "longport-paper", "local-dry-run"}
+)
 LONGPORT_BROKERS = frozenset({"longport", "longport-paper"})
 ALPACA_BROKERS = frozenset({"alpaca", "alpaca-paper"})
 IBKR_BROKERS = frozenset({"ibkr-paper"})
