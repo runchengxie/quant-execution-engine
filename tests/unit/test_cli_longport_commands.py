@@ -19,6 +19,7 @@ from quant_execution_engine.execution import (
     ExecutionState,
     ExecutionStateStore,
 )
+from quant_execution_engine.targets import write_targets_json
 
 pytestmark = pytest.mark.unit
 
@@ -745,6 +746,31 @@ def test_run_rebalance_rejects_legacy_workbook(tmp_path: Path) -> None:
     assert result.stderr is not None
     assert "deprecated" in result.stderr.lower()
     assert "canonical targets json" in result.stderr.lower()
+
+
+def test_run_rebalance_local_dry_run_uses_explicit_cn_fx(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    target_file = tmp_path / "targets.json"
+    write_targets_json(
+        target_file,
+        targets=[{"symbol": "600519.SH", "market": "CN", "target_weight": 1.0}],
+        asof="2026-05-29",
+        source="unit",
+    )
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("FX_CNY_USD", "0.14")
+    monkeypatch.setenv("QEXEC_LOCAL_DRY_RUN_CASH_USD", "1400")
+    monkeypatch.setenv("QEXEC_LOCAL_DRY_RUN_PRICE", "10")
+
+    result = cli.run_rebalance(str(target_file), broker="local-dry-run")
+
+    assert result.exit_code == 0
+    assert result.stdout is not None
+    assert "DRY-RUN" in result.stdout
+    audit_logs = sorted((tmp_path / "outputs" / "orders").glob("*_paper_dry.jsonl"))
+    assert audit_logs
 
 
 def test_run_rebalance_live_requires_explicit_enable(

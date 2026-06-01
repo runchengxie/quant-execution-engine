@@ -205,6 +205,29 @@ def test_risk_gate_blocks_oversized_order(tmp_path: Path) -> None:
     assert state.parent_orders[0].status == "BLOCKED"
 
 
+def test_cn_dry_run_never_submits_to_adapter(tmp_path: Path) -> None:
+    adapter = FakeAdapter()
+    service = OrderLifecycleService(
+        adapter,
+        state_store=ExecutionStateStore(root_dir=tmp_path),
+        risk_chain=RiskGateChain({}),
+    )
+
+    results = service.execute_orders(
+        [Order(symbol="600519.SH.CN", quantity=100, side="BUY", price=10.0)],
+        account_label="main",
+        dry_run=True,
+        target_source="cross-sectional-trees",
+        target_asof="2026-05-29",
+        target_input_path="outputs/targets/a_share_latest.json",
+    )
+
+    assert results[0].status == "DRY_RUN"
+    assert results[0].order_id is not None
+    assert results[0].order_id.startswith("dry_run_")
+    assert adapter.submit_calls == 0
+
+
 def test_idempotent_submission_reuses_existing_open_order(tmp_path: Path) -> None:
     adapter = FakeAdapter()
     store = ExecutionStateStore(root_dir=tmp_path)

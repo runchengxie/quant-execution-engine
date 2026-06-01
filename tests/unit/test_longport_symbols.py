@@ -21,6 +21,7 @@ from quant_execution_engine.broker.longport import _to_lb_symbol
         ("858.SZ", "000858.SZ.CN"),
         ("430047.BJ", "430047.BJ.CN"),
         ("600000.XSHG", "600000.SH.CN"),
+        ("1.XSHE", "000001.SZ.CN"),
     ],
 )
 def test_to_lb_symbol(raw: str, expect: str) -> None:

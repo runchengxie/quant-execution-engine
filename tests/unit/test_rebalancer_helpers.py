@@ -5,6 +5,11 @@ from unittest.mock import patch
 import pytest
 
 from quant_execution_engine.models import AccountSnapshot, Position, Quote
+from quant_execution_engine.broker.factory import (
+    get_broker_adapter,
+    get_broker_capabilities,
+    is_paper_broker,
+)
 from quant_execution_engine.rebalance import FeeSchedule, RebalanceService
 from quant_execution_engine.targets import TargetEntry
 
@@ -39,6 +44,7 @@ def test_coerce_lb_symbol_preserves_a_share_exchange_suffix() -> None:
     )
     assert RebalanceService._coerce_lb_symbol("858.SZ") == "000858.SZ.CN"
     assert RebalanceService._coerce_lb_symbol("600000.XSHG") == "600000.SH.CN"
+    assert RebalanceService._coerce_lb_symbol("1.XSHE") == "000001.SZ.CN"
 
 
 def test_plan_rebalance_cn_dry_run_lot_sizing(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -60,6 +66,40 @@ def test_plan_rebalance_cn_dry_run_lot_sizing(monkeypatch: pytest.MonkeyPatch) -
     assert result.orders[0].symbol == "600519.SH.CN"
     assert result.orders[0].quantity == 1000
     assert result.orders[0].side == "BUY"
+
+
+def test_plan_rebalance_rejects_cn_quote_without_fx_rate() -> None:
+    service = RebalanceService(env="paper")
+    client = SimpleNamespace(lot_size=lambda symbol: 100 if symbol.endswith(".CN") else 1)
+    snapshot = AccountSnapshot(env="paper", cash_usd=1400.0, positions=[])
+    targets = [TargetEntry(symbol="600519.SH", market="CN", target_weight=1.0)]
+
+    with (
+        patch.object(RebalanceService, "_get_client", return_value=client),
+        patch("quant_execution_engine.rebalance.get_rate_to_usd", return_value=None),
+        pytest.raises(ValueError, match="missing FX rate for CNY"),
+    ):
+        service.plan_rebalance(
+            targets,
+            snapshot,
+            quotes={"600519.SH.CN": 10.0},
+        )
+
+
+def test_local_dry_run_backend_supports_offline_cn_file_contract(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("QEXEC_LOCAL_DRY_RUN_CASH_USD", "1400")
+    monkeypatch.setenv("QEXEC_LOCAL_DRY_RUN_PRICE", "10")
+
+    capabilities = get_broker_capabilities("local-dry-run")
+    adapter = get_broker_adapter(broker_name="local-dry-run")
+
+    assert is_paper_broker("local-dry-run") is True
+    assert capabilities.supports_live_submit is False
+    assert adapter.get_account_snapshot().cash_usd == pytest.approx(1400)
+    assert adapter.get_quotes(["600519.SH.CN"])["600519.SH.CN"].price == pytest.approx(10)
+    assert adapter.lot_size("600519.SH.CN") == 100
 
 
 def test_compute_effective_total() -> None:

@@ -31,6 +31,7 @@ __all__ = [
     "BrokerOrderRequest",
     "BrokerValidationError",
     "IbkrPaperBrokerAdapter",
+    "LocalDryRunBrokerAdapter",
     "LongPortBrokerAdapter",
     "LongPortClient",
     "LongPortPaperBrokerAdapter",
@@ -55,6 +56,7 @@ __all__ = [
 def __getattr__(name: str):
     if name in {
         "IbkrPaperBrokerAdapter",
+        "LocalDryRunBrokerAdapter",
         "LongPortBrokerAdapter",
         "LongPortPaperBrokerAdapter",
         "LongPortClient",
@@ -65,6 +67,7 @@ def __getattr__(name: str):
         "getenv_both",
     }:
         from .ibkr import IbkrPaperBrokerAdapter
+        from .local_dry_run import LocalDryRunBrokerAdapter
         from .ibkr_runtime import (
             probe_ibkr_runtime_config,
             resolve_ibkr_runtime_config,
@@ -82,6 +85,7 @@ def __getattr__(name: str):
 
         exports = {
             "IbkrPaperBrokerAdapter": IbkrPaperBrokerAdapter,
+            "LocalDryRunBrokerAdapter": LocalDryRunBrokerAdapter,
             "LongPortBrokerAdapter": LongPortBrokerAdapter,
             "LongPortPaperBrokerAdapter": LongPortPaperBrokerAdapter,
             "LongPortClient": LongPortClient,
