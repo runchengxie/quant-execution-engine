@@ -18,7 +18,8 @@
   - `uv run pytest -m integration`
   - `uv run pytest -m e2e`
 - 覆盖率是按需视角，不应绑死在默认 `pytest` 入口。
-- Ruff 与 mypy 当前仍处于维护债收敛阶段；默认 `pytest` 通过不代表完整质量门控通过。
+- Ruff 与 Pyright 是当前 hard gate；mypy 在迁移后的一个发布周期内保留为 advisory。默认
+  `pytest` 通过不代表完整质量门控通过。
 - 优先写行为测试，不要堆源码字符串、文件存在性之类的低价值静态断言。
 
 ## Current Functional Caveats

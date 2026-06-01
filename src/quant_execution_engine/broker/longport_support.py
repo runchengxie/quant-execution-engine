@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 from enum import Enum
+from typing import Protocol, cast
 
 
 def getenv_both(name_new: str, name_old: str, default: str | None = None) -> str | None:
@@ -16,6 +17,10 @@ def getenv_both(name_new: str, name_old: str, default: str | None = None) -> str
 class Env(str, Enum):
     REAL = "real"
     PAPER = "paper"
+
+
+class _EnumLike(Protocol):
+    value: object
 
 
 @dataclass
@@ -38,7 +43,7 @@ def enum_value(value: object) -> object:
                 return value
         except Exception:  # pragma: no cover - mock import always available in tests
             pass
-        return value.value
+        return cast(_EnumLike, value).value
     text = str(value)
     if "." in text:
         return text.split(".")[-1]
@@ -75,8 +80,9 @@ def normalize_order_status(status: object) -> str:
 def coerce_iso(value: object) -> str:
     if value is None:
         return ""
-    if hasattr(value, "isoformat"):
-        return str(value.isoformat())
+    isoformat = getattr(value, "isoformat", None)
+    if callable(isoformat):
+        return str(isoformat())
     return str(value)
 
 

@@ -6,6 +6,7 @@ import importlib
 import math
 import os
 import time
+from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any
@@ -105,18 +106,30 @@ def probe_ibkr_runtime_config() -> IbkrRuntimeConfig:
     return resolve_ibkr_runtime_config()
 
 
+def _as_float(value: object) -> float:
+    if value in (None, ""):
+        return 0.0
+    return float(str(value))
+
+
+def _as_list(value: object) -> list[Any]:
+    if isinstance(value, Iterable) and not isinstance(value, (str, bytes, bytearray)):
+        return list(value)
+    return []
+
+
 def _ticker_has_valid_price(ticker: Any) -> bool:
     market_price = getattr(ticker, "marketPrice", None)
     if callable(market_price):
         try:
-            price = float(market_price())
+            price = _as_float(market_price())
             if math.isfinite(price) and price > 0:
                 return True
         except Exception:
             pass
     for attr in ("last", "close", "bid", "ask"):
         try:
-            price = float(getattr(ticker, attr, 0) or 0)
+            price = _as_float(getattr(ticker, attr, 0))
         except Exception:
             continue
         if math.isfinite(price) and price > 0:
@@ -192,11 +205,11 @@ class IbkrRuntime:
             raw = managed()
         else:
             raw = managed or []
-        return [str(account).strip() for account in raw if str(account).strip()]
+        return [str(account).strip() for account in _as_list(raw) if str(account).strip()]
 
     def _raw_account_values(self) -> list[Any]:
         summary = self._get_ib().accountSummary()
-        return list(summary or [])
+        return _as_list(summary)
 
     def resolve_account_id(self) -> str | None:
         if self._account_id is not None:
@@ -376,7 +389,7 @@ class IbkrRuntime:
                 payload = method()
             except Exception:
                 continue
-            trades.extend(list(payload or []))
+            trades.extend(_as_list(payload))
         deduped: dict[str, Any] = {}
         for trade in trades:
             order_id = self._trade_order_id(trade)
@@ -394,7 +407,7 @@ class IbkrRuntime:
     def list_open_trades(self, account_id: str | None = None) -> list[Any]:
         selected_account = account_id or self.resolve_account_id()
         method = getattr(self._get_ib(), "openTrades", None)
-        trades = list(method() or []) if callable(method) else []
+        trades = _as_list(method()) if callable(method) else []
         if not selected_account:
             return trades
         filtered: list[Any] = []
@@ -418,7 +431,7 @@ class IbkrRuntime:
     ) -> list[Any]:
         selected_account = account_id or self.resolve_account_id()
         method = getattr(self._get_ib(), "reqExecutions", None)
-        fills = list(method() or []) if callable(method) else []
+        fills = _as_list(method()) if callable(method) else []
         results: list[Any] = []
         expected_order_id = None if broker_order_id is None else str(broker_order_id).strip()
         for fill in fills:

@@ -46,14 +46,14 @@ def _ticker_price(ticker: Any) -> float:
     market_price = getattr(ticker, "marketPrice", None)
     if callable(market_price):
         try:
-            price = float(market_price())
+            price = _as_float(market_price())
             if price > 0:
                 return price
         except Exception:
             pass
     for attr in ("last", "close", "bid", "ask"):
         try:
-            price = float(getattr(ticker, attr, 0) or 0)
+            price = _as_float(getattr(ticker, attr, 0))
         except Exception:
             continue
         if price > 0:
