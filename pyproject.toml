@@ -80,6 +80,26 @@ typeCheckingMode = "basic"
 reportMissingImports = false
 reportMissingTypeStubs = false
 
+[tool.maintainability.quality_targets]
+pyright_strict_targets = [
+  "src/quant_execution_engine/targets.py",
+  "src/quant_execution_engine/risk.py",
+  "src/quant_execution_engine/preflight.py",
+  "src/quant_execution_engine/rebalance.py",
+  "src/quant_execution_engine/execution_state.py",
+  "src/quant_execution_engine/broker/base.py",
+  "src/quant_execution_engine/execution_service.py",
+]
+mypy_advisory_targets = [
+  "src/quant_execution_engine/targets.py",
+  "src/quant_execution_engine/risk.py",
+  "src/quant_execution_engine/preflight.py",
+  "src/quant_execution_engine/rebalance.py",
+  "src/quant_execution_engine/execution_state.py",
+  "src/quant_execution_engine/broker/base.py",
+  "src/quant_execution_engine/execution_service.py",
+]
+
 [[tool.mypy.overrides]]
 module = [
   "longbridge.*",
