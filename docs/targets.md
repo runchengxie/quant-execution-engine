@@ -85,3 +85,4 @@
 - 旧的 `ticker-list` / `weights` 格式不再作为调仓执行的输入。
 - 内部工装如果接收 `ticker` 列表，会先写成上述标准 JSON，再交给执行链路。
 - `rebalance` 以 USD 统一估值；目标或现有持仓包含 `HK`、`CN`、`SG` 时，必须配置对应的 `FX_<CCY>_USD` 或 `fx.to_usd.<CCY>` 汇率，否则拒绝生成调仓计划。
+- 上游研究系统可以在 `targets.json.lineage.json` 中记录 strategy、signal artifact 或 run provenance；执行引擎不把这些 sidecar 字段当作下单输入，调仓行为仍只由标准 `targets.json` 和执行侧风控决定。
