@@ -89,6 +89,7 @@ pyright_strict_targets = [
   "src/quant_execution_engine/execution_state.py",
   "src/quant_execution_engine/broker/base.py",
   "src/quant_execution_engine/execution_service.py",
+  "src/quant_execution_engine/cli.py",
 ]
 mypy_advisory_targets = [
   "src/quant_execution_engine/targets.py",
@@ -98,6 +99,7 @@ mypy_advisory_targets = [
   "src/quant_execution_engine/execution_state.py",
   "src/quant_execution_engine/broker/base.py",
   "src/quant_execution_engine/execution_service.py",
+  "src/quant_execution_engine/cli.py",
 ]
 
 [[tool.mypy.overrides]]

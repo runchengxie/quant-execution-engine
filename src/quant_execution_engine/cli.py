@@ -125,6 +125,12 @@ _EXCEPTION_STATUS_GROUPS: dict[str, set[str]] = {
 }
 
 
+def _close_broker_adapter(adapter: object | None) -> None:
+    close_fn = getattr(adapter, "close", None)
+    if callable(close_fn):
+        close_fn()
+
+
 def _handle_command_result(result: int | CommandResult) -> int:
     if isinstance(result, CommandResult):
         if _RICH_CONSOLE is not None and result.rich_renderable is not None:
@@ -464,9 +470,7 @@ def run_orders(
         get_logger(__name__).error(msg)
         return CommandResult(exit_code=1, stderr=msg)
     finally:
-        close_fn = getattr(adapter, "close", None)
-        if callable(close_fn):
-            close_fn()
+        _close_broker_adapter(adapter)
 
 
 def run_broker_orders(
@@ -539,9 +543,7 @@ def run_broker_orders(
         get_logger(__name__).error(msg)
         return CommandResult(exit_code=1, stderr=msg)
     finally:
-        close_fn = getattr(adapter, "close", None)
-        if callable(close_fn):
-            close_fn()
+        _close_broker_adapter(adapter)
 
 
 def run_broker_fills(
@@ -606,9 +608,7 @@ def run_broker_fills(
         get_logger(__name__).error(msg)
         return CommandResult(exit_code=1, stderr=msg)
     finally:
-        close_fn = getattr(adapter, "close", None)
-        if callable(close_fn):
-            close_fn()
+        _close_broker_adapter(adapter)
 
 
 def run_exceptions(
@@ -649,9 +649,7 @@ def run_exceptions(
         get_logger(__name__).error(msg)
         return CommandResult(exit_code=1, stderr=msg)
     finally:
-        close_fn = getattr(adapter, "close", None)
-        if callable(close_fn):
-            close_fn()
+        _close_broker_adapter(adapter)
 
 
 def run_reconcile(
@@ -681,9 +679,7 @@ def run_reconcile(
         get_logger(__name__).error(msg)
         return CommandResult(exit_code=1, stderr=msg)
     finally:
-        close_fn = getattr(adapter, "close", None)
-        if callable(close_fn):
-            close_fn()
+        _close_broker_adapter(adapter)
 
 
 def run_cancel(
@@ -715,9 +711,7 @@ def run_cancel(
         get_logger(__name__).error(msg)
         return CommandResult(exit_code=1, stderr=msg)
     finally:
-        close_fn = getattr(adapter, "close", None)
-        if callable(close_fn):
-            close_fn()
+        _close_broker_adapter(adapter)
 
 
 def run_cancel_all(
@@ -736,9 +730,7 @@ def run_cancel_all(
         get_logger(__name__).error(msg)
         return CommandResult(exit_code=1, stderr=msg)
     finally:
-        close_fn = getattr(adapter, "close", None)
-        if callable(close_fn):
-            close_fn()
+        _close_broker_adapter(adapter)
 
 
 def run_cancel_rest(
@@ -770,9 +762,7 @@ def run_cancel_rest(
         get_logger(__name__).error(msg)
         return CommandResult(exit_code=1, stderr=msg)
     finally:
-        close_fn = getattr(adapter, "close", None)
-        if callable(close_fn):
-            close_fn()
+        _close_broker_adapter(adapter)
 
 
 def run_order(
@@ -792,9 +782,7 @@ def run_order(
         get_logger(__name__).error(msg)
         return CommandResult(exit_code=1, stderr=msg)
     finally:
-        close_fn = getattr(adapter, "close", None)
-        if callable(close_fn):
-            close_fn()
+        _close_broker_adapter(adapter)
 
 
 def run_trace_order(
@@ -817,9 +805,7 @@ def run_trace_order(
         get_logger(__name__).error(msg)
         return CommandResult(exit_code=1, stderr=msg)
     finally:
-        close_fn = getattr(adapter, "close", None)
-        if callable(close_fn):
-            close_fn()
+        _close_broker_adapter(adapter)
 
 
 def run_retry(
@@ -851,9 +837,7 @@ def run_retry(
         get_logger(__name__).error(msg)
         return CommandResult(exit_code=1, stderr=msg)
     finally:
-        close_fn = getattr(adapter, "close", None)
-        if callable(close_fn):
-            close_fn()
+        _close_broker_adapter(adapter)
 
 
 def run_resume_remaining(
@@ -876,9 +860,7 @@ def run_resume_remaining(
         get_logger(__name__).error(msg)
         return CommandResult(exit_code=1, stderr=msg)
     finally:
-        close_fn = getattr(adapter, "close", None)
-        if callable(close_fn):
-            close_fn()
+        _close_broker_adapter(adapter)
 
 
 def run_accept_partial(
@@ -901,9 +883,7 @@ def run_accept_partial(
         get_logger(__name__).error(msg)
         return CommandResult(exit_code=1, stderr=msg)
     finally:
-        close_fn = getattr(adapter, "close", None)
-        if callable(close_fn):
-            close_fn()
+        _close_broker_adapter(adapter)
 
 
 def run_reprice(
@@ -928,9 +908,7 @@ def run_reprice(
         get_logger(__name__).error(msg)
         return CommandResult(exit_code=1, stderr=msg)
     finally:
-        close_fn = getattr(adapter, "close", None)
-        if callable(close_fn):
-            close_fn()
+        _close_broker_adapter(adapter)
 
 
 def run_retry_stale(
@@ -953,9 +931,7 @@ def run_retry_stale(
         get_logger(__name__).error(msg)
         return CommandResult(exit_code=1, stderr=msg)
     finally:
-        close_fn = getattr(adapter, "close", None)
-        if callable(close_fn):
-            close_fn()
+        _close_broker_adapter(adapter)
 
 
 def run_state_doctor(
