@@ -1,6 +1,6 @@
 # 盈透证券模拟盘冒烟测试
 
-当前券商支持矩阵和证据成熟度以「current-capabilities.md」为准。
+当前券商支持矩阵和证据成熟度以 [current-capabilities.md](current-capabilities.md) 为准。
 
 本文档旨在说明以下目标：
 

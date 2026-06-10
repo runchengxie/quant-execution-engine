@@ -1,17 +1,17 @@
 # AGENTS
 
-## Repo Scope
+## 仓库范围
 
 - 这是一个只负责交易执行的仓库。
 - 策略研究、AI 信号、历史回测和原始数据导入已经移除。不要把这些模块重新加回本仓库。
 
-## Environment
+## 环境
 
 - 使用 `uv` 作为默认入口。
 - 常用初始化命令：`uv sync --group dev --extra cli`
 - 常用测试命令：`uv run pytest`
 
-## Testing
+## 测试
 
 - 默认测试只跑快速单元测试。
 - `integration` 和 `e2e` 需要显式选择：
@@ -22,7 +22,7 @@
   `pytest` 只说明快速行为回归通过，合并前仍需按改动范围运行完整质量门控。
 - 优先写行为测试，不要堆源码字符串、文件存在性之类的低价值静态断言。
 
-## Current Functional Caveats
+## 当前功能注意事项
 
 - 当前完整支持矩阵、凭证来源规则、证据成熟度和已知限制以 `docs/current-capabilities.md` 为准。
 - 长桥实盘的自动化端到端证据仍弱于模拟盘冒烟测试；实盘操作必须由操作员按文档监督执行。
@@ -38,7 +38,7 @@
 - `orders` / `exceptions` / `order` 都是本地追踪状态视图；券商全量订单视图使用只读券商查询命令。
 - 调仓输入只接受标准 `targets.json`。
 
-## Outputs
+## 输出
 
 - 调仓审计日志输出到 `outputs/orders/*.jsonl`。
 - 本地执行状态输出到 `outputs/state/*.json`。

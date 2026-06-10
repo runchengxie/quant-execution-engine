@@ -1,6 +1,6 @@
 # 配置说明
 
-当前券商后端支持范围、凭证来源规则和证据成熟度以「current-capabilities.md」为准。本文聚焦配置入口。
+当前券商后端支持范围、凭证来源规则和证据成熟度以 [current-capabilities.md](current-capabilities.md) 为准。本文聚焦配置入口。
 
 ## 环境变量
 

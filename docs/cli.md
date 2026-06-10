@@ -136,7 +136,7 @@ qexec orders --broker longport-paper --symbol AAPL
 ```
 
 你可以通过状态（如 `open`、`failure`、`terminal`）或标的代码（如 `AAPL`）进行过滤。
-*注意：此命令仅展示本地执行引擎已追踪的订单。*
+注意：此命令仅展示本地执行引擎已追踪的订单。
 
 ### `broker-orders`
 
@@ -192,7 +192,7 @@ qexec trace-order <broker-order-id> --broker longport-paper
 qexec trace-order <child-order-id> --broker longport --format json
 ```
 
-这个命令不会修改任何状态；它的目标是把「本地追踪到的事实」和「券商端只读历史记录」放到同一个复查视图里。
+这个命令不会修改任何状态；它的目标是把本地追踪到的事实和券商端只读历史记录放到同一个复查视图里。
 
 ### `rebalance`
 
@@ -247,13 +247,13 @@ qexec retry <broker-order-id> --broker longport-paper
 # 对一笔仍在开启状态的限价单进行改价（系统会先执行撤单，再以新价格发起新的子订单）
 qexec reprice <broker-order-id> --limit-price 155.50 --broker longport-paper
 
-# 批量处理“过期挂单”：撤销在本地停留超过指定时长（默认 5 分钟）且零成交的挂单，并重新发起提交
+# 批量处理过期挂单：撤销在本地停留超过指定时长（默认 5 分钟）且零成交的挂单，并重新发起提交
 qexec retry-stale --older-than-minutes 15 --broker longport-paper
 ```
 
 ### `cancel-rest` / `resume-remaining` / `accept-partial`（部分成交处理）
 
-当订单发生「部分成交」时，系统会将其停留在需要人工介入的状态。你可以使用以下专项命令进行处理：
+当订单发生部分成交时，系统会将其停留在需要人工介入的状态。你可以使用以下专项命令进行处理：
 
 ```bash
 # 1. 撤销剩余未成交的部分
