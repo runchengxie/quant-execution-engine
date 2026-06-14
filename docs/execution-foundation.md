@@ -6,6 +6,8 @@
 如需了解项目的文件结构，请参阅 [architecture.md](architecture.md)。
 如需了解测试的运行方式，请参阅 [testing.md](testing.md)。
 如需了解当前券商支持矩阵、证据成熟度和共享限制说明，请参阅 [current-capabilities.md](current-capabilities.md)。
+如需了解上游研究结果进入执行层前后的隔离、审计和 paper/live 分层，请参阅
+[research-handoff-governance.md](research-handoff-governance.md)。
 已完成阶段清单和历史迁移记录保存在 [archive/](archive/) 目录，当前操作入口以本文和顶层页面为准。
 
 ## 1. 本文档解答什么问题

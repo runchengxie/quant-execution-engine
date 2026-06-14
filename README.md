@@ -98,6 +98,7 @@ outputs/evidence-bundles/*
 - 命令行说明：[docs/cli.md](docs/cli.md)
 - 配置和凭证：[docs/configuration.md](docs/configuration.md)
 - `targets.json` 格式：[docs/targets.md](docs/targets.md)
+- 研究到执行交接治理：[docs/research-handoff-governance.md](docs/research-handoff-governance.md)
 - 测试入口：[docs/testing.md](docs/testing.md)
 - 架构说明：[docs/architecture.md](docs/architecture.md)
 - 长桥实盘谨慎演练：[docs/longport-real-smoke.md](docs/longport-real-smoke.md)
