@@ -140,7 +140,7 @@ def test_main_routes_config() -> None:
             result = cli.main()
 
     assert result == 0
-    mock_run.assert_called_once_with(True, broker=None)
+    mock_run.assert_called_once_with(True, broker=None, check_gates=False)
 
 
 def test_main_routes_evidence_maturity() -> None:

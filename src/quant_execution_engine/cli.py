@@ -47,6 +47,7 @@ from .execution import (
     OrderLifecycleService,
 )
 from .guards import validate_live_execution_guard
+from .health import HealthCheckError, render_health_result, run_health
 from .logging import get_logger, set_run_id
 from .preflight import run_preflight_checks
 from .rebalance import RebalanceService
@@ -74,7 +75,14 @@ from .renderers.table import (
     render_state_repair_summary,
     render_tracked_order_detail,
 )
-from .risk import get_kill_switch_config, get_risk_config
+from .report import (
+    ReportError,
+    get_run_report,
+    list_run_reports,
+    render_run_report,
+    render_run_report_list,
+)
+from .risk import get_kill_switch_config, get_risk_config, is_manual_kill_switch_active
 from .state_tools import StateMaintenanceService
 from .targets import read_targets_json
 
@@ -216,7 +224,9 @@ def run_account(
         return CommandResult(exit_code=1, stderr=msg)
 
 
-def run_config(show: bool = True, broker: str | None = None) -> CommandResult:
+def run_config(
+    show: bool = True, broker: str | None = None, *, check_gates: bool = False
+) -> CommandResult:
     if not show:
         return CommandResult(exit_code=0)
 
@@ -254,6 +264,42 @@ def run_config(show: bool = True, broker: str | None = None) -> CommandResult:
         risk_cfg = get_risk_config()
         kill_switch_cfg = get_kill_switch_config()
         default_account = resolve_default_account_label()
+
+        if check_gates:
+            kill_active, _kill_reason = is_manual_kill_switch_active()
+
+            def _gate_row(label: str, value: str, active: bool) -> str:
+                return f"{label:<26s}{value:<22s}{'ACTIVE' if active else 'OFF'}"
+
+            max_notional = float(risk_cfg.get("max_notional_per_order", 0.0) or 0.0)
+            max_qty = int(float(risk_cfg.get("max_qty_per_order", 0) or 0))
+            max_spread = int(float(risk_cfg.get("max_spread_bps", 0) or 0))
+            max_partic = float(risk_cfg.get("max_participation_rate", 0) or 0)
+            max_impact = int(float(risk_cfg.get("max_market_impact_bps", 0) or 0))
+            kill_env = str(kill_switch_cfg.get("env_var") or "QEXEC_KILL_SWITCH")
+            kill_state = "ACTIVE (execution blocked)" if kill_active else "inactive"
+            fail_thresh = str(kill_switch_cfg.get("failure_threshold", 3) or 3)
+
+            gates_output = [
+                "=== Active Risk Gate Thresholds ===",
+                "Broker: " + selected_broker,
+                "",
+                "Gate                      Threshold              Status",
+                "-" * 60,
+                _gate_row("max_notional_per_order", _fmt_unlimited(max_notional),
+                          max_notional > 0),
+                _gate_row("max_qty_per_order", _fmt_unlimited(max_qty), max_qty > 0),
+                _gate_row("max_spread_bps", str(max_spread), max_spread > 0),
+                _gate_row("max_participation_rate", str(max_partic), max_partic > 0),
+                _gate_row("max_market_impact_bps", str(max_impact), max_impact > 0),
+                "",
+                "Kill switch env:         " + kill_env,
+                "Kill switch state:       " + kill_state,
+                "Failure threshold:       " + fail_thresh,
+                "",
+                "Source: config/config.yaml  execution.risk.*",
+            ]
+            return CommandResult(exit_code=0, stdout="\n".join(gates_output))
 
         alpaca_key = os.getenv("ALPACA_API_KEY") or os.getenv("APCA_API_KEY_ID")
         alpaca_secret = os.getenv("ALPACA_SECRET_KEY") or os.getenv("APCA_API_SECRET_KEY")
@@ -1188,6 +1234,43 @@ def _format_filter_summary(
     return ", ".join(parts) if parts else "none"
 
 
+def run_report(
+    *,
+    run_id: str | None = None,
+    broker: str | None = None,
+    last_n: int | None = None,
+) -> CommandResult:
+    """Generate a human-readable execution run report."""
+    try:
+        if run_id:
+            report = get_run_report(run_id)
+            return CommandResult(exit_code=0, stdout=render_run_report(report))
+        reports = list_run_reports(broker_filter=broker, last_n=last_n)
+        return CommandResult(exit_code=0, stdout=render_run_report_list(reports))
+    except ReportError as exc:
+        return CommandResult(exit_code=1, stderr=str(exc))
+    except Exception as exc:
+        return CommandResult(exit_code=1, stderr=f"Report failed: {exc}")
+
+
+def run_health_cmd(
+    *,
+    broker: str | None = None,
+    account: str = "main",
+) -> CommandResult:
+    """Run quick health check."""
+    try:
+        result = run_health(broker_name=broker, account_label=account)
+        return CommandResult(
+            exit_code=0 if result.healthy else 1,
+            stdout=render_health_result(result),
+        )
+    except HealthCheckError as exc:
+        return CommandResult(exit_code=1, stderr=str(exc))
+    except Exception as exc:
+        return CommandResult(exit_code=1, stderr=f"Health check failed: {exc}")
+
+
 def main() -> int:
     run_id = uuid.uuid4().hex[:12]
     set_run_id(run_id)
@@ -1239,7 +1322,11 @@ def main() -> int:
         )
     if args.command == "config":
         return _handle_command_result(
-            run_config(getattr(args, "show", True), broker=getattr(args, "broker", None))
+            run_config(
+                getattr(args, "show", True),
+                broker=getattr(args, "broker", None),
+                check_gates=getattr(args, "check_gates", False),
+            )
         )
     if args.command == "evidence-maturity":
         return _handle_command_result(run_evidence_maturity(fmt=getattr(args, "format", "table")))
@@ -1406,6 +1493,21 @@ def main() -> int:
                 recompute_parent_aggregates=getattr(args, "recompute_parent_aggregates", False),
                 account=getattr(args, "account", "main"),
                 broker=getattr(args, "broker", None),
+            )
+        )
+    if args.command == "report":
+        return _handle_command_result(
+            run_report(
+                run_id=getattr(args, "run_id", None),
+                broker=getattr(args, "broker", None),
+                last_n=getattr(args, "last_n", None),
+            )
+        )
+    if args.command == "health":
+        return _handle_command_result(
+            run_health_cmd(
+                broker=getattr(args, "broker", None),
+                account=getattr(args, "account", "main"),
             )
         )
 

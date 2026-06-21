@@ -97,6 +97,12 @@ Examples:
 
     config_parser = subparsers.add_parser("config", help="Show effective broker config")
     config_parser.add_argument("--show", action="store_true", default=True)
+    config_parser.add_argument(
+        "--check-gates",
+        action="store_true",
+        default=False,
+        help="Print active risk gate thresholds only",
+    )
     _add_broker_arg(config_parser)
 
     evidence_maturity_parser = subparsers.add_parser(
@@ -361,5 +367,29 @@ Examples:
         ),
     )
     _add_broker_account_args(state_repair_parser)
+
+    report_parser = subparsers.add_parser(
+        "report",
+        help="Show human-readable execution run reports from evidence bundles",
+    )
+    _add_broker_arg(report_parser)
+    report_parser.add_argument(
+        "--run-id",
+        type=str,
+        default=None,
+        help="Show detailed report for a specific run id",
+    )
+    report_parser.add_argument(
+        "--last-n",
+        type=int,
+        default=None,
+        help="Show the last N runs (default: all, newest first)",
+    )
+
+    health_parser = subparsers.add_parser(
+        "health",
+        help="Quick operator health check (preflight + state-doctor)",
+    )
+    _add_broker_account_args(health_parser)
 
     return parser

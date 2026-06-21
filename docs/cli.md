@@ -51,6 +51,13 @@ qexec config --broker ibkr-paper
 
 对于盈透模拟盘（`ibkr-paper`），该命令会显示本地网关的主机地址、端口、客户 ID、账户 ID 及超时时间，并标明当前的运行环境设定（基于本地 IB Gateway 和 TWS API）。
 
+附加 `--check-gates` 可以只打印当前生效的风险门控阈值与紧急停单状态，适合在盘前快速复核：
+
+```bash
+qexec config --broker longport-paper --check-gates
+qexec config --broker longport --check-gates
+```
+
 ### `evidence-maturity`
 
 查看各券商接入代码的成熟度、最新的测试证据、存在的功能缺口以及下一步的冒烟测试建议。
@@ -295,3 +302,40 @@ qexec state-repair --clear-kill-switch --dedupe-fills --recompute-parent-aggrega
   移除未被任何子订单引用、且已经处于终态的游离券商订单记录。
 - `--recompute-parent-aggregates`
   根据本地子订单、券商订单和成交记录重新计算母订单的成交数量、剩余数量和汇总状态。
+
+### `report`
+
+从本地的证据打包目录（`outputs/evidence-bundles/`）中读取历次执行的审计证据，生成操作员可读的摘要报表。
+
+```bash
+# 列出所有可用的执行运行记录（最新在前）
+qexec report
+
+# 按券商过滤
+qexec report --broker longport-paper
+
+# 只展示最近 5 次运行
+qexec report --broker longport-paper --last-n 5
+
+# 查看某次运行的详细报告（包括逐笔订单追踪摘要）
+qexec report --run-id 20260621_abc123
+```
+
+该命令不需要预先运行 `evidence-pack`，直接读取已存在的 `manifest.json`（如有）。适合在复盘、排障或操作员交接时快速了解历史执行概况。
+
+### `health`
+
+快速运行一次只读健康检查，合并 preflight 与 state-doctor 的结果，输出统一的"健康 / 不健康"判断。
+
+```bash
+qexec health --broker longport-paper
+qexec health --broker ibkr-paper
+```
+
+检查内容包括：
+- 券商接口可达性、账户解析、行情获取
+- 实盘保护机制状态
+- 本地执行状态一致性
+- 紧急停单状态
+
+所有检查均为只读操作，不会提交订单或修改本地状态。适合作为盘前检查或 Makefile `make health` 目标的基础命令。
