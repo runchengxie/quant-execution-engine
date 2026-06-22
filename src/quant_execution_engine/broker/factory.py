@@ -165,6 +165,6 @@ def get_broker_adapter(
                 "custom broker client injection is only supported for longport and ibkr backends"
             )
         AlpacaPaperBrokerAdapter = _load_alpaca_adapter_cls()
-        return AlpacaPaperBrokerAdapter(client=None)
+        return AlpacaPaperBrokerAdapter()
 
     raise BrokerValidationError(f"unsupported broker backend: {backend}")
