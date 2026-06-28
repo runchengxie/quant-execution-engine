@@ -16,7 +16,6 @@ import pytest
 
 from quant_execution_engine.facade import QEEFacade
 
-
 # ------------------------------------------------------------------
 # Intraday-style targets fixture (simulates TargetExporter output)
 # ------------------------------------------------------------------

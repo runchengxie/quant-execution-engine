@@ -286,8 +286,7 @@ def run_config(
                 "",
                 "Gate                      Threshold              Status",
                 "-" * 60,
-                _gate_row("max_notional_per_order", _fmt_unlimited(max_notional),
-                          max_notional > 0),
+                _gate_row("max_notional_per_order", _fmt_unlimited(max_notional), max_notional > 0),
                 _gate_row("max_qty_per_order", _fmt_unlimited(max_qty), max_qty > 0),
                 _gate_row("max_spread_bps", str(max_spread), max_spread > 0),
                 _gate_row("max_participation_rate", str(max_partic), max_partic > 0),
@@ -359,12 +358,12 @@ def run_config(
                 env_name=longport_env_name,
                 default="false",
             )
-            max_notional = _getenv_both(
+            local_max_notional = _getenv_both(
                 "LONGPORT_MAX_NOTIONAL_PER_ORDER",
                 "LONGBRIDGE_MAX_NOTIONAL_PER_ORDER",
                 "0",
             )
-            max_qty = _getenv_both(
+            local_max_qty = _getenv_both(
                 "LONGPORT_MAX_QTY_PER_ORDER", "LONGBRIDGE_MAX_QTY_PER_ORDER", "0"
             )
             tw_start = _getenv_both(
@@ -391,8 +390,9 @@ def run_config(
                     "- Overnight:             "
                     + ("enabled" if _to_bool(overnight) else "disabled"),
                     "- Overnight Source:      " + resolved_overnight_source,
-                    "- Local Max Notional:    " + _fmt_unlimited(_to_float(max_notional, 0.0)),
-                    "- Local Max Quantity:    " + _fmt_unlimited(_to_int(max_qty, 0)),
+                    "- Local Max Notional:    "
+                    + _fmt_unlimited(_to_float(local_max_notional, 0.0)),
+                    "- Local Max Quantity:    " + _fmt_unlimited(_to_int(local_max_qty, 0)),
                     "- Trade Window:          " + f"{tw_start} - {tw_end}",
                     "- App Key:               " + _mask(app_key),
                     "- App Key Source:        " + app_key_source,

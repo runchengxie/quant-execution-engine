@@ -45,16 +45,12 @@ class HealthResult:
         if self.preflight_error:
             items.append(f"preflight: {self.preflight_error}")
         if self.preflight and self.preflight.has_failures:
-            failure_count = sum(
-                1 for c in self.preflight.checks if c.outcome == "FAIL"
-            )
+            failure_count = sum(1 for c in self.preflight.checks if c.outcome == "FAIL")
             items.append(f"preflight: {failure_count} failure(s)")
         if self.state_doctor_error:
             items.append(f"state-doctor: {self.state_doctor_error}")
         if self.state_doctor is not None and self._state_issue_count > 0:
-            items.append(
-                f"state-doctor: {self._state_issue_count} issue(s)"
-            )
+            items.append(f"state-doctor: {self._state_issue_count} issue(s)")
         return items
 
 
@@ -85,9 +81,7 @@ def run_health(
     # State doctor
     try:
         service = StateMaintenanceService()
-        result.state_doctor = service.doctor(
-            broker_name=resolved, account_label=account_label
-        )
+        result.state_doctor = service.doctor(broker_name=resolved, account_label=account_label)
     except Exception as exc:
         result.state_doctor_error = str(exc)
 
@@ -116,9 +110,7 @@ def render_health_result(result: HealthResult) -> str:
         flags = ""
         if warned:
             flags = f", {len(warned)} warning(s)"
-        lines.append(
-            f"  Preflight: {status} ({ok_count} ok, {len(failed)} failed{flags})"
-        )
+        lines.append(f"  Preflight: {status} ({ok_count} ok, {len(failed)} failed{flags})")
         for check in failed:
             lines.append(f"    FAIL - {check.name}: {check.message}")
         for check in warned:
@@ -135,9 +127,7 @@ def render_health_result(result: HealthResult) -> str:
         sd = result.state_doctor
         real_issues = [i for i in sd.issues if i.severity != "INFO"]
         status = "PASS" if not real_issues else "ISSUES"
-        lines.append(
-            f"  State doctor: {status} ({len(real_issues)} issue(s))"
-        )
+        lines.append(f"  State doctor: {status} ({len(real_issues)} issue(s))")
         for issue in real_issues:
             lines.append(f"    - {issue.message}")
 
@@ -145,9 +135,9 @@ def render_health_result(result: HealthResult) -> str:
     if result.healthy:
         lines.append("No issues found — ready for execution.")
     else:
-        issues = result.issues
-        lines.append(f"Issues ({len(issues)}):")
-        for issue in issues:
-            lines.append(f"  - {issue}")
+        health_issues = result.issues
+        lines.append(f"Issues ({len(health_issues)}):")
+        for issue_text in health_issues:
+            lines.append(f"  - {issue_text}")
 
     return "\n".join(lines)

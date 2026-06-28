@@ -15,6 +15,7 @@ dev = [
   "mypy>=1.10",
   "pyright>=1.1.390",
   "types-PyYAML",
+  "ty>=0.0.55",
 ]
 
 [project.optional-dependencies]
@@ -79,6 +80,28 @@ pythonVersion = "3.10"
 typeCheckingMode = "basic"
 reportMissingImports = false
 reportMissingTypeStubs = false
+
+[tool.ty.src]
+include = [
+  "src/quant_execution_engine/targets.py",
+  "src/quant_execution_engine/risk.py",
+  "src/quant_execution_engine/preflight.py",
+  "src/quant_execution_engine/rebalance.py",
+  "src/quant_execution_engine/execution_state.py",
+  "src/quant_execution_engine/broker/base.py",
+  "src/quant_execution_engine/execution_service.py",
+  "src/quant_execution_engine/cli.py",
+]
+exclude = [
+  ".venv",
+  "outputs",
+  "build",
+  "dist",
+]
+
+[tool.ty.rules]
+redundant-cast = "ignore"
+unresolved-import = "ignore"
 
 [tool.maintainability.quality_targets]
 pyright_strict_targets = [

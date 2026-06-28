@@ -138,9 +138,7 @@ class QEEFacade:
             )
 
             # 5. Save audit log
-            audit_path = self._service.save_audit_log(
-                rebalance_result, dry_run=dry_run
-            )
+            audit_path = self._service.save_audit_log(rebalance_result, dry_run=dry_run)
 
             # 6. Reconcile
             reconcile_warnings: list[str] = []
@@ -265,7 +263,5 @@ def _collect_reconcile_warnings(report: BrokerReconcileReport) -> list[str]:
     warnings: list[str] = []
     for order in report.open_orders:
         if order.status in {"REJECTED", "EXPIRED"}:
-            warnings.append(
-                f"Order {order.broker_order_id} ({order.symbol}) is {order.status}"
-            )
+            warnings.append(f"Order {order.broker_order_id} ({order.symbol}) is {order.status}")
     return warnings

@@ -72,9 +72,7 @@ def _build_run_report(bundle_dir: Path, run_id: str) -> RunReport:
         run_id=run_id,
         broker_name=str(payload.get("broker_name") or "") or None,
         account_label=str(payload.get("account_label") or "") or None,
-        dry_run=(
-            bool(payload["dry_run"]) if payload.get("dry_run") is not None else None
-        ),
+        dry_run=(bool(payload["dry_run"]) if payload.get("dry_run") is not None else None),
         created_at=str(payload.get("created_at") or "") or None,
         bundle_path=str(bundle_dir),
         included_count=int(payload.get("included_artifact_count", 0)),
@@ -128,8 +126,7 @@ def get_run_report(
         available = _list_bundle_ids(root)
         available_text = ", ".join(available) if available else "none"
         raise ReportError(
-            f"run id {run_id} not found in {_bundles_dir(root)}; "
-            f"available: {available_text}"
+            f"run id {run_id} not found in {_bundles_dir(root)}; available: {available_text}"
         )
     return _build_run_report(bundle_dir, run_id)
 
@@ -163,8 +160,10 @@ def render_run_report(report: RunReport) -> str:
         entries = trace.get("entries") or []
         if entries:
             lines.append(f"  Order trace entries ({len(entries)}):")
-            lines.append(f"  {'Order Ref':30s} {'Intent':12s} {'Parent':10s} "
-                         f"{'Broker':10s} {'Children':>8s} {'Fills':>6s} {'Warnings':>8s}")
+            lines.append(
+                f"  {'Order Ref':30s} {'Intent':12s} {'Parent':10s} "
+                f"{'Broker':10s} {'Children':>8s} {'Fills':>6s} {'Warnings':>8s}"
+            )
             lines.append("  " + "-" * 90)
             for entry in entries:
                 order_ref = str(entry.get("order_ref", "-"))[:28]
