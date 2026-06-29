@@ -7,7 +7,9 @@
 #   make test-all              Run full test suite (unit + integration + e2e)
 #   make lint                  Run ruff lint
 #   make format                Run ruff format check
-#   make typecheck             Run pyright + mypy
+#   make typecheck             Run ty
+#   make basedpyright          Run BasedPyright advisory diagnostics
+#   make mypy-advisory         Run mypy advisory diagnostics
 #   make quality               Run full quality gate (lint + format + typecheck + test)
 #   make preflight-paper       Preflight check against longport-paper
 #   make preflight-ibkr        Preflight check against ibkr-paper
@@ -59,7 +61,14 @@ format-fix:
 
 .PHONY: typecheck
 typecheck:
-	uv run pyright src/quant_execution_engine/
+	uv run ty check
+
+.PHONY: basedpyright
+basedpyright:
+	uv run python -m basedpyright
+
+.PHONY: mypy-advisory
+mypy-advisory:
 	uv run mypy src/quant_execution_engine/
 
 .PHONY: quality
@@ -131,7 +140,9 @@ help:
 	@echo "  make test-all            Run full suite"
 	@echo "  make lint                Ruff lint"
 	@echo "  make format              Ruff format check"
-	@echo "  make typecheck           Pyright + mypy"
+	@echo "  make typecheck           ty check"
+	@echo "  make basedpyright        BasedPyright advisory diagnostics"
+	@echo "  make mypy-advisory       mypy advisory diagnostics"
 	@echo "  make quality             Full gate: lint + format + typecheck + test"
 	@echo
 	@echo "Broker smoke (paper only):"
