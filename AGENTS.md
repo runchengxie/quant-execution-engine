@@ -18,7 +18,7 @@
   - `uv run pytest -m integration`
   - `uv run pytest -m e2e`
 - 覆盖率是按需视角，不应绑死在默认 `pytest` 入口。
-- Ruff 与 Pyright 是当前 hard gate；mypy 在迁移后的一个发布周期内保留为 advisory。默认
+- Ruff、ty 和默认快速测试是当前基础门禁。`make quality` 会额外运行 Pyright 和 mypy；顶层委托检查的 `release_typecheck` 运行 Pyright，`mypy_advisory` 单独保留。默认
   `pytest` 只说明快速行为回归通过，合并前仍需按改动范围运行完整质量门控。
 - 优先写行为测试，不要堆源码字符串、文件存在性之类的低价值静态断言。
 

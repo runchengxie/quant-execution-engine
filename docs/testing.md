@@ -79,7 +79,7 @@ uv run pytest
 Ruff 行宽与工作区其他 Python 仓库保持一致，为 100 列。ty 的默认覆盖面由
 `pyproject.toml` 中 `[tool.ty.src].include` 维护，当前先覆盖执行关键模块。
 
-Release 前或需要诊断类型债时，再单独运行 advisory 检查；它们不替代默认 `ty check`：
+发布前或需要诊断类型债时，再单独运行建议项检查；它们不替代默认 `ty check`：
 
 ```bash
 uv run --group dev python -m pyright
@@ -92,7 +92,7 @@ stub 噪声。mypy 覆盖 `src/quant_execution_engine`，并只对 optional SDK 
 新增 mypy override、Ruff ignore 或 `# type: ignore` 前，应优先确认它是否是
 optional dependency 边界、兼容 shim，或确实无法用更明确的类型表达。
 
-2026-06-01 的历史 Pyright hard gate 与 mypy advisory 迁移细节已移入
+2026-06-01 的历史 Pyright 门禁与 mypy 建议项迁移细节已移入
 [archive/type-gate-migration-20260601.md](archive/type-gate-migration-20260601.md)。
 
 ## 券商测试与证据入口

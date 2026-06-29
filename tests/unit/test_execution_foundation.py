@@ -217,7 +217,7 @@ def test_cn_dry_run_never_submits_to_adapter(tmp_path: Path) -> None:
         [Order(symbol="600519.SH.CN", quantity=100, side="BUY", price=10.0)],
         account_label="main",
         dry_run=True,
-        target_source="cross-sectional-trees",
+        target_source="strategy-pipeline",
         target_asof="2026-05-29",
         target_input_path="outputs/targets/a_share_latest.json",
     )

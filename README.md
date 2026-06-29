@@ -83,10 +83,12 @@ outputs/evidence-bundles/*
 
 这些目录用于本地审计和复查，默认不进入 Git。
 
-## 与另外两个仓库的边界
+## 与工作区其他仓库的边界
 
 - `market-data-platform`：生产、检查和发布共享市场数据资产。
-- `cross-sectional-trees`：只读消费平台资产，做研究、回测和目标持仓导出。
+- `alpha-research`：负责特征、模型、研究评估和信号产物。
+- `portfolio-backtester`：负责组合构造、回测、容量、暴露和报告。
+- `strategy-pipeline`：只读消费平台资产，编排研究流程，并导出标准 `targets.json`。
 - `quant-execution-engine`：读取标准 `targets.json`，负责 dry-run、风控、执行和审计。
 
 本仓库只负责最后一段执行链路。

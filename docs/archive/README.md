@@ -5,4 +5,4 @@
 | 文档 | 用途 |
 | --- | --- |
 | [execution-checklist.md](execution-checklist.md) | 历史功能清单，用于追溯执行闭环的阶段性完成记录。 |
-| [type-gate-migration-20260601.md](type-gate-migration-20260601.md) | 2026-06-01 Pyright hard gate 与 mypy advisory 迁移记录。 |
+| [type-gate-migration-20260601.md](type-gate-migration-20260601.md) | 2026-06-01 Pyright 门禁与 mypy 建议项迁移记录。 |

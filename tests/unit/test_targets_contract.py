@@ -112,7 +112,7 @@ def test_read_targets_json_accepts_a_share_suffixes_and_market_alias(
     target_path.write_text(
         json.dumps(
             {
-                "source": "cross-sectional-trees",
+                "source": "strategy-pipeline",
                 "asof": "2026-05-29",
                 "targets": [
                     {"symbol": "600519.SH", "target_weight": 0.35},
