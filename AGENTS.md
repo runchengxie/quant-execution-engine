@@ -21,6 +21,12 @@
 - Ruff、ty 和默认快速测试是当前基础门禁。`make basedpyright` 和 `make mypy-advisory` 是发布前或诊断用建议项；顶层委托检查的 `release_typecheck` 运行 BasedPyright 建议项，`mypy_advisory` 单独保留。默认 `pytest` 只说明快速行为回归通过，合并前仍需按改动范围运行完整质量门控。
 - 优先写行为测试，不要堆源码字符串、文件存在性之类的低价值静态断言。
 
+## GitHub 发布偏好
+
+- 用户明确要求 commit、push 或发布本仓改动时，默认直接在 `main` 上提交并推送到 `origin/main`。
+- 不要默认新建 `codex/*` 分支或 draft PR；只有用户明确要求 PR、远端规则阻止直接推送、工作区存在难以拆分的混杂改动，或改动风险需要人工 review 时才走分支和 PR。
+- 本仓作为 `research-workspace` 子模块使用时，推送本仓后还要回到顶层仓库提交更新后的 submodule gitlink。
+
 ## 当前功能注意事项
 
 - 当前完整支持矩阵、凭证来源规则、证据成熟度和已知限制以 `docs/current-capabilities.md` 为准。
