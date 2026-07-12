@@ -1,5 +1,7 @@
 """Broker integrations."""
 
+from typing import TYPE_CHECKING, Any
+
 from .base import (
     BrokerAdapter,
     BrokerCapabilityMatrix,
@@ -21,6 +23,16 @@ from .factory import (
     resolve_broker_name,
     resolve_default_account_label,
 )
+
+if TYPE_CHECKING:
+    from .ibkr import IbkrPaperBrokerAdapter
+    from .ibkr_runtime import (
+        probe_ibkr_runtime_config,
+        resolve_ibkr_runtime_config,
+    )
+    from .local_dry_run import LocalDryRunBrokerAdapter
+    from .longport import LongPortClient, _to_lb_symbol, get_config, getenv_both
+    from .longport_adapter import LongPortBrokerAdapter, LongPortPaperBrokerAdapter
 
 __all__ = [
     "BrokerAdapter",
@@ -53,7 +65,7 @@ __all__ = [
 ]
 
 
-def __getattr__(name: str):
+def __getattr__(name: str) -> Any:
     if name in {
         "IbkrPaperBrokerAdapter",
         "LocalDryRunBrokerAdapter",

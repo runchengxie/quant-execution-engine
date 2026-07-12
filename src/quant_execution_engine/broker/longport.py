@@ -3,7 +3,7 @@ import time
 from collections.abc import Iterable
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Any
+from typing import Any, cast
 
 from .base import BrokerImportError
 
@@ -199,7 +199,7 @@ def _make_longport_context_factory(region: str | None, kind: str):
             tried.append(rg)
             os.environ["LONGPORT_REGION"] = rg
             try:
-                cfg = Config.from_env()
+                cfg = cast(Any, Config.from_env())
                 return QuoteContext(cfg) if kind == "quote" else TradeContext(cfg)
             except Exception as e:  # Defer raising until all options tried
                 msg = str(e).lower()
