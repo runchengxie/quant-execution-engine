@@ -37,6 +37,6 @@ jobs:
         run: uv run ty check
       - name: Run pytest
         run: uv run pytest
-      - name: Run BasedPyright advisory
-        continue-on-error: true
-        run: uv run python -m basedpyright
+      # - name: Run BasedPyright advisory
+      #   continue-on-error: true
+      #   run: uv run python -m basedpyright
