@@ -18,7 +18,7 @@
   - `uv run pytest -m integration`
   - `uv run pytest -m e2e`
 - 覆盖率是按需视角，不应绑死在默认 `pytest` 入口。
-- Ruff、ty 和默认快速测试是当前基础门禁。`make basedpyright` 和 `make mypy-advisory` 是发布前或诊断用建议项；顶层委托检查的 `release_typecheck` 运行 BasedPyright 建议项，`mypy_advisory` 单独保留。默认 `pytest` 只说明快速行为回归通过，合并前仍需按改动范围运行完整质量门控。
+- Ruff、ty 和默认快速测试是当前基础门禁。`make basedpyright` 是发布前或诊断用建议项；顶层委托检查的 `release_typecheck` 运行 BasedPyright 建议项。默认 `pytest` 只说明快速行为回归通过，合并前仍需按改动范围运行完整质量门控。
 - 优先写行为测试，不要堆源码字符串、文件存在性之类的低价值静态断言。
 
 ## GitHub 发布偏好
