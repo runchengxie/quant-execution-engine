@@ -51,6 +51,10 @@ src/quant_execution_engine/
   _journal_reducer.py
   _journal_sqlite_core.py
   _journal_sqlite.py
+  transport.py
+  transport_service.py
+  broker_transport.py
+  paper_transport.py
   fees.py
   fx.py
   targets.py
@@ -148,6 +152,10 @@ project_tools/
     提供新增的 append-only SQLite journal、事务型 intent 幂等索引、保守的提交不确定状态、
     纯函数状态归约、不可变对账证据以及 snapshot/replay。公开入口与迁移限制见
     [durable-execution-journal.md](durable-execution-journal.md)。当前 v1 CLI 状态路径保持不变。
+- `transport.py`、`transport_service.py`、`broker_transport.py` 与 `paper_transport.py`
+    定义新增的类型化机械执行 port、journal 驱动的唯一提交入口、现有 broker adapter 包装和无网络
+    paper transport。它们不拥有 approval、policy、preflight 或 risk，且尚未切换当前 CLI 默认路径。
+    能力、故障语义和迁移边界见 [execution-transport.md](execution-transport.md)。
 - `renderers/` 目录
     视图渲染层，负责将核心数据格式化为表格、JSON、调仓差异对比图及终端摘要信息。
 - `project_tools/` 目录

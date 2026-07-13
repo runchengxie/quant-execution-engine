@@ -14,9 +14,10 @@
 
 ## 共享执行语义
 
-> 新增的 durable execution journal 当前是 additive API，尚未连接 `rebalance`、现有 broker
-> adapter 或 v1 状态命令。它不能被解读为现有实盘路径已经完成 event-journal 迁移；迁移边界见
-> `durable-execution-journal.md`。
+> 新增的 durable execution journal 与类型化 transport 当前是 additive API。现有 broker
+> adapter 已可通过机械 adapter 进入新边界，但 `rebalance`、v1 状态命令和默认 CLI 尚未切换。
+> 这不能被解读为现有实盘路径已经完成 event-journal 迁移；迁移边界见
+> `durable-execution-journal.md` 和 `execution-transport.md`。
 
 - 带有 `--execute` 参数的调仓命令已为长桥实盘、长桥模拟盘、Alpaca 模拟盘和盈透模拟盘打通了真实的券商底层代码链路，但各后端的成熟度存在差异（如上表所述）。
 - 目前 `--account` 参数仅用于账户或配置标签的解析与快速失败校验，暂不具备真实的多账户路由能力。
