@@ -58,6 +58,9 @@ src/quant_execution_engine/
   vnpy_transport.py
   _vnpy_bindings.py
   _vnpy_mapper.py
+  recovery_matrix.py
+  _recovery_fault_support.py
+  _recovery_fault_harness.py
   fees.py
   fx.py
   targets.py
@@ -163,6 +166,10 @@ project_tools/
     提供 optional、lazy-import 的 vn.py Gateway/EventEngine bridge。SDK DTO 只存在于 leaf binding；
     qexec 继续拥有 policy、journal 和 reconciliation。默认 shadow、live gate、OMS 查询限制和资源
     生命周期见 [vnpy-transport.md](vnpy-transport.md)。
+- `recovery_matrix.py`、`_recovery_fault_support.py` 与 `_recovery_fault_harness.py`
+    定义严格的 `execution_recovery_matrix.v1` 证据合同，并用纯本地 transport/journal 驱动八个
+    确定性故障场景。它不导入 broker SDK、不读取凭证、不改变 rebalance 默认路径；操作员边界见
+    [execution-recovery-matrix.md](execution-recovery-matrix.md)。
 - `renderers/` 目录
     视图渲染层，负责将核心数据格式化为表格、JSON、调仓差异对比图及终端摘要信息。
 - `project_tools/` 目录

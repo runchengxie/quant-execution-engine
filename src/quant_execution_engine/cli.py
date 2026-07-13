@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import importlib.util
 import os
 import sys
@@ -51,6 +52,12 @@ from .health import HealthCheckError, render_health_result, run_health
 from .logging import get_logger, set_run_id
 from .preflight import run_preflight_checks
 from .rebalance import RebalanceService
+from .recovery_matrix import (
+    RecoveryMatrixError,
+    RecoveryMatrixMode,
+    execution_recovery_matrix_bytes,
+    write_execution_recovery_matrix,
+)
 from .renderers.diff import render_rebalance_diff
 from .renderers.jsonout import render_json, render_multiple_account_snapshots_json
 from .renderers.table import (
@@ -468,6 +475,30 @@ def run_evidence_pack(
         msg = f"Evidence pack failed: {exc}"
         get_logger(__name__).error(msg)
         return CommandResult(exit_code=1, stderr=msg)
+
+
+def run_recovery_matrix(
+    *,
+    mode: str = "shadow",
+    output_path: str = "outputs/evidence/execution_recovery_matrix.v1.json",
+) -> CommandResult:
+    """Write deterministic offline recovery evidence without loading a broker SDK."""
+
+    try:
+        selected_mode = RecoveryMatrixMode(mode)
+        destination = Path(output_path)
+        matrix = write_execution_recovery_matrix(destination, mode=selected_mode)
+        digest = hashlib.sha256(execution_recovery_matrix_bytes(matrix)).hexdigest()
+        return CommandResult(
+            exit_code=0,
+            stdout=(
+                f"Recovery matrix passed: {len(matrix.scenarios)} scenarios; "
+                f"mode={matrix.mode.value}; live_broker_access=false; "
+                f"sha256={digest}; output={destination}"
+            ),
+        )
+    except (RecoveryMatrixError, OSError, ValueError) as exc:
+        return CommandResult(exit_code=1, stderr=f"Recovery matrix failed: {exc}")
 
 
 def run_orders(
@@ -1336,6 +1367,17 @@ def main() -> int:
                 run_id=args.run_id,
                 output_dir=getattr(args, "output_dir", None),
                 operator_notes=getattr(args, "operator_note", None),
+            )
+        )
+    if args.command == "recovery-matrix":
+        return _handle_command_result(
+            run_recovery_matrix(
+                mode=getattr(args, "mode", "shadow"),
+                output_path=getattr(
+                    args,
+                    "output",
+                    "outputs/evidence/execution_recovery_matrix.v1.json",
+                ),
             )
         )
     if args.command == "orders":

@@ -66,6 +66,8 @@ snapshot，因此重启前后可以得到相同状态和相同证据序列。
 - 不会自动创建 journal 数据库，也不会改变当前报单路径；
 - 新增 transport adapter 已把 `prepare_submission` 作为唯一提交许可点；能力和故障语义见
   [execution-transport.md](execution-transport.md)，仍需在 parity 和故障测试通过后才可切换默认路径；
+- 八类确定性恢复场景和操作员 kill-switch 顺序见
+  [execution-recovery-matrix.md](execution-recovery-matrix.md)；矩阵只生成离线证据，不会切换执行路径；
 - 回滚本 PR 只需停止调用新 API；现有 v1 状态和 CLI 无需迁移。
 
 当前实现假设数据库位于支持 SQLite 锁和 fsync 语义的本地文件系统，不支持把活动数据库直接放在

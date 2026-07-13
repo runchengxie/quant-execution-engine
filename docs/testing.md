@@ -105,6 +105,16 @@ uv run pytest tests/unit/test_vnpy_transport.py tests/unit/test_vnpy_optional_im
 
 未安装 optional extra 时，真实 DTO 测试会 skip；missing-import 测试仍验证核心包与 leaf adapter 的
 延迟导入错误信息。
+`recovery_matrix.py`、`_recovery_fault_support.py` 和 `_recovery_fault_harness.py` 同样进入严格
+类型目标。恢复矩阵专项测试不会加载 broker runtime 或网络：
+
+```bash
+uv run pytest tests/unit/test_execution_recovery_matrix.py
+qexec recovery-matrix --mode shadow --output /tmp/execution_recovery_matrix.v1.json
+```
+
+测试会在两个独立 workspace 重复生成证据并比较原始 bytes，同时验证严格 schema、八个 canonical
+场景、journal/idempotency/state monotonicity、CLI 离线路由和临时文件原子替换。
 新增 mypy override、Ruff ignore 或 `# type: ignore` 前，应优先确认它是否是
 optional dependency 边界、兼容 shim，或确实无法用更明确的类型表达。
 

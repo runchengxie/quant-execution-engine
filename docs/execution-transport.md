@@ -95,6 +95,10 @@ order ID 查询的 transport 会明确失败并要求人工/券商侧对账。
 默认 `SHADOW`，并明确拒绝把内存 OMS cache 当成可靠 broker query。详细边界见
 [vnpy-transport.md](vnpy-transport.md)。
 
+八类 timeout、重复/乱序 callback、重启和对账故障由独立的纯离线 evidence path 覆盖；它复用
+本 transport contract 与 durable journal，不改变默认执行路径。见
+[execution-recovery-matrix.md](execution-recovery-matrix.md)。
+
 ## 迁移与回滚
 
 - 当前 v1 CLI 和 `OrderLifecycleService` 保持默认，不从本 API 自动报单；

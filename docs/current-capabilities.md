@@ -27,6 +27,15 @@ vn.py Gateway/OMS bridge 当前也是 additive、experimental transport：
 - vn.py OMS 是进程内 callback cache，不作为可靠 broker query/reconciliation 来源；
 - 详细模式、live gate 和映射限制见 `vnpy-transport.md`。
 
+执行恢复矩阵当前提供 additive、完全离线的自动化证据：
+
+- `qexec recovery-matrix` 覆盖 timeout、重复/乱序 callback、重启、撤单成交竞态、重连和持仓漂移；
+- 输出严格、byte-stable 的 `execution_recovery_matrix.v1`，明确声明
+  `deterministic=true` 和 `live_broker_access=false`；
+- shadow/paper 两种标签都只使用本地 fake transport 和 SQLite journal，不证明任何真实 Gateway
+  或券商恢复能力；
+- 真实 accepted-but-timeout 和 position drift 仍必须按操作员 runbook 查询券商权威事实并人工复核。
+
 - 带有 `--execute` 参数的调仓命令已为长桥实盘、长桥模拟盘、Alpaca 模拟盘和盈透模拟盘打通了真实的券商底层代码链路，但各后端的成熟度存在差异（如上表所述）。
 - 目前 `--account` 参数仅用于账户或配置标签的解析与快速失败校验，暂不具备真实的多账户路由能力。
 - 长桥实盘、长桥模拟盘、Alpaca 模拟盘和盈透模拟盘的适配器目前均按单账户语义运行。传入不支持的账户标签会直接报错拦截。

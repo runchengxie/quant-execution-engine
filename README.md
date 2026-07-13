@@ -45,6 +45,7 @@ uv sync --group dev --extra cli --extra vnpy
 qexec --help
 qexec config --broker longport-paper
 qexec preflight --broker longport-paper
+qexec recovery-matrix --mode shadow
 ```
 
 当前不假设默认券商。请在 `config/config.yaml` 中配置 `broker.backend`，或在命令中显式传入 `--broker`。
@@ -98,6 +99,7 @@ outputs/evidence-bundles/*
 
 - 先看文档首页：[docs/README.md](docs/README.md)
 - 当前能力和限制：[docs/current-capabilities.md](docs/current-capabilities.md)
+- 离线恢复故障矩阵：[docs/execution-recovery-matrix.md](docs/execution-recovery-matrix.md)
 - 命令行说明：[docs/cli.md](docs/cli.md)
 - 配置和凭证：[docs/configuration.md](docs/configuration.md)
 - `targets.json` 格式：[docs/targets.md](docs/targets.md)

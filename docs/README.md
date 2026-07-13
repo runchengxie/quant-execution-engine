@@ -11,6 +11,7 @@
 | 我想理解持久 journal、幂等提交和重启恢复 | `durable-execution-journal.md` |
 | 我想理解类型化 transport、broker adapter 包装和离线 paper 执行 | `execution-transport.md` |
 | 我想评估 vn.py Gateway/OMS transport bridge | `vnpy-transport.md` |
+| 我想运行恢复故障矩阵或查操作员 kill-switch 顺序 | `execution-recovery-matrix.md` |
 | 我想查 `qexec` 有哪些命令和参数 | `cli.md` |
 | 我想配置券商凭证、风控阈值或本地 YAML | `configuration.md` |
 | 我想知道 `targets.json` 应该长什么样 | `targets.md` |
@@ -41,6 +42,7 @@
 - `durable-execution-journal.md`：追加式事件、幂等提交许可、snapshot/replay 和故障恢复语义。
 - `execution-transport.md`：机械执行 port、能力发现、journal 提交许可和 broker/paper adapter。
 - `vnpy-transport.md`：可选 vn.py bridge、shadow/paper/live 门禁、DTO 映射与 OMS 查询限制。
+- `execution-recovery-matrix.md`：八类离线故障、byte-stable v1 证据和操作员恢复/回滚顺序。
 - `testing.md`：默认测试、pytest 标记、集成测试、端到端测试和人工监督冒烟测试。
 - `architecture.md`：包结构、模块边界和责任分层。
 - `execution-foundation.md`：订单生命周期、本地状态、对账、风控和恢复链路。

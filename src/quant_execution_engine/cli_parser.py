@@ -133,6 +133,23 @@ Examples:
         help="Operator note to include in the evidence bundle; may be passed more than once",
     )
 
+    recovery_matrix_parser = subparsers.add_parser(
+        "recovery-matrix",
+        help="Run the deterministic offline recovery fault matrix",
+    )
+    recovery_matrix_parser.add_argument(
+        "--mode",
+        choices=["shadow", "paper"],
+        default="shadow",
+        help="Evidence mode label; both modes use only the offline in-memory transport",
+    )
+    recovery_matrix_parser.add_argument(
+        "--output",
+        type=str,
+        default="outputs/evidence/execution_recovery_matrix.v1.json",
+        help="Canonical execution_recovery_matrix.v1 JSON output path",
+    )
+
     orders_parser = subparsers.add_parser(
         "orders",
         help="Show tracked broker orders from local execution state",

@@ -83,6 +83,21 @@ qexec evidence-pack <run-id> --operator-note '终端输出已人工复查'
 
 打包结果默认输出到 `outputs/evidence-bundles/<run-id>` 目录下。系统会生成一份清单文件，记录审计日志、目标持仓文件、本地状态、冒烟测试证据、按订单聚合的追踪记录快照以及操作员备注的包含、缺失或跳过状态；同时，安全机制会确保 `.env*` 等包含敏感信息的凭证文件不会被打包进去。
 
+### `recovery-matrix`
+
+运行八个完全离线、确定性的执行恢复故障场景，并写出严格的
+`execution_recovery_matrix.v1` JSON：
+
+```bash
+qexec recovery-matrix
+qexec recovery-matrix --mode paper --output outputs/evidence/execution_recovery_matrix.v1.json
+```
+
+`--mode` 只能是 `shadow` 或 `paper`，默认 `shadow`。两者都仅使用本地 in-memory transport 和
+临时 SQLite journal，不读取 broker 配置、不构造 Gateway、不连接网络；该命令也不会设置 kill
+switch、撤单或补单。场景含义、byte-stable 合同及操作员恢复步骤见
+[execution-recovery-matrix.md](execution-recovery-matrix.md)。
+
 ### `preflight`
 
 在不改变券商实际账户状态的前提下，运行执行前的就绪性检查。
