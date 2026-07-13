@@ -83,6 +83,11 @@ reportMissingTypeStubs = false
 
 [tool.ty.src]
 include = [
+  "src/quant_execution_engine/domain.py",
+  "src/quant_execution_engine/_serialization_common.py",
+  "src/quant_execution_engine/_serialization_v1.py",
+  "src/quant_execution_engine/_serialization_v2.py",
+  "src/quant_execution_engine/serialization.py",
   "src/quant_execution_engine/targets.py",
   "src/quant_execution_engine/risk.py",
   "src/quant_execution_engine/preflight.py",
@@ -105,6 +110,11 @@ unresolved-import = "ignore"
 
 [tool.maintainability.quality_targets]
 basedpyright_include_targets = [
+  "src/quant_execution_engine/domain.py",
+  "src/quant_execution_engine/_serialization_common.py",
+  "src/quant_execution_engine/_serialization_v1.py",
+  "src/quant_execution_engine/_serialization_v2.py",
+  "src/quant_execution_engine/serialization.py",
   "src/quant_execution_engine/targets.py",
   "src/quant_execution_engine/risk.py",
   "src/quant_execution_engine/preflight.py",
@@ -115,6 +125,11 @@ basedpyright_include_targets = [
   "src/quant_execution_engine/cli.py",
 ]
 mypy_advisory_targets = [
+  "src/quant_execution_engine/domain.py",
+  "src/quant_execution_engine/_serialization_common.py",
+  "src/quant_execution_engine/_serialization_v1.py",
+  "src/quant_execution_engine/_serialization_v2.py",
+  "src/quant_execution_engine/serialization.py",
   "src/quant_execution_engine/targets.py",
   "src/quant_execution_engine/risk.py",
   "src/quant_execution_engine/preflight.py",
