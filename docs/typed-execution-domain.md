@@ -58,3 +58,7 @@ v2 wire mapping 的固定规则为：
 
 该 v2 codec 是 qexec 领域对象的序列化缝隙，不会改变当前 `targets.json` 的默认写法。
 现有 CLI 和状态文件仍走 v1 路径，直到后续 journal 迁移具有独立的兼容与恢复证据。
+
+新增的持久化、幂等提交许可、状态归约和 snapshot/replay 见
+[durable-execution-journal.md](durable-execution-journal.md)。该 journal 仍是 additive API，
+尚未切换现有 CLI 或 broker adapter。

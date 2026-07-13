@@ -8,6 +8,7 @@
 | --- | --- |
 | 我想确认这个引擎现在支持哪些券商和能力 | `current-capabilities.md` |
 | 我想理解类型化目标、订单意图和事件边界 | `typed-execution-domain.md` |
+| 我想理解持久 journal、幂等提交和重启恢复 | `durable-execution-journal.md` |
 | 我想查 `qexec` 有哪些命令和参数 | `cli.md` |
 | 我想配置券商凭证、风控阈值或本地 YAML | `configuration.md` |
 | 我想知道 `targets.json` 应该长什么样 | `targets.md` |
@@ -35,6 +36,7 @@
 - `configuration.md`：环境变量、本地配置文件、实盘保护和配置加载顺序。
 - `targets.md`：执行输入文件格式。
 - `research-handoff-governance.md`：研究结果进入执行层前后的边界、审计和 paper/live 分层。
+- `durable-execution-journal.md`：追加式事件、幂等提交许可、snapshot/replay 和故障恢复语义。
 - `testing.md`：默认测试、pytest 标记、集成测试、端到端测试和人工监督冒烟测试。
 - `architecture.md`：包结构、模块边界和责任分层。
 - `execution-foundation.md`：订单生命周期、本地状态、对账、风控和恢复链路。

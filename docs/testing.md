@@ -91,6 +91,9 @@ stub 噪声。mypy 覆盖 `src/quant_execution_engine`，并只对 optional SDK 
 `longport.*`、`longbridge.*`、`rich.*` 使用 `ignore_missing_imports`。
 新增的 `domain.py`、`serialization.py` 及其三个私有实现模块通过文件级
 `pyright: strict` 进入严格检查面，而不会借机扩大旧模块的类型债清理范围。
+新增的 `execution_journal.py` 及其 `_journal_*` 实现模块也进入 ty、BasedPyright 和 mypy
+的严格目标；其单元测试覆盖进程重启、并发 prepare、重复 callback、乱序终态、accepted-but-
+timeout、snapshot/tail replay、不可变 trigger、hash 损坏和 torn database。
 新增 mypy override、Ruff ignore 或 `# type: ignore` 前，应优先确认它是否是
 optional dependency 边界、兼容 shim，或确实无法用更明确的类型表达。
 

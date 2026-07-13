@@ -45,6 +45,12 @@ src/quant_execution_engine/
   _serialization_common.py
   _serialization_v1.py
   _serialization_v2.py
+  execution_journal.py
+  _journal_domain.py
+  _journal_codec.py
+  _journal_reducer.py
+  _journal_sqlite_core.py
+  _journal_sqlite.py
   fees.py
   fx.py
   targets.py
@@ -138,6 +144,10 @@ project_tools/
     wire codec。`serialization.py` 是稳定公开 facade，具体实现按 common、v1 migration 和
     v2 codec 拆分在三个私有模块中。当前 CLI 与文件状态仍保留原有 DTO；迁移边界和能力验证详见
     [typed-execution-domain.md](typed-execution-domain.md)。
+- `execution_journal.py` 与 `_journal_*`
+    提供新增的 append-only SQLite journal、事务型 intent 幂等索引、保守的提交不确定状态、
+    纯函数状态归约、不可变对账证据以及 snapshot/replay。公开入口与迁移限制见
+    [durable-execution-journal.md](durable-execution-journal.md)。当前 v1 CLI 状态路径保持不变。
 - `renderers/` 目录
     视图渲染层，负责将核心数据格式化为表格、JSON、调仓差异对比图及终端摘要信息。
 - `project_tools/` 目录

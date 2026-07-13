@@ -84,6 +84,12 @@ reportMissingTypeStubs = false
 [tool.ty.src]
 include = [
   "src/quant_execution_engine/domain.py",
+  "src/quant_execution_engine/_journal_codec.py",
+  "src/quant_execution_engine/_journal_domain.py",
+  "src/quant_execution_engine/_journal_reducer.py",
+  "src/quant_execution_engine/_journal_sqlite_core.py",
+  "src/quant_execution_engine/_journal_sqlite.py",
+  "src/quant_execution_engine/execution_journal.py",
   "src/quant_execution_engine/_serialization_common.py",
   "src/quant_execution_engine/_serialization_v1.py",
   "src/quant_execution_engine/_serialization_v2.py",
@@ -111,6 +117,12 @@ unresolved-import = "ignore"
 [tool.maintainability.quality_targets]
 basedpyright_include_targets = [
   "src/quant_execution_engine/domain.py",
+  "src/quant_execution_engine/_journal_codec.py",
+  "src/quant_execution_engine/_journal_domain.py",
+  "src/quant_execution_engine/_journal_reducer.py",
+  "src/quant_execution_engine/_journal_sqlite_core.py",
+  "src/quant_execution_engine/_journal_sqlite.py",
+  "src/quant_execution_engine/execution_journal.py",
   "src/quant_execution_engine/_serialization_common.py",
   "src/quant_execution_engine/_serialization_v1.py",
   "src/quant_execution_engine/_serialization_v2.py",
@@ -126,6 +138,12 @@ basedpyright_include_targets = [
 ]
 mypy_advisory_targets = [
   "src/quant_execution_engine/domain.py",
+  "src/quant_execution_engine/_journal_codec.py",
+  "src/quant_execution_engine/_journal_domain.py",
+  "src/quant_execution_engine/_journal_reducer.py",
+  "src/quant_execution_engine/_journal_sqlite_core.py",
+  "src/quant_execution_engine/_journal_sqlite.py",
+  "src/quant_execution_engine/execution_journal.py",
   "src/quant_execution_engine/_serialization_common.py",
   "src/quant_execution_engine/_serialization_v1.py",
   "src/quant_execution_engine/_serialization_v2.py",
