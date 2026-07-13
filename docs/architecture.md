@@ -40,6 +40,11 @@ src/quant_execution_engine/
   paths.py
   logging.py
   models.py
+  domain.py
+  serialization.py
+  _serialization_common.py
+  _serialization_v1.py
+  _serialization_v2.py
   fees.py
   fx.py
   targets.py
@@ -128,6 +133,11 @@ project_tools/
     风控模块，负责订单维度的执行风控拦截与由环境变量触发的紧急停单逻辑。
 - `targets.py`
     规范定义持仓目标数据结构（即 `targets.json` 的规范），并提供对应的解析与校验功能。
+- `domain.py` 与 `serialization.py`
+    定义框架中立、不可变的类型化执行领域对象，以及显式的 v1 迁移 reader 和确定性 v2
+    wire codec。`serialization.py` 是稳定公开 facade，具体实现按 common、v1 migration 和
+    v2 codec 拆分在三个私有模块中。当前 CLI 与文件状态仍保留原有 DTO；迁移边界和能力验证详见
+    [typed-execution-domain.md](typed-execution-domain.md)。
 - `renderers/` 目录
     视图渲染层，负责将核心数据格式化为表格、JSON、调仓差异对比图及终端摘要信息。
 - `project_tools/` 目录

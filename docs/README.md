@@ -7,6 +7,7 @@
 | 我现在的问题 | 先看哪一页 |
 | --- | --- |
 | 我想确认这个引擎现在支持哪些券商和能力 | `current-capabilities.md` |
+| 我想理解类型化目标、订单意图和事件边界 | `typed-execution-domain.md` |
 | 我想查 `qexec` 有哪些命令和参数 | `cli.md` |
 | 我想配置券商凭证、风控阈值或本地 YAML | `configuration.md` |
 | 我想知道 `targets.json` 应该长什么样 | `targets.md` |

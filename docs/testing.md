@@ -89,6 +89,8 @@ uv run --group dev python -m mypy src/quant_execution_engine
 BasedPyright 使用 Python 3.10、`basic` mode，并忽略 optional broker SDK 的 missing-import /
 stub 噪声。mypy 覆盖 `src/quant_execution_engine`，并只对 optional SDK / UI 依赖
 `longport.*`、`longbridge.*`、`rich.*` 使用 `ignore_missing_imports`。
+新增的 `domain.py`、`serialization.py` 及其三个私有实现模块通过文件级
+`pyright: strict` 进入严格检查面，而不会借机扩大旧模块的类型债清理范围。
 新增 mypy override、Ruff ignore 或 `# type: ignore` 前，应优先确认它是否是
 optional dependency 边界、兼容 shim，或确实无法用更明确的类型表达。
 
