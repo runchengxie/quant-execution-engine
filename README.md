@@ -36,6 +36,7 @@ uv sync --group dev --extra cli
 uv sync --group dev --extra cli --extra longport
 uv sync --group dev --extra cli --extra alpaca
 uv sync --group dev --extra cli --extra ibkr
+uv sync --group dev --extra cli --extra vnpy
 ```
 
 查看入口：

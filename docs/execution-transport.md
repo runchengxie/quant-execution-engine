@@ -89,9 +89,15 @@ order ID 查询的 transport 会明确失败并要求人工/券商侧对账。
 必须显式调用 `record_fill` 注入成交，然后通过 `poll_and_record` 写入 journal。它适合 contract、
 幂等、恢复和上层编排测试，不是交易所撮合仿真器。
 
+### `VnPyExecutionTransport`
+
+可选 vn.py bridge 已作为独立 leaf adapter 提供，但不改变默认路径。它复用 Gateway/EventEngine，
+默认 `SHADOW`，并明确拒绝把内存 OMS cache 当成可靠 broker query。详细边界见
+[vnpy-transport.md](vnpy-transport.md)。
+
 ## 迁移与回滚
 
 - 当前 v1 CLI 和 `OrderLifecycleService` 保持默认，不从本 API 自动报单；
-- vn.py transport 属于后续独立改动，本模块没有引入 vn.py 依赖；
+- vn.py 仅属于 `vnpy` optional extra，核心 transport 与现有 CLI 不导入它；
 - 切换默认路径前需要 paper/shadow parity、故障注入和操作员证据；
 - 回滚只需停止调用 additive transport API，原有 broker adapter、CLI 和 v1 state 不需迁移。

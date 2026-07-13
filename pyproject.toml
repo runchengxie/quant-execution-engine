@@ -23,11 +23,13 @@ cli = ["rich>=13"]
 longport = ["longport>=0.2.77"]
 alpaca = ["alpaca-py", "pytz"]
 ibkr = ["ib-insync>=0.9.86"]
+vnpy = ["vnpy>=4.4,<5"]
 full = [
   "longport>=0.2.77",
   "alpaca-py",
   "pytz",
   "ib-insync>=0.9.86",
+  "vnpy>=4.4,<5",
 ]
 
 [project.scripts]
@@ -94,6 +96,9 @@ include = [
   "src/quant_execution_engine/broker_transport.py",
   "src/quant_execution_engine/paper_transport.py",
   "src/quant_execution_engine/transport_service.py",
+  "src/quant_execution_engine/_vnpy_bindings.py",
+  "src/quant_execution_engine/_vnpy_mapper.py",
+  "src/quant_execution_engine/vnpy_transport.py",
   "src/quant_execution_engine/_serialization_common.py",
   "src/quant_execution_engine/_serialization_v1.py",
   "src/quant_execution_engine/_serialization_v2.py",
@@ -131,6 +136,9 @@ basedpyright_include_targets = [
   "src/quant_execution_engine/broker_transport.py",
   "src/quant_execution_engine/paper_transport.py",
   "src/quant_execution_engine/transport_service.py",
+  "src/quant_execution_engine/_vnpy_bindings.py",
+  "src/quant_execution_engine/_vnpy_mapper.py",
+  "src/quant_execution_engine/vnpy_transport.py",
   "src/quant_execution_engine/_serialization_common.py",
   "src/quant_execution_engine/_serialization_v1.py",
   "src/quant_execution_engine/_serialization_v2.py",
@@ -156,6 +164,9 @@ mypy_advisory_targets = [
   "src/quant_execution_engine/broker_transport.py",
   "src/quant_execution_engine/paper_transport.py",
   "src/quant_execution_engine/transport_service.py",
+  "src/quant_execution_engine/_vnpy_bindings.py",
+  "src/quant_execution_engine/_vnpy_mapper.py",
+  "src/quant_execution_engine/vnpy_transport.py",
   "src/quant_execution_engine/_serialization_common.py",
   "src/quant_execution_engine/_serialization_v1.py",
   "src/quant_execution_engine/_serialization_v2.py",

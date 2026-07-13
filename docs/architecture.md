@@ -55,6 +55,9 @@ src/quant_execution_engine/
   transport_service.py
   broker_transport.py
   paper_transport.py
+  vnpy_transport.py
+  _vnpy_bindings.py
+  _vnpy_mapper.py
   fees.py
   fx.py
   targets.py
@@ -156,6 +159,10 @@ project_tools/
     定义新增的类型化机械执行 port、journal 驱动的唯一提交入口、现有 broker adapter 包装和无网络
     paper transport。它们不拥有 approval、policy、preflight 或 risk，且尚未切换当前 CLI 默认路径。
     能力、故障语义和迁移边界见 [execution-transport.md](execution-transport.md)。
+- `vnpy_transport.py`、`_vnpy_bindings.py` 与 `_vnpy_mapper.py`
+    提供 optional、lazy-import 的 vn.py Gateway/EventEngine bridge。SDK DTO 只存在于 leaf binding；
+    qexec 继续拥有 policy、journal 和 reconciliation。默认 shadow、live gate、OMS 查询限制和资源
+    生命周期见 [vnpy-transport.md](vnpy-transport.md)。
 - `renderers/` 目录
     视图渲染层，负责将核心数据格式化为表格、JSON、调仓差异对比图及终端摘要信息。
 - `project_tools/` 目录
