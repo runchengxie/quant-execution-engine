@@ -67,9 +67,7 @@ def test_handoff_audit_checks_schema_and_optional_hashes(tmp_path: Path) -> None
             {
                 "asof": "2026-07-14",
                 "source": "strategy-pipeline",
-                "targets": [
-                    {"symbol": "600000.SH", "market": "CN", "target_weight": 0.1}
-                ],
+                "targets": [{"symbol": "600000.SH", "market": "CN", "target_weight": 0.1}],
             }
         )
     )
@@ -97,4 +95,6 @@ def test_handoff_audit_checks_schema_and_optional_hashes(tmp_path: Path) -> None
     )
 
     assert report.status == "pass"
-    assert any(check.name == "release_protocol_hash" and check.status == "pass" for check in report.checks)
+    assert any(
+        check.name == "release_protocol_hash" and check.status == "pass" for check in report.checks
+    )
