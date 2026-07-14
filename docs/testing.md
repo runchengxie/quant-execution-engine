@@ -1,225 +1,96 @@
-# 测试
+# 测试和质量检查
 
-券商支持范围、证据成熟度以及已知缺口，请以 [current-capabilities.md](current-capabilities.md) 为准。本文仅描述测试入口与运行方式。
+本页说明 `quant-execution-engine` 的测试分层和本地命令。券商支持范围与证据成熟度见 [current-capabilities.md](current-capabilities.md)。
 
-## 默认入口
-
-默认的测试入口为：
+## 默认测试
 
 ```bash
 uv run pytest
 ```
 
-该命令仅运行快速测试，默认会排除带有以下标记（`marker`）的测试用例：
+`pyproject.toml` 默认排除以下标记：
 
-- `integration`（集成测试）
-- `e2e`（端到端测试）
-- `slow`（耗时较长的慢速测试）
+- `integration`
+- `e2e`
+- `slow`
+
+默认命令适合快速行为回归。
 
 ## Pytest 标记
 
-`pyproject.toml` 中声明的 pytest 标记如下。新增或重命名标记时，需要同步更新本节。
-
-| 标记 | 含义 |
+| 标记 | 用途 |
 | --- | --- |
-| `unit` | 快速、隔离的单元测试。 |
-| `integration` | 需要外部 API、本地网关或数据库等环境的集成测试。 |
-| `e2e` | 通过子进程运行命令行或脚手架的端到端测试。 |
-| `slow` | 运行时间较长的测试。 |
-| `requires_api` | 需要外部 API 访问权限。 |
-| `requires_db` | 需要数据库访问权限。 |
+| `unit` | 快速、隔离的行为测试 |
+| `integration` | 需要外部 API、本地网关或数据库 |
+| `e2e` | 通过子进程验证完整命令链路 |
+| `slow` | 运行时间较长 |
+| `requires_api` | 需要外部 API |
+| `requires_db` | 需要数据库 |
+
+## Makefile 入口
+
+```bash
+make test
+make test-all
+make test-integration
+make test-e2e
+make lint
+make format
+make typecheck
+make basedpyright
+make quality
+```
+
+| 命令 | 实际范围 |
+| --- | --- |
+| `make test` | 默认快速测试 |
+| `make test-all` | 清除默认标记过滤，运行完整测试集 |
+| `make test-integration` | 集成测试 |
+| `make test-e2e` | 端到端测试 |
+| `make lint` | Ruff 代码检查 |
+| `make format` | Ruff 格式检查 |
+| `make typecheck` | `ty` 配置范围 |
+| `make basedpyright` | BasedPyright 发布诊断 |
+| `make quality` | lint、format、typecheck 和默认测试 |
+
+按需生成覆盖率报告：
+
+```bash
+uv run pytest \
+  --cov=src/quant_execution_engine \
+  --cov-report=term-missing \
+  -m 'not integration and not e2e and not slow'
+```
 
 ## 测试分层
 
-- `tests/unit/`
-  快速且相互隔离的行为测试。覆盖了命令行（CLI）路由、订单生命周期、部分成交后的恢复逻辑、执行前预检（`preflight`）、本地状态维护以及渲染器等功能。
-- `tests/integration/`
-  覆盖适配器和生命周期的跨模块行为测试。例如状态对账（`reconcile`）、紧急停单、状态恢复，以及在提供真实凭证或本地运行环境时，基于真实券商后端（长桥 / 盈透）的验证。
-- `tests/e2e/`
-  通过子进程运行命令行工具和冒烟测试脚手架（`smoke harness`），进行端到端的冒烟测试。
+- `tests/unit/` 覆盖命令路由、订单生命周期、预检、风控、本地状态和渲染。
+- `tests/integration/` 覆盖券商适配器、对账、紧急停单和外部环境。
+- `tests/e2e/` 通过子进程验证命令行和操作员脚手架。
 
-## 常用命令
+真实券商测试需要显式环境变量和人工监督。缺少凭证、网络或本地网关时，相关用例应跳过或快速失败。
 
-仅运行单元测试：
+## 测试重点
 
-```bash
-uv run pytest
-```
+修改以下领域时应补充定点测试：
 
-仅运行端到端测试（`e2e`）：
+- `targets.json` 解析和版本兼容
+- 执行前检查和风险降级
+- 调仓计划与订单意图
+- 提交、查询、撤销和对账
+- 重试、改价和部分成交恢复
+- 本地状态修复和异常诊断
+- 证据输出与敏感文件排除
+- 券商配置来源和实盘保护
 
-```bash
-uv run pytest -m e2e
-```
+默认测试只证明离线行为回归通过。模拟盘和实盘成熟度仍需结合受监督演练、审计日志和本地证据判断。
 
-仅运行集成测试：
+## 类型检查
 
-```bash
-uv run pytest -m integration
-```
+基础类型门禁是 `ty`。BasedPyright 用于发布前诊断。两者的覆盖范围由 `pyproject.toml` 维护。
 
-按需查看测试覆盖率：
+当前工具链不使用 `mypy`。
 
-```bash
-uv run pytest --cov=src/quant_execution_engine --cov-report=term-missing -m 'not integration and not e2e and not slow'
-```
+## 自动化状态
 
-## 静态检查
-
-基础质量门禁由 Ruff、ty 和默认快速测试组成。默认 `pytest`
-只代表行为快回归通过；合并前至少同时运行以下命令：
-
-```bash
-uv run --group dev ruff check .
-uv run --group dev ruff format --check .
-uv run --group dev ty check
-uv run pytest
-```
-
-Ruff 行宽与工作区其他 Python 仓库保持一致，为 100 列。ty 的默认覆盖面由
-`pyproject.toml` 中 `[tool.ty.src].include` 维护，当前先覆盖执行关键模块。
-
-发布前或需要诊断类型债时，再单独运行建议项检查；它们不替代默认 `ty check`：
-
-```bash
-uv run --group dev python -m basedpyright
-```
-
-BasedPyright 使用 Python 3.10、`basic` mode，并忽略 optional broker SDK 的 missing-import /
-stub 噪声。
-新增的 `domain.py`、`serialization.py` 及其三个私有实现模块通过文件级
-`pyright: strict` 进入严格检查面，而不会借机扩大旧模块的类型债清理范围。
-新增 Ruff ignore 或 `# type: ignore` 前，应优先确认它是否是
-optional dependency 边界、兼容 shim，或确实无法用更明确的类型表达。
-
-mypy 已于 2026-07-13 移除，类型检查统一为 ty + basedpyright。历史迁移细节移入
-[archive/type-gate-migration-20260601.md](archive/type-gate-migration-20260601.md)。
-
-## 券商测试与证据入口
-
-| 券商 | 默认自动化覆盖 | 按需开启的自动化覆盖 | 人工监督冒烟测试 |
-| --- | --- | --- | --- |
-| `alpaca-paper` | 单元测试覆盖适配器归一化、命令行路由和执行生命周期；默认不发起真实网络请求。 | 默认无真实联网集成测试；若需验证模拟盘凭证，请按场景手动运行。 | 可作为低成本且稳定的模拟盘回归和冒烟基线。 |
-| `longport-paper` | 单元测试覆盖凭证解析、模拟盘运行环境优先级、命令行工具和测试脚手架契约。 | 提供 `LONGPORT_ACCESS_TOKEN_TEST` 后可运行模拟盘预检与调仓路径。 | 已具备人工监督的提交、查询、对账与撤单基础闭环证据。 |
-| `longport` | 单元测试覆盖实盘保护、本地密钥拦截和配置来源解析。 | 实盘行情集成测试依赖应用程序密钥、秘密密钥以及访问令牌，凭证或网络异常时会跳过。 | 需附加 `--allow-non-paper` 并按 `longport-real-smoke.md` 人工监督执行。 |
-| `ibkr-paper` | 单元测试覆盖后端注册、运行环境配置、美股标签校验、订单与成交数据归一化、冒烟环境快照。 | `IBKR_ENABLE_INTEGRATION=1` 运行只读测试；`IBKR_ENABLE_MUTATION_TESTS=1` 运行提交与撤单测试；`IBKR_ENABLE_FILL_TESTS=1` 运行成交测试。 | 已具备本地无订单（`no-order`）证据；具体路径见 `ibkr-paper-smoke.md`。 |
-
-说明：`outputs/` 目录默认被 Git 忽略。证据文件是本地复查记录，不作为随仓库版本控制的固定测试数据（`fixtures`）提交。
-
-可以使用以下命令检查代码路径状态与证据成熟度（`evidence maturity`）是否一致：
-
-```bash
-qexec evidence-maturity
-qexec evidence-maturity --format json
-```
-
-## 当前测试证明了什么
-
-- 默认的 `pytest` 命令能够确保快速的行为逻辑测试顺利通过。
-- 与生命周期相关的单元测试覆盖了已跟踪订单的重试（`retry`）、重新定价（`reprice`）、状态对账（`reconcile`）、部分成交后的人工处置、等待撤单（`pending-cancel`）、迟到成交记录的恢复，以及状态诊断、清理、修复工具（`state doctor/prune/repair`）。
-- 命令行（CLI）单元测试覆盖了新旧命令的路由分发以及实盘保护机制。
-- 端到端测试（`e2e`）验证了命令行工具和测试脚手架在子进程中的冒烟测试行为，包括信号生成、目标持仓输出，以及操作员脚手架对非模拟盘环境的拦截路径。
-- `smoke_operator_harness.py` 具备单元测试，覆盖了固定的执行流程、仅执行预检（`preflight-only`）路径、下游操作员步骤失败的处理，以及测试证据的 JSON 输出功能。
-- 证据打包工具（`evidence bundle`）的单元测试覆盖了按运行编号（`run_id`）收集审计日志、目标清单、执行状态、测试证据、按订单聚合的追踪快照及操作员备注的功能，并验证了其能够妥善处理缺失的可选文件以及跳过 `.env` 等敏感文件。
-- 风控降级单元测试验证了被禁用的风控项（`BYPASS`）与因缺少行情数据而降级的风控项（`BYPASS`）之间的区分，测试了预检（`preflight`）输出的结构化详情，以及审计日志（`audit JSONL`）中关于降级原因的摘要信息。
-- 异常恢复建议的测试涵盖了对等待撤单、过期未成交订单、部分成交订单的诊断提示，并确保查看单笔订单详情（`order`）时仅提供操作建议，不会意外触发券商后端的订单状态变更。
-- 长桥模拟盘（`longport-paper`）已作为正式的券商后端接入。在提供 `LONGPORT_ACCESS_TOKEN_TEST` 的前提下，可执行模拟盘的预检与调仓（`preflight / rebalance`）路径。
-- 盈透模拟盘（`ibkr-paper`）已具备单元测试，覆盖了后端注册、配置信息展示、市场与账户校验、订单与成交记录的归一化，以及冒烟测试脚手架的盈透环境快照记录路径。
-- 长桥模拟盘目前已通过人工监督的冒烟测试，验证通过了提交、查询、对账、撤单的最简闭环，这是一条可复现的模拟盘测试证据链，未包含在默认的自动化测试中。
-- 盈透模拟盘拥有一次人工监督下的无订单（`no-order`）测试证据：在 WSL 环境内的命令行工具成功连接到 Windows 系统下监听 `127.0.0.1:4002` 的 IB Gateway，并跑通了配置读取、账户查询、行情获取、调仓、对账、异常查看和全部撤单等流程。但由于盈透存在冲突的实盘会话（`competing live session`），导致 AAPL 行情返回为 0，实际产生的订单数为 0（`audit_order_count=0`）。
-- 长桥实盘已通过人工监督的只读验证，跑通了配置读取、执行预检、账户查询和行情获取流程，并确认了用户私有实盘配置的路由与实盘保护机制均能正常工作。
-- 涉及长桥实盘行情的测试用例，目前已支持将典型的网络、区域或凭证异常妥善处理为跳过（`skipped`）状态。
-
-## 当前测试还没有证明什么
-
-- 现有的测试无法单独证明长桥的实盘交易（包含提交、查询、撤单、对账的完整生命周期）已通过全自动的端到端验证。
-- 目前成本最低、最稳定的回归测试基线依然是 Alpaca 模拟盘，而长桥模拟盘则是具备真实券商端测试证据链的模拟盘路径。
-- 盈透模拟盘目前仍缺乏在有效市场行情下真实发单的测试证据，现阶段定位为依赖本地网关（`Gateway`）驱动的增量后端；主要回归测试基线仍是 Alpaca 模拟盘。
-- 实盘券商的支持成熟度，最终应以人工监督下的冒烟测试、生成的审计日志及可复查的本地证据为准。
-
-## 运行前提
-
-- 位于 `tests/integration/` 目录下涉及长桥实盘行情的测试用例，强依赖于环境变量 `LONGPORT_APP_KEY`、`LONGPORT_APP_SECRET` 以及 `LONGPORT_ACCESS_TOKEN`。
-- `tests/integration/test_ibkr_paper_integration.py` 强依赖于本地已启动并成功登录的 IB Gateway，并且需要显式开启环境变量 `IBKR_ENABLE_INTEGRATION=1`；涉及提交和撤单的用例还要求设置 `IBKR_ENABLE_MUTATION_TESTS=1`，涉及成交回报的路径则要求设置 `IBKR_ENABLE_FILL_TESTS=1`。
-- `tests/e2e/` 目录下的绝大多数测试无需真实的券商凭证。当凭证缺失或网络/可用区不可达时，涉及实盘行情的用例会自动跳过。
-- Alpaca 相关的测试路径默认不会发起真实的外部网络请求，如果需要进行真实的模拟盘验证，请单独配置 `ALPACA_*` 相关的环境变量并显式指定运行相应的测试场景。
-
-## 操作员冒烟测试
-
-如果你希望重复验证模拟盘账户的核心执行路径与操作员命令，可以直接运行：
-
-```bash
-PYTHONPATH=src python project_tools/smoke_operator_harness.py --broker alpaca-paper --execute
-PYTHONPATH=src python project_tools/smoke_operator_harness.py --broker ibkr-paper --execute --evidence-output outputs/evidence/ibkr-paper-smoke.json
-PYTHONPATH=src python project_tools/smoke_operator_harness.py --broker longport-paper --execute --cleanup-open-orders --evidence-output outputs/evidence/longport-paper-smoke.json
-```
-
-如果你只想先确认依赖、凭证、账户和行情等基础条件是否正常，而不想生成目标清单或实际发单，可以先运行预检模式：
-
-```bash
-PYTHONPATH=src python project_tools/smoke_operator_harness.py --broker alpaca-paper --preflight-only
-PYTHONPATH=src python project_tools/smoke_operator_harness.py --broker ibkr-paper --preflight-only
-PYTHONPATH=src python project_tools/smoke_operator_harness.py --broker longport-paper --preflight-only
-```
-
-如果你希望将某次冒烟测试的结果保存为可供复查的证据，可以添加相应的记录参数：
-
-```bash
-PYTHONPATH=src python project_tools/smoke_operator_harness.py --broker alpaca-paper --execute --evidence-output outputs/evidence/operator-smoke.json
-PYTHONPATH=src python project_tools/smoke_operator_harness.py --broker ibkr-paper --execute --evidence-output outputs/evidence/ibkr-paper-smoke.json --operator-note "operator supervised paper smoke"
-PYTHONPATH=src python project_tools/smoke_operator_harness.py --broker longport-paper --execute --cleanup-open-orders --evidence-output outputs/evidence/longport-paper-smoke.json
-PYTHONPATH=src python project_tools/smoke_operator_harness.py --broker longport --allow-non-paper --execute --evidence-output outputs/evidence/longport-real-smoke.json --operator-note "operator supervised" --operator-note "cancel not covered"
-```
-
-如果上述运行成功生成了审计 `run_id`，你可以继续据此生成本地复查打包文件：
-
-```bash
-qexec evidence-pack <run-id>
-qexec evidence-pack <run-id> --operator-note "reviewed terminal output"
-```
-
-如果测试流程中途在某一步失败，`--evidence-output` 也会保留部分现场证据，包括：
-
-- 已完成的步骤。
-- 失败步骤的名称。
-- 失败步骤的退出码（`exit code`）和错误输出（`stderr`）。
-- 稳定的失败分类（`failure_category`）。
-- 保守的下一步操作提示（`next_step_hint`）。
-- 被跳过的步骤（`skipped_steps`），说明哪些步骤未执行及其被跳过的原因。
-
-如果测试流程顺利执行完毕，但最终已跟踪的订单状态变为本地拦截（`BLOCKED`）或其他需要操作员介入判断的状态，证据文件中还会额外保留以下信息：
-
-- `operator_outcome_status`
-- `operator_outcome_source`
-- `operator_outcome_message`
-- `operator_outcome_category`
-- `operator_next_step_hint`
-- `audit_log_path` / `audit_run_id`
-- 操作员备注（`operator_notes`）
-
-默认的冒烟测试流程会依次串联以下步骤：
-
-1. `config`（查看配置）
-2. `account`（查看账户）
-3. `quote`（获取行情）
-4. 写入一份最小规模的 `targets.json`
-5. `rebalance --execute`（执行调仓）
-6. `orders`（查看本地跟踪的订单）
-7. `order`（如果本地状态中找到了最新被跟踪的订单，则查看其详情）
-8. `reconcile`（状态对账）
-9. `exceptions`（查看异常队列）
-10. 可选的 `cancel-all`（撤销所有开启状态的订单）
-
-如果你希望在模拟盘测试结束时，顺手清理掉本地状态中仍然处于开启（`open`）状态的订单，可以追加：
-
-```bash
-PYTHONPATH=src python project_tools/smoke_operator_harness.py --broker alpaca-paper --execute --cleanup-open-orders
-PYTHONPATH=src python project_tools/smoke_operator_harness.py --broker longport-paper --execute --cleanup-open-orders
-```
-
-此测试脚手架默认拒绝在非模拟盘环境的券商后端运行；如果你确切知道自己在做什么，并希望在实盘环境强制运行，需要额外传入 `--allow-non-paper` 参数。
-
-- 如果你准备开始进行盈透模拟盘的最小闭环验证，请先阅读 [docs/ibkr-paper-smoke.md](ibkr-paper-smoke.md)。
-- 如果你希望系统化地重复验证长桥模拟盘失败场景，建议阅读 [docs/longport-paper-failure-smoke.md](longport-paper-failure-smoke.md)。
-- 如果你准备将 Alpaca 模拟盘作为日常回归测试的基线，请先阅读 [docs/alpaca-paper-smoke.md](alpaca-paper-smoke.md)。
-- 如果你准备开始进行长桥实盘的最小闭环验证，请先阅读 [docs/longport-real-smoke.md](longport-real-smoke.md)。
+当前仓库没有启用 GitHub Actions 测试 workflow。本地 Makefile、`pyproject.toml` 和受监督验证记录是当前事实来源。
