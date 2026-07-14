@@ -70,6 +70,13 @@ uv run pytest \
 
 真实券商测试需要显式环境变量和人工监督。缺少凭证、网络或本地网关时，相关用例应跳过或快速失败。
 
+## 券商演练文档
+
+- [Alpaca 模拟盘演练](alpaca-paper-smoke.md)
+- [盈透模拟盘演练](ibkr-paper-smoke.md)
+- [长桥模拟盘失败场景](longport-paper-failure-smoke.md)
+- [长桥实盘谨慎演练](longport-real-smoke.md)
+
 ## 测试重点
 
 修改以下领域时应补充定点测试：
