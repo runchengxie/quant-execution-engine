@@ -81,7 +81,7 @@ qexec evidence-pack <run-id> --operator-note '终端输出已人工复查'
 
 生成的 `manifest.json` 现在除了归档清单，还会附带 `trace_summary`，用于快速查看本次打包里追踪记录快照的数量、警告数量和订单级摘要，而不必先打开完整的 `trace/order_traces.json`。CLI 终端输出也会同步显示一行简要的 trace 统计。
 
-打包结果默认输出到 `outputs/evidence-bundles/<run-id>` 目录下。系统会生成一份清单文件，记录审计日志、目标持仓文件、本地状态、冒烟测试证据、按订单聚合的追踪记录快照以及操作员备注的包含、缺失或跳过状态；同时，安全机制会确保 `.env*` 等包含敏感信息的凭证文件不会被打包进去。
+打包结果默认输出到 `outputs/evidence-bundles/<run-id>`。清单会记录审计日志、目标持仓文件、本地状态、冒烟测试证据、订单追踪快照和操作员备注的包含、缺失或跳过状态。`.env*` 等敏感凭证文件不会进入证据包。
 
 ### `preflight`
 
@@ -105,7 +105,7 @@ qexec preflight --broker ibkr-paper
 - 行情、订单簿深度与成交量数据的可达性
 - 检查已配置的依赖市场数据的风控项，判断是否会因为买卖盘或日成交量数据缺失而在正式执行时被降级跳过。
 
-对于盈透模拟盘（`ibkr-paper`），这些检查能直接反映本地 IB Gateway 的连通性、账户解析情况和行情获取权限；如果发生失败，网关的网络连通性错误会直接体现在检查结果中。
+对于盈透模拟盘（`ibkr-paper`），这些检查会反映本地 IB Gateway 的连通性、账户解析和行情权限。网关连接错误会直接出现在检查结果中。
 
 ### `account`
 
@@ -131,7 +131,7 @@ qexec quote AAPL --broker alpaca-paper
 qexec quote AAPL --broker ibkr-paper
 ```
 
-注意：当前盈透模拟盘（`ibkr-paper`）仅支持美股正股的基础行情；如果传入类似 `700.HK` 这类非美股代码，系统会直接报错拦截。
+当前盈透模拟盘（`ibkr-paper`）仅支持美股正股的基础行情。传入 `700.HK` 等非美股代码时，系统会直接拦截。
 
 ### `orders`
 
@@ -155,7 +155,7 @@ qexec broker-orders --broker longport --symbol AAPL --status filled
 qexec broker-orders --broker longport --order-id 123456789 --format json
 ```
 
-这是一条券商端的只读查询路径，用于辅助排障、审计与复盘；它不替代本地追踪状态，也不改变 `orders` 命令的语义。
+这是券商端的只读查询路径，用于排障、审计与复盘。它只提供补充视图，不改变本地追踪状态和 `orders` 命令语义。
 
 ### `broker-fills`
 
@@ -199,7 +199,7 @@ qexec trace-order <broker-order-id> --broker longport-paper
 qexec trace-order <child-order-id> --broker longport --format json
 ```
 
-这个命令不会修改任何状态；它的目标是把本地追踪到的事实和券商端只读历史记录放到同一个复查视图里。
+这个命令不会修改状态。它把本地追踪事实和券商端只读历史记录放在同一个复查视图中。
 
 ### `rebalance`
 

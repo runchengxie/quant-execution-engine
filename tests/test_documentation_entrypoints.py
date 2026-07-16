@@ -1,15 +1,22 @@
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 ENTRY_DOCS = (
     ROOT / "README.md",
     ROOT / "AGENTS.md",
-    ROOT / "docs" / "README.md",
-    ROOT / "docs" / "testing.md",
+    *sorted((ROOT / "docs").glob("*.md")),
 )
-FORBIDDEN_FRAGMENTS = ("不是", "而是", "**", "；", "——", "“", "”")
+STYLE_PATTERNS = (
+    re.compile(r"不是.{0,40}而是"),
+    re.compile(r"并非.{0,40}而是"),
+    re.compile(r"\*\*"),
+    re.compile("；"),
+    re.compile("——"),
+    re.compile("[“”]"),
+)
 
 
 def test_entry_docs_use_concise_chinese_style() -> None:
@@ -20,9 +27,9 @@ def test_entry_docs_use_concise_chinese_style() -> None:
             path.read_text(encoding="utf-8").splitlines(),
             start=1,
         ):
-            for fragment in FORBIDDEN_FRAGMENTS:
-                if fragment in line:
-                    offenders.append(f"{path.relative_to(ROOT)}:{line_number}:{fragment}")
+            for pattern in STYLE_PATTERNS:
+                if pattern.search(line):
+                    offenders.append(f"{path.relative_to(ROOT)}:{line_number}:{pattern.pattern}")
 
     assert offenders == []
 
@@ -40,10 +47,28 @@ def test_testing_docs_match_makefile_targets() -> None:
         "format",
         "typecheck",
         "basedpyright",
+        "maintainability",
         "quality",
     ):
         assert f"`make {target}`" in docs
         assert f"{target}:" in makefile
+
+
+def test_makefile_static_checks_cover_repository_python_roots() -> None:
+    makefile = (ROOT / "Makefile").read_text(encoding="utf-8")
+
+    assert "PYTHON_PATHS := src tests scripts project_tools" in makefile
+    assert "ruff check $(PYTHON_PATHS)" in makefile
+    assert "ruff format --check $(PYTHON_PATHS)" in makefile
+    assert "quality: lint format typecheck maintainability test" in makefile
+
+
+def test_readme_local_dry_run_example_is_versioned() -> None:
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    example = ROOT / "examples" / "targets.local-dry-run.json"
+
+    assert "examples/targets.local-dry-run.json" in readme
+    assert example.is_file()
 
 
 def test_docs_match_current_type_tools_and_automation() -> None:

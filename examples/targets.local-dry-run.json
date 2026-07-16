@@ -1,0 +1,12 @@
+{
+  "asof": "2026-07-16",
+  "source": "local-documentation-example",
+  "target_gross_exposure": 1.0,
+  "targets": [
+    {
+      "symbol": "AAPL.US",
+      "market": "US",
+      "target_weight": 0.9
+    }
+  ]
+}

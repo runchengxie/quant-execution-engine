@@ -16,7 +16,7 @@
 
 - `qexec rebalance --execute` 在实盘路径下要求 `QEXEC_ENABLE_LIVE=1`。
 - 仓库根目录下的 `.env*` 或 `.envrc*` 如果包含长桥实盘凭证，命令行工具会拒绝执行。
-- 这条保护的目的是防止把实盘密钥留在仓库本地文件里；模拟盘路径不受这个限制。
+- 这条保护用于防止实盘密钥留在仓库本地文件里。模拟盘路径不受这个限制。
 - `.env.example` 只示范本地模拟盘与冒烟测试配置，不包含 `LONGPORT_ACCESS_TOKEN` 实盘占位符。
 
 可选：
@@ -68,7 +68,7 @@
 
 另外：
 
-- `QEXEC_ENABLE_LIVE` 会先读当前进程环境变量；如果没设置，再回退到 `~/.config/qexec/longport-live.env`。
+- `QEXEC_ENABLE_LIVE` 先读当前进程环境变量。未设置时回退到 `~/.config/qexec/longport-live.env`。
 - `qexec config --broker longport` 和 `qexec config --broker longport-paper` 会显示各项配置的命中来源，便于排查到底读到了哪一层配置。
 
 ### Alpaca 模拟盘
@@ -100,18 +100,19 @@
 说明：
 
 - 当前盈透证券模拟盘后端按本地盈透网关配合应用编程接口路线运行。
-- 当前只支持美股正股的最小切片；非美股标的会在适配器层快速失败。
+- 当前只支持美股正股的最小切片。非美股标的会在适配器层快速失败。
 - `qexec config --broker ibkr-paper` 会显示主机、模拟盘端口、客户编号、账户编号与超时时间的有效值和来源。
-- 真实多账户路由不在当前范围内；`--account` 仍只接受 `main`。
+- 真实多账户路由不在当前范围内。`--account` 仍只接受 `main`。
 
 ### 安装模型
 
-- 核心安装：`uv sync --group dev --extra cli`
+- 最小命令行安装：`uv sync --extra cli`
+- 开发环境：`uv sync --group dev --extra cli`
 - 长桥：`uv sync --group dev --extra cli --extra longport`
 - Alpaca：`uv sync --group dev --extra cli --extra alpaca`
 - 盈透：`uv sync --group dev --extra cli --extra ibkr`
 - 全量券商依赖：`uv sync --group dev --extra cli --extra full`
-- 当前命令行工具不再假设默认券商；请在本地配置文件里显式设置 `broker.backend`，或每次传 `--broker`。
+- 当前命令行工具没有默认券商。请在本地配置文件里设置 `broker.backend`，或每次传 `--broker`。
 
 ### `.envrc.example`
 
@@ -218,7 +219,7 @@ fx:
 
 `qexec rebalance` 统一以 USD 计算组合价值、目标手数和名义金额风控。对于
 `HK`、`CN`、`SG` 市场，执行引擎会在调仓计划生成前使用相应 FX 配置将
-行情换算为 USD；缺少汇率时会拒绝生成计划，避免以混合币种继续计算。
+行情会换算为 USD。缺少汇率时拒绝生成计划，避免以混合币种继续计算。
 因此港股 `targets.json` 通过 `longport-paper` 或 `longport` 调仓前，必须
 配置 `FX_HKD_USD`（或上面的 `fx.to_usd.HKD` / `fx.rates.HKDUSD`）。
 
@@ -237,6 +238,6 @@ fx:
 - 长桥交易时段配置只是会话接口不可用时的本地降级判断。
 - 长桥最大数量与名义金额配置更偏兼容层或遗留客户端语义。当前主执行路径仍以 `execution.risk.*` 作为主要风控来源。
 - 紧急停单变量和可选路径可以手动停掉新的券商提交。
-- 默认账户是命令行工具没显式传 `--account` 时的默认标签；如果适配器不支持该标签，会直接报错。
+- 默认账户是命令行工具未传 `--account` 时使用的标签。适配器不支持该标签时会直接报错。
 - 执行状态目录控制幂等与恢复状态文件目录，默认是 `outputs/state`。
 - 盈透证券目前依赖本地已启动的盈透网关，当前配置层只开放模拟盘运行路径，暂不支持切换到实盘券商后端。

@@ -1,8 +1,6 @@
 # 类型化执行领域边界
 
-`quant_execution_engine.domain` 是后续执行状态、journal 和 transport 工作使用的框架中立
-领域边界。它不会在本阶段替换现有 CLI 使用的 `models.py` DTO，也不会替换
-`execution_state.py` 的 v1 文件状态。
+`quant_execution_engine.domain` 是执行状态、日志和传输层使用的框架中立领域边界。当前 CLI 继续使用 `models.py` 中的数据对象，v1 文件状态继续由 `execution_state.py` 维护。
 
 ## 领域链路
 
@@ -18,8 +16,7 @@ PortfolioTarget
 - `OrderIntent` 表达一次类型化报单意图。
 - `OrderEvent` 与 `Fill` 表达券商边界返回的不可变事实。
 
-所有领域对象均为 frozen dataclass。数量、价格和金额使用 `Decimal`；时间使用带时区的
-`datetime`；side、order type、time in force、status 和 event type 使用字符串枚举。
+所有领域对象都是不可变 dataclass。数量、价格和金额使用 `Decimal`。时间使用带时区的 `datetime`。方向、订单类型、有效期、状态和事件类型使用字符串枚举。
 这些模块不导入任何券商 SDK、Qlib、LEAN 或 vn.py 类型。
 
 ## 能力验证
@@ -33,7 +30,7 @@ PortfolioTarget
 卖出订单不等同于做空订单。`OrderIntent.opens_short` 显式表达是否新开空头，避免平多卖单
 被错误地按照做空能力处理。
 
-## v1 兼容与 v2 codec
+## v1 兼容与 v2 编解码
 
 `quant_execution_engine.serialization` 提供显式迁移入口：
 
@@ -42,19 +39,16 @@ PortfolioTarget
 - `order_event_from_v1`
 - `fill_from_v1`
 
-该模块保持为稳定公开 facade；common wire primitives、v1 migration 和 v2 codec 分别位于
-三个私有实现模块，调用方不应直接依赖这些私有模块。
+该模块是稳定的公开入口。通用 wire 基础类型、v1 迁移和 v2 编解码分别位于三个私有实现模块，调用方不应直接依赖这些私有模块。
 
-旧格式允许无时区时间。迁移时必须通过 `naive_timezone` 明确解释该时间；默认值为 UTC。
-schema v2 reader 不做推测，遇到无时区时间会拒绝读取。
+旧格式允许无时区时间。迁移时必须通过 `naive_timezone` 明确解释该时间，默认值为 UTC。v2 读取器遇到无时区时间会拒绝读取。
 
-v2 wire mapping 的固定规则为：
+v2 wire 映射规则：
 
-- `schema_version` 固定为 `2`，并包含明确的 `kind`；
-- 所有 `Decimal` 以规范化十进制字符串写入 JSON；
-- 所有时间统一写成 UTC ISO-8601（`Z` 后缀）；
-- `dumps_v2` 使用排序 key 和紧凑分隔符，输出可重复的 canonical JSON；
-- framework/SDK 对象不得进入 metadata 或 wire payload。
+- `schema_version` 固定为 `2`，并包含明确的 `kind`
+- 所有 `Decimal` 以规范化十进制字符串写入 JSON
+- 所有时间统一写成 UTC ISO-8601（`Z` 后缀）
+- `dumps_v2` 使用排序键和紧凑分隔符，输出可重复的规范 JSON
+- 框架和 SDK 对象不得进入 `metadata` 或 wire payload
 
-该 v2 codec 是 qexec 领域对象的序列化缝隙，不会改变当前 `targets.json` 的默认写法。
-现有 CLI 和状态文件仍走 v1 路径，直到后续 journal 迁移具有独立的兼容与恢复证据。
+v2 编解码只处理 qexec 领域对象，不改变当前 `targets.json` 的默认写法。现有 CLI 和状态文件继续使用 v1 路径，后续迁移需要独立的兼容与恢复证据。

@@ -1,161 +1,74 @@
-# 项目架构
+# 架构
 
-## 项目定位
+`quant_execution_engine` 负责把标准目标持仓转换为可审计的执行计划和订单生命周期。券商支持程度见 [current-capabilities.md](current-capabilities.md)，生命周期细节见 [execution-foundation.md](execution-foundation.md)。
 
-`quant_execution_engine` 定位为一个纯粹的量化执行引擎。
-
-当前支持矩阵、证据成熟度和已知限制说明以
-[current-capabilities.md](current-capabilities.md) 为准。
-本文负责说明包结构、模块边界和责任分层。订单生命周期与执行底座细节见
-[execution-foundation.md](execution-foundation.md)；阶段性完成清单见
-[archive/execution-checklist.md](archive/execution-checklist.md)。
-
-它负责：
-
-- 提供券商底层的适配、接口能力矩阵以及凭证封装。
-- 获取账户资金持仓快照与拉取实时行情。
-- 基于目标持仓生成调仓计划，并提供调仓前后的差异预览。
-- 支持预演、实盘和模拟盘的完整调仓落地流程。
-- 维护从订单意图、母子订单流转、成交回报到状态对账的完整生命周期。
-- 落实执行层的风控拦截与紧急停单机制。
-- 提供执行前的就绪性检查（Preflight）、本地状态维护工具以及面向操作员的终端命令行交互。
-- 负责生成审计日志、持久化本地执行状态，并提供用于验证的冒烟测试工装。
-
-范围外：
-
-- 策略研究、历史回测或 Alpha 挖掘。
-- 基础行情数据的清洗导入与因子计算。
-- 跨券商的多账户统一路由与资金调拨中台。
-- TWAP、POV 等复杂的算法交易执行调度框架；当前侧重于基础执行闭环。
-
-## 包结构
+## 数据流
 
 ```text
-src/quant_execution_engine/
-  __init__.py
-  __main__.py
-  cli.py
-  cli_parser.py
-  config.py
-  paths.py
-  logging.py
-  models.py
-  domain.py
-  serialization.py
-  _serialization_common.py
-  _serialization_v1.py
-  _serialization_v2.py
-  fees.py
-  fx.py
-  targets.py
-  account.py
-  rebalance.py
-  execution.py
-  execution_service.py
-  execution_service_recovery.py
-  execution_service_recovery_actions.py
-  execution_service_state_reconcile_ops.py
-  evidence_maturity.py
-  evidence_bundle.py
-  execution_state.py
-  diagnostics.py
-  guards.py
-  preflight.py
-  risk.py
-  state_tools.py
-  broker/
-    __init__.py
-    base.py
-    factory.py
-    alpaca.py
-    ibkr.py
-    ibkr_runtime.py
-    _stubs.py
-    longport_adapter.py
-    longport_credentials.py
-    longport_support.py
-    longport.py
-  renderers/
-    __init__.py
-    diff.py
-    jsonout.py
-    table.py
-project_tools/
-  export_repo_source.py
-  smoke_signal_harness.py
-  smoke_target_harness.py
-  smoke_operator_harness.py
+targets.json
+  → 解析与交接审计
+  → 账户和行情快照
+  → 调仓计划与执行风控
+  → 券商适配器
+  → 本地订单状态与对账
+  → 审计日志和证据包
 ```
 
-## 分层说明
+执行层的输入边界止于目标持仓。因子研究、历史回测、行情清洗和候选晋升由上游仓库完成。
 
-- `cli.py`
-    作为命令行主入口，负责券商后端路由、命令分发与统一的错误处理。包含就绪性检查、人工干预恢复以及本地状态维护等命令。
-- `cli_parser.py`
-    负责构建命令行的参数树与参数声明，是将命令行定义逻辑剥离出的独立模块。
-- `broker/base.py` 与 `broker/factory.py`
-    定义券商接口的标准化生命周期、能力支持矩阵，以及多后端的工厂选择逻辑。
-- `broker/` 目录下的具体实现
-    分别负责长桥底层封装及其对应的实盘与模拟盘适配、Alpaca 模拟盘适配，以及盈透本地网关的运行环境与模拟盘适配。
-- `broker/longport_credentials.py`
-    处理长桥实盘与模拟盘的鉴权凭证解析，确保不同配置环境相互隔离，并规避占位符配置导致的异常。
-- `broker/longport_support.py`
-    提供长桥运行期的通用支持函数，避免 SDK 的底层细节泄漏到命令行顶层。
-- `account.py`
-    通过底层券商适配器，统一处理账户资产快照与行情查询业务。
-- `rebalance.py`
-    核心调仓模块，负责解析目标仓位、生成订单执行计划、调用执行入口，并记录完整的审计日志。
-- `execution.py`
-    包导出文件，对外提供统一的执行生命周期相关类型和服务的引入路径。
-- `execution_service.py`
-    执行服务的主流程编排，涵盖订单提交、状态对账、撤单操作以及异常状态的视图聚合。
-- `execution_service_recovery.py`
-    提供异常恢复模块的向下兼容引入路径。
-- `execution_service_recovery_actions.py`
-    实现各项人工干预与恢复动作，包括重试订单、重新定价、撤销未成交部分、继续执行剩余订单、接受部分成交结果，以及清理过期订单等。
-- `execution_service_state_reconcile_ops.py`
-    处理底层的状态同步细节，包括执行状态的持久化、对账数据的合并、本地已追踪订单的同步与状态标记。
-- `evidence_maturity.py`
-    梳理并汇总各券商后端的代码支持度及测试留存情况，并给出下一步冒烟测试建议，供系统生成成熟度报告使用。
-- `evidence_bundle.py`
-    根据运行编号打包收集单次执行的完整复查材料，包含审计日志、目标清单、本地状态、测试证据以及操作员备注。
-- `execution_state.py`
-    定义执行生命周期的数据结构、状态枚举，并实现基于本地文件的状态持久化存储。
-- `diagnostics.py`
-    诊断模块，负责将券商接口返回的原始错误码与本地异常状态，转化为操作员易于理解的归一化诊断信息与排查建议。
-- `guards.py`
-    安全拦截模块，负责实盘执行前的强制确认，并扫描排查，防止实盘密钥遗留在本地代码仓库中。
-- `preflight.py`
-    执行前置检查模块，在不改变券商实际状态的前提下，验证账户、网络与数据的就绪情况。
-- `state_tools.py`
-    本地状态维护工具，提供状态文件的一致性体检、旧数据清理和异常修复功能。
-- `risk.py`
-    风控模块，负责订单维度的执行风控拦截与由环境变量触发的紧急停单逻辑。
-- `targets.py`
-    规范定义持仓目标数据结构（即 `targets.json` 的规范），并提供对应的解析与校验功能。
-- `domain.py` 与 `serialization.py`
-    定义框架中立、不可变的类型化执行领域对象，以及显式的 v1 迁移 reader 和确定性 v2
-    wire codec。`serialization.py` 是稳定公开 facade，具体实现按 common、v1 migration 和
-    v2 codec 拆分在三个私有模块中。当前 CLI 与文件状态仍保留原有 DTO；迁移边界和能力验证详见
-    [typed-execution-domain.md](typed-execution-domain.md)。
-- `renderers/` 目录
-    视图渲染层，负责将核心数据格式化为表格、JSON、调仓差异对比图及终端摘要信息。
-- `project_tools/` 目录
-    项目独立工具箱，包含生成测试信号、模拟持仓目标、操作员流程跑通测试等脚本。这些工装主要用于系统行为验证，与核心业务代码保持物理隔离。
+## 模块职责
 
-## 设计取向
+| 模块 | 职责 |
+| --- | --- |
+| `cli.py`、`cli_parser.py` | 命令分发、参数声明、操作员输出和统一错误处理 |
+| `targets.py` | `targets.json` 解析、市场归一和写入工具 |
+| `handoff_audit.py` | 校验目标与 lineage 文件的存在性和哈希，不改变订单参数 |
+| `account.py`、`rebalance.py` | 读取账户与行情，统一币种估值，生成调仓计划 |
+| `fees.py`、`fx.py` | 手续费估算和汇率读取 |
+| `risk.py`、`guards.py` | 订单风控、紧急停单和实盘凭证保护 |
+| `preflight.py`、`health.py` | 执行前就绪检查和本地状态体检汇总 |
+| `broker/base.py`、`broker/factory.py` | 券商协议、能力声明、后端选择和账户标签解析 |
+| `broker/local_dry_run.py` | 无网络的文件契约预演 |
+| `broker/alpaca.py` | Alpaca 模拟盘适配 |
+| `broker/ibkr.py`、`broker/ibkr_runtime.py` | 盈透模拟盘适配和本地网关运行时 |
+| `broker/longport*.py` | 长桥 SDK、凭证、代码转换及模拟盘与实盘适配 |
+| `execution_service*.py` | 提交、状态合并、对账和人工恢复动作 |
+| `execution_state.py`、`state_tools.py` | 本地生命周期模型、持久化、诊断和修复 |
+| `diagnostics.py` | 把后端错误归一为操作员可用的排查信息 |
+| `evidence_bundle.py`、`evidence_maturity.py`、`report.py` | 证据打包、成熟度汇总和运行报告 |
+| `domain.py`、`serialization.py`、`_serialization_*.py` | 不可变领域对象、v1 迁移读取和严格 v2 wire codec |
+| `execution_policy.py`、`execution_helpers.py` | 已批准目标的执行策略计算和共享辅助函数 |
+| `facade.py` | 为外部 Python 调用方提供简化执行接口 |
+| `renderers/` | 表格、JSON 和调仓差异视图 |
+| `project_tools/` | 操作员演练、测试信号和目标生成工装 |
 
-- 职责直白：模块命名直接体现业务职能，避免过度抽象或过早引入平台化的宏大命名。
-- 收敛输入边界：实盘下单的唯一指令输入，严格限定为标准化的 `targets.json` 目标持仓文件。
-- 本地状态优先：以本地持久化的订单状态，作为系统防重报（幂等性）、异常恢复以及人工接管的核心底层依据。
-- 视图职责清晰：系统的订单查询命令（如 `orders` 和 `exceptions`）仅展示本引擎已记录且正在跟踪的订单状态，避免混同为券商后端的全量订单簿。
-- 网关依赖模式：针对盈透证券，将其定位为依赖本地运行环境的后端，目前严格通过本地部署的 IB Gateway 配合 TWS API 进行接入。
+`models.py` 仍承载 CLI 和文件状态链路使用的可变 DTO。新领域边界及迁移规则见 [typed-execution-domain.md](typed-execution-domain.md)。
 
-## 当前限制
+## 分层原则
 
-- 单账户模式：虽然命令行已支持传递账户参数并进行显式校验，但目前所有接入的券商（长桥实盘及模拟盘、Alpaca 模拟盘、盈透模拟盘）在底层均按单账户逻辑运行，暂不具备真实的多账户路由与切换能力。
-- 部分成交恢复的限制：发生部分成交后，继续执行剩余订单当前仅支持整数股的继续申报；更复杂的碎股处理或算法拆单调度暂不在支持范围内。
-- 风控依赖市场数据：买卖价差、参与率以及市场冲击等风控指标均强依赖券商下发的实时行情。若无法获取有效行情，系统会如实记录为跳过校验，并保持人工复核入口。
-- 实盘验证成熟度：长桥实盘的代码执行链路虽已打通，但出于资金安全考虑，其全自动的端到端测试证据目前仍弱于 Alpaca 模拟盘，实盘的验证仍须依赖人工监督按步骤推进。
-- 配置读取策略分化：长桥模拟盘优先读取项目本地的测试配置文件，实盘强制优先从用户级的私有目录（`~/.config/...`）读取。这样可以让模拟盘测试随时重复执行，同时隔离实盘密钥遗留在代码库的风险。
-- 盈透模拟盘处于早期支持：目前盈透仅支持美股正股的最基础交易切片，且强依赖本地已登录的客户端。现有测试记录已证明代码能够成功连接网关并完成账户对账；实际市场行情下的完整订单流转（报单、成交、撤单）测试证据仍需在后续冒烟测试中补齐。
+### 目标与计划
+
+`targets.py` 只解释目标文件。`rebalance.py` 结合账户、行情、汇率、费用和手数规则生成计划。默认预演不会提交订单。
+
+### 风控与执行
+
+`risk.py` 为每项检查产出结构化结果。`execution_service.py` 在本地登记意图后调用券商适配器，并把后端结果写回生命周期状态。
+
+### 后端隔离
+
+业务编排依赖 `BrokerAdapter`，各券商的 SDK 和连接细节留在 `broker/`。能力矩阵用于快速拒绝后端不支持的操作。
+
+### 状态与证据
+
+本地状态用于防重报、恢复和操作员查询。对账把券商事实合并到已追踪订单。审计日志和证据包为复查提供独立材料。
+
+## 当前约束
+
+- 各后端按单账户语义运行。
+- `orders` 等命令展示引擎已追踪的订单范围，不代表券商完整订单簿。
+- 部分成交后的继续执行当前限整数数量。
+- 点差、参与率和冲击检查依赖有效市场数据。缺少数据时会记录降级结果。
+- 盈透当前限美股正股，并依赖已登录的本地网关。
+- 复杂拆单、算法调度和跨券商资金路由不在当前范围内。
+
+历史完成清单保存在 [archive/](archive/)。

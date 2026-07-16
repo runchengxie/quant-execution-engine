@@ -31,6 +31,7 @@ def test_maintainability_ratchet_matches_current_baseline():
         f"Ratchet drift! {ratchet_budget_actuals} != {expected}"
     )
     assert module.check_ratchet_budgets(metrics) == {}
+    assert metrics.roots == ["src", "scripts", "tests", "project_tools"]
 
 
 def test_maintainability_metrics_cli_outputs_json():

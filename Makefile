@@ -9,7 +9,8 @@
 #   make format                Run ruff format check
 #   make typecheck             Run ty
 #   make basedpyright          Run BasedPyright advisory diagnostics
-#   make quality               Run full quality gate (lint + format + typecheck + test)
+#   make maintainability       Enforce maintainability ratchet budgets
+#   make quality               Run the local quality gate
 #   make preflight-paper       Preflight check against longport-paper
 #   make preflight-ibkr        Preflight check against ibkr-paper
 #   make smoke-longport-paper  Run operator smoke against longport-paper
@@ -25,6 +26,7 @@
 
 BROKER       ?= longport-paper
 UV_SYNC_ARGS ?= --group dev --extra cli
+PYTHON_PATHS := src tests scripts project_tools
 
 .PHONY: sync
 sync:
@@ -48,15 +50,15 @@ test-e2e:
 
 .PHONY: lint
 lint:
-	uv run ruff check src/ tests/
+	uv run ruff check $(PYTHON_PATHS)
 
 .PHONY: format
 format:
-	uv run ruff format --check src/ tests/
+	uv run ruff format --check $(PYTHON_PATHS)
 
 .PHONY: format-fix
 format-fix:
-	uv run ruff format src/ tests/
+	uv run ruff format $(PYTHON_PATHS)
 
 .PHONY: typecheck
 typecheck:
@@ -66,8 +68,12 @@ typecheck:
 basedpyright:
 	uv run python -m basedpyright
 
+.PHONY: maintainability
+maintainability:
+	uv run python scripts/dev/maintainability_metrics.py --ratchet
+
 .PHONY: quality
-quality: lint format typecheck test
+quality: lint format typecheck maintainability test
 	@echo "=== quality gate passed ==="
 
 .PHONY: preflight-paper
@@ -137,7 +143,8 @@ help:
 	@echo "  make format              Ruff format check"
 	@echo "  make typecheck           ty check"
 	@echo "  make basedpyright        BasedPyright advisory diagnostics"
-	@echo "  make quality             Full gate: lint + format + typecheck + test"
+	@echo "  make maintainability     Maintainability ratchet"
+	@echo "  make quality             Local gate: lint + format + typecheck + maintainability + test"
 	@echo
 	@echo "Broker smoke (paper only):"
 	@echo "  make preflight-paper     Preflight longport-paper"

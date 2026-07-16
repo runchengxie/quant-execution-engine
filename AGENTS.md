@@ -1,6 +1,6 @@
 # AGENTS.md
 
-本文件说明 `quant-execution-engine` 的协作边界。
+本文件说明 `quant-execution-engine` 的协作边界和本地门禁。
 
 ## 仓库职责
 
@@ -14,31 +14,35 @@
 
 策略研究、信号生成、历史回测和原始数据采集由其他仓库维护。
 
-## 环境和测试
+## 开发流程
+
+- 仓库统一使用 `main`。
+- 并行会话使用独立克隆，并在各自的 `main` 上工作。
+- 修改前确认工作区状态，保留其他会话已有的改动。
+- 先提交本仓库，再由 `research-workspace` 更新对应 gitlink。
+- 不提交 `outputs/`、凭证、本地环境文件和券商数据。
+
+## 环境和本地门禁
 
 ```bash
 uv sync --group dev --extra cli
-make test
-make lint
-make format
-make typecheck
 make quality
 ```
 
-扩展测试和诊断：
+发布或大范围改动还应运行：
 
 ```bash
-make test-all
-make test-integration
-make test-e2e
 make basedpyright
+make test-all
 ```
 
-默认 `pytest` 排除 `integration`、`e2e` 和 `slow` 标记。
+默认 `pytest` 排除 `integration`、`e2e` 和 `slow` 标记。维护性预算由 `make maintainability` 检查。
+
+在 `research-workspace` 托管检出中，`core.hooksPath` 指向 superproject 的共享钩子目录。共享 `pre-push` 会先校验推送引用，再按清单运行仓库检查。单独克隆本仓库时不会继承这套钩子，推送前需手动运行 `make quality`。
 
 ## 执行安全
 
-- 输入只接受标准 `targets.json`。
+- 调仓输入只接受包含 `targets` 数组的标准 `targets.json`。
 - 当前没有默认券商。
 - 模拟盘和实盘都需要显式选择券商。
 - 实盘需要保护开关和人工监督。
@@ -61,12 +65,4 @@ make basedpyright
 - 券商演练：`docs/*-smoke.md`
 - 历史记录：`docs/archive/`
 
-## 编辑规则
-
-- 中文说明使用自然、直接的表达和中文标点。
-- 保留必要的命令、路径、配置键和 API 名称。
-- 历史迁移记录放入 `docs/archive/`。
-- 修改执行逻辑时优先写行为测试。
-- 不提交 `outputs/`、凭证、本地环境文件和券商数据。
-
-大范围调整使用短期分支和 PR。合并后再按需更新顶层 gitlink。
+中文说明使用自然、直接的表达和中文标点。保留必要的命令、路径、配置键和 API 名称。历史迁移记录放入 `docs/archive/`。

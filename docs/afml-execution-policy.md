@@ -72,4 +72,4 @@ python -m quant_execution_engine.handoff_audit \
 - 每个策略决策写入 receipt，并关联 targets hash。
 - 缺少 recent volume 时可以保留原订单数量，但必须由上层风控决定是否允许降级。
 - 非法或过期 forecast price 必须在 preflight 阶段拒绝。
-- 研究协议负责允许目标进入执行；执行风控仍可独立拒绝目标。
+- 研究协议负责批准目标进入执行。执行风控仍可独立拒绝目标。

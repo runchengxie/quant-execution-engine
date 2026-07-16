@@ -5,9 +5,9 @@
 
 本文档提供了 Alpaca 模拟盘（`alpaca-paper`）的最小可复查冒烟测试路径，旨在帮助你快速确认以下事项：
 
-*   API 凭证加载正常；
-*   核心操作命令链路（如 `config`、`preflight`、`account`、`quote`、带 `--execute` 参数的 `rebalance`、`orders` 以及 `reconcile`）已成功连通；
-*   能够生成并留存本地的测试证据 JSON 文件，以便后续复查。
+- API 凭证加载正常
+- 核心操作命令链路已连通，包括 `config`、`preflight`、`account`、`quote`、带 `--execute` 的 `rebalance`、`orders` 和 `reconcile`
+- 能够生成并留存本地测试证据 JSON 文件
 
 > 定位说明：当前我们将 `alpaca-paper` 作为低成本、稳定且可重复的模拟盘回归测试基线使用，该路径不涉及实盘交易。
 
@@ -21,8 +21,8 @@ uv sync --group dev --extra cli --extra alpaca
 
 请至少提供一组 Alpaca 模拟盘的 API 凭证：
 
-*   `ALPACA_API_KEY` 或 `APCA_API_KEY_ID`
-*   `ALPACA_SECRET_KEY` 或 `APCA_API_SECRET_KEY`
+- `ALPACA_API_KEY` 或 `APCA_API_KEY_ID`
+- `ALPACA_SECRET_KEY` 或 `APCA_API_SECRET_KEY`
 
 建议在当前的命令行终端中临时导出（`export`）这些变量，避免将凭证硬编码并遗留在代码仓库的本地配置文件中。
 

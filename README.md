@@ -20,11 +20,21 @@ targets.json → preflight → dry-run → execute → reconcile → evidence
 
 ## 安装
 
+支持 Python 3.10 至 3.12。`pyproject.toml` 的版本约束为 `>=3.10,<3.13`。
+
+安装命令行和离线预演所需的最小依赖：
+
+```bash
+uv sync --extra cli
+```
+
+开发环境还需安装测试和质量工具：
+
 ```bash
 uv sync --group dev --extra cli
 ```
 
-券商依赖按需安装：
+券商 SDK 按需安装：
 
 ```bash
 uv sync --group dev --extra cli --extra longport
@@ -32,29 +42,41 @@ uv sync --group dev --extra cli --extra alpaca
 uv sync --group dev --extra cli --extra ibkr
 ```
 
+长桥命令需要 `longport` 额外依赖和对应环境的凭证。模拟盘与实盘使用不同令牌，实盘还需要 `QEXEC_ENABLE_LIVE=1`。配置位置和保护规则见 [docs/configuration.md](docs/configuration.md)。
+
 ## 最小流程
+
+先用无网络的 `local-dry-run` 检查目标文件和调仓计划：
+
+```bash
+qexec config --broker local-dry-run
+qexec preflight --broker local-dry-run
+qexec rebalance examples/targets.local-dry-run.json --broker local-dry-run
+```
+
+准备好长桥模拟盘依赖和凭证后，可以运行：
 
 ```bash
 qexec config --broker longport-paper
 qexec preflight --broker longport-paper
-qexec rebalance outputs/targets/2026-04-09.json --broker longport-paper
+qexec rebalance <targets.json> --broker longport-paper
 ```
 
 确认调仓计划后，模拟盘可以显式执行：
 
 ```bash
-qexec rebalance outputs/targets/2026-04-09.json \
+qexec rebalance <targets.json> \
   --broker longport-paper \
   --execute
 qexec orders --broker longport-paper --status open
 qexec reconcile --broker longport-paper
 ```
 
-当前没有默认券商。实盘需要人工监督和显式保护开关。
+当前没有默认券商。实盘操作需要人工监督和显式保护开关。
 
 ## 输入和输出
 
-输入格式见 [docs/targets.md](docs/targets.md)。
+目标文件格式见 [docs/targets.md](docs/targets.md)。运行产物默认写入以下目录：
 
 ```text
 outputs/orders/*.jsonl
@@ -65,26 +87,17 @@ outputs/evidence-bundles/*
 
 这些目录用于审计和复查，默认不进入 Git。
 
-## 测试和质量检查
+## 本地质量检查
 
 ```bash
-make test
-make lint
-make format
-make typecheck
 make quality
-```
-
-扩展测试和发布诊断：
-
-```bash
-make test-all
-make test-integration
-make test-e2e
 make basedpyright
+make test-all
 ```
 
-详细范围见 [docs/testing.md](docs/testing.md)。
+`make quality` 覆盖全仓 Ruff 检查、格式检查、`ty` 配置范围、维护性预算和默认测试。完整范围见 [docs/testing.md](docs/testing.md)。
+
+在 `research-workspace` 托管检出中，共享 `pre-push` 会按工作区清单派发本地检查。单独克隆本仓库时，应在推送前手动运行 `make quality`。
 
 ## 文档入口
 
@@ -93,6 +106,7 @@ make basedpyright
 - [命令行](docs/cli.md)
 - [配置和凭证](docs/configuration.md)
 - [目标文件格式](docs/targets.md)
-- [测试](docs/testing.md)
+- [测试和本地门禁](docs/testing.md)
 - [架构](docs/architecture.md)
+- [订单生命周期](docs/execution-foundation.md)
 - [长桥实盘演练](docs/longport-real-smoke.md)

@@ -1,30 +1,13 @@
-# 目标持仓清单（targets.json）格式说明
+# `targets.json` 格式
 
-## 格式约束
+`qexec rebalance` 只接受带有顶层 `targets` 数组的 JSON 文件。每个目标表达一个标的的目标权重或目标数量。
 
-本执行引擎仅接受符合规范的 `targets.json` 文件作为调仓指令的输入。
-
-清单列表中的每个目标对象（`Target`）必须包含以下核心字段：
-
-- `symbol`（标的代码）
-- `market`（所在市场）
-
-此外，在表达预期仓位时，每个目标对象必须且只能在以下两个字段中选择其一（不可同时为空，也不可同时提供）：
-
-- `target_weight`（目标权重）
-- `target_quantity`（目标数量）
-
-系统支持的额外可选字段包括：
-
-- `notes`（备注信息）
-- `metadata`（扩展元数据）
-
-## 最小配置示例
+## 推荐格式
 
 ```json
 {
   "asof": "2026-04-09",
-  "source": "research-core",
+  "source": "strategy-pipeline",
   "target_gross_exposure": 1.0,
   "targets": [
     {
@@ -41,51 +24,59 @@
 }
 ```
 
-## 字段详细说明
+每个目标必须提供 `symbol`，并在 `target_weight` 与 `target_quantity` 中选一个。两个仓位字段同时提供或同时缺失都会被拒绝。
 
-### 全局字段
+推荐始终写明 `market`。这样便于上游审计，也能减少无后缀代码的歧义。
 
-- `asof`
-  目标清单的生成日期或对应的数据截面时间（通常由上游的策略研究端提供）。
-- `source`
-  指令的产出来源标识，例如 `research-core`。
-- `target_gross_exposure`
-  目标总风险敞口倍率，默认值为 `1.0`。
-- `targets`
-  具体的标的持仓目标列表。
-- `notes`
-  针对整份清单的全局备注说明（可选）。
+## 顶层字段
 
-### 目标项专属字段
+| 字段 | 是否必需 | 当前语义 |
+| --- | --- | --- |
+| `targets` | 是 | 非空目标数组 |
+| `asof` | 否 | 目标生成日期或数据截面时间 |
+| `source` | 否 | 上游来源标识 |
+| `target_gross_exposure` | 否 | 总敞口倍率，默认 `1.0`，不得小于零 |
+| `notes` | 否 | 整份目标清单的备注 |
+| `schema_version` | 否 | 记录在解析结果中的版本元数据，见下文 |
 
-针对 `targets` 列表中的每一项，除核心必填字段外，还支持以下可选字段：
+目标项还可包含 `notes` 和 `metadata`。`metadata` 会进入目标对象，执行计划仍由标的、市场、仓位字段和执行侧风控决定。
 
-- `notes`
-  针对单个交易标的的备注信息。
-- `metadata`
-  用于向下游执行链路透传的扩展参数或自定义元数据。
+## 市场和代码推断
 
-## 市场标识说明
+支持的市场代码为 `US`、`HK`、`CN` 和 `SG`。`A_SHARE`、`ASHARE`、`CN_A` 会归一为 `CN`。
 
-引擎目前原生支持以下四个市场标识：
+解析顺序如下：
 
-- `US`（美股）
-- `HK`（港股）
-- `CN`（A股）
-- `SG`（新加坡股）
+1. 显式 `market` 优先。
+2. 缺少 `market` 时，`.US`、`.HK`、`.CN`、`.SG` 后缀用于推断市场。
+3. `.SH`、`.SZ`、`.BJ`、`.XSHG`、`.XSHE` 后缀用于推断 `CN`。
+4. 市场和后缀都缺失时，`qexec` 当前按 `US` 解析。
 
-解析规则：
-如果在生成目标时，传入的 `symbol` 自带诸如 `.US`、`.HK`、`.CN`、`.SG` 等后缀，系统会自动提取并解析出对应的市场代码；如果在输入数据中完全未指定市场标识，系统将默认将其按照美股（`US`）处理。
+A 股目标应保留交易所后缀：
+
+```json
+{
+  "targets": [
+    {"symbol": "600519.SH", "market": "CN", "target_weight": 0.5},
+    {"symbol": "000858.SZ", "market": "CN", "target_weight": 0.3},
+    {"symbol": "430047.BJ", "market": "CN", "target_weight": 0.2}
+  ]
+}
+```
+
+`.XSHG` 会归一为 `.SH`，`.XSHE` 会归一为 `.SZ`。带这些交易所后缀的纯数字代码会补足六位。仅有数字和 `market: CN` 时无法推断交易所，也不会自动补后缀。文件中的推荐形式是 `600519.SH` 配合 `market: CN`。长桥适配层会在运行时转换为 `600519.SH.CN`。
+
+## `schema_version` 的当前语义
+
+目标文件写入工具当前省略 `schema_version`。读取器在字段缺失或无法转成整数时记录默认值 `2`。如果文件提供其他整数，读取器会原样记录，目前不会据此拒绝调仓。
+
+因此，目标文件里的 `schema_version` 目前属于描述性元数据，尚未形成版本兼容门禁。类型化执行领域的 v2 wire codec 使用另一套严格版本检查，规则见 [typed-execution-domain.md](typed-execution-domain.md)。
 
 ## 输入边界
 
-调仓入口只接受上面这种包含 `targets` 数组的标准目标清单。
+- 旧的顶层 `tickers` 和 `weights` 格式不能直接进入调仓命令。
+- 内部工装可以接收 ticker 列表，再写成标准 `targets` 数组。
+- `rebalance` 以 USD 统一估值。目标或现有持仓包含 `HK`、`CN`、`SG` 时，需要配置对应的 `FX_<CCY>_USD` 或 `fx.to_usd.<CCY>` 汇率。
+- 上游可以在 `targets.json.lineage.json` 记录策略、信号产物和运行来源。sidecar 不参与下单参数计算。
 
-- 每个目标项必须提供 `symbol`、`market`，并且只能在 `target_weight` 与 `target_quantity` 中选择一个。
-- 旧的 `ticker-list` / `weights` 格式不再作为调仓执行的输入。
-- 内部工装如果接收 `ticker` 列表，会先写成上述标准 JSON，再交给执行链路。
-- `rebalance` 以 USD 统一估值；目标或现有持仓包含 `HK`、`CN`、`SG` 时，必须配置对应的 `FX_<CCY>_USD` 或 `fx.to_usd.<CCY>` 汇率，否则拒绝生成调仓计划。
-- 上游研究系统可以在 `targets.json.lineage.json` 中记录 strategy、signal artifact 或 run provenance；执行引擎不把这些 sidecar 字段当作下单输入，调仓行为仍只由标准 `targets.json` 和执行侧风控决定。
-
-研究候选进入执行层前的证据边界、lineage sidecar 语义和 paper/live 分层见
-[research-handoff-governance.md](research-handoff-governance.md)。
+研究候选进入执行层前的证据边界见 [research-handoff-governance.md](research-handoff-governance.md)。

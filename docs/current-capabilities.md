@@ -1,70 +1,59 @@
-# 当前功能与能力边界
+# 当前能力
 
-本代码仓库是一个纯粹的面向量化交易的执行引擎。它涵盖了券商适配器、账户与行情读取、调仓计划生成、订单提交、本地执行状态维护、状态对账、异常恢复命令、审计日志以及冒烟测试证据留存等功能。本项目暂不支持策略研究、历史回测、原始数据导入、因子计算流水线、跨券商的多账户统一路由中台服务。
+本页记录已注册的券商后端、可验证的执行范围和证据成熟度。命令细节见 [cli.md](cli.md)，凭证和保护开关见 [configuration.md](configuration.md)。
 
-## 券商支持矩阵
+## 后端矩阵
 
-| 券商后端 | 当前运行路径 | 运行环境要求 | 证据成熟度 | 当前缺口 |
-| --- | --- | --- | --- | --- |
-| Alpaca 模拟盘（`alpaca-paper`，兼容别名 `alpaca`） | 纯模拟盘适配器，支持提交、查询、撤单与对账链路。 | 环境变量 `ALPACA_API_KEY` 或 `APCA_API_KEY_ID`，以及 `ALPACA_SECRET_KEY` 或 `APCA_API_SECRET_KEY`。 | 作为稳定且低成本的模拟盘基线，用于反复运行回归与冒烟测试。默认测试使用伪造数据，无需网络连接。 | 暂不支持 Alpaca 实盘路径。 |
-| 长桥模拟盘（`longport-paper`） | 长桥模拟盘后端，支持真实的券商端提交、查询、撤单与对账链路。 | 需配置 `LONGPORT_APP_KEY`、`LONGPORT_APP_SECRET` 以及 `LONGPORT_ACCESS_TOKEN_TEST`。允许在项目本地的 `.env` 和 `.env.local` 文件中配置模拟盘凭证。 | 人工监督下的模拟盘冒烟测试已覆盖基础的提交、查询、对账与撤单流程。 | 失败场景的测试证据仍需持续补充。 |
-| 长桥实盘（`longport`） | 长桥实盘后端，在实盘保护机制下提供真实的券商端读取与执行链路。 | 需配置 `LONGPORT_APP_KEY`、`LONGPORT_APP_SECRET`、`LONGPORT_ACCESS_TOKEN`，且在执行实盘下单（`--execute`）时需要显式设置环境变量 `QEXEC_ENABLE_LIVE=1`。实盘凭证必须来自当前进程环境或用户私有文件 `~/.config/qexec/longport-live.env`，严禁存放在项目本地的 `.env*` 或 `.envrc*` 文件中。 | 人工监督下的只读检查已验证配置加载、预检、账户查询、行情获取、私有实盘配置路由以及实盘保护机制的表现。 | 完整的实盘提交、查询、撤单与对账证据目前仍弱于模拟盘冒烟测试，必须继续在人工监督下谨慎推进。 |
-| 盈透模拟盘（`ibkr-paper`） | 依赖本地运行的盈透网关的模拟盘后端，目前仅支持美股正股的最小切片。 | 已启动并成功登录的本地盈透网关；环境变量 `IBKR_HOST`、`IBKR_PORT` 或 `IBKR_PORT_PAPER`、`IBKR_CLIENT_ID`，以及可选的 `IBKR_ACCOUNT_ID`。 | 无报单级别的证据已证明网关连接、账户、行情、调仓、对账与全部撤单链路的连通性。 | 仍缺乏在有效市场行情下，真实的券商端报单、撤单与成交证据。 |
-| A 股 / CN 文件契约（`local-dry-run`） | `targets.json` 可解析 `market: CN` 目标，适合作为中国大陆市场研究到执行的 dry-run 合约验收。`local-dry-run` 后端只提供离线现金、合成报价和手数规则，用于无网络文件契约预演。 | 由 `strategy export-targets` 生成的 `.SH`、`.SZ`、`.BJ` 标的应保留交易所后缀；`.XSHG`、`.XSHE` 会标准化为 `.SH`、`.SZ`。估值前必须提供 `FX_CNY_USD` 或 `fx.to_usd.CNY`。不带 `--execute` 的 `qexec rebalance` 不会提交订单。 | 当前完成文件契约级验收；中国大陆市场真实报单能力需要另行提供券商证据。 | 当前券商后端没有宣称中国大陆市场真实报单能力；真实账户权限、券商接口、港股通或 A 股账户能力必须单独验证。 |
+| 后端 | 用途 | 前置条件 | 当前证据和限制 |
+| --- | --- | --- | --- |
+| `local-dry-run` | 无网络的目标文件解析、合成行情和调仓预演 | 安装 `cli` 额外依赖 | 适合文件契约和手数规则回归，不提供提交、撤单、订单查询或对账 |
+| `alpaca-paper` | Alpaca 模拟盘提交、查询、撤单和对账 | 安装 `alpaca` 额外依赖并配置模拟盘凭证 | 是低成本模拟盘回归基线，当前没有 Alpaca 实盘后端 |
+| `alpaca` | `alpaca-paper` 的兼容别名 | 与 `alpaca-paper` 相同 | 仍按模拟盘语义运行 |
+| `longport-paper` | 长桥模拟盘的账户、行情、提交、查询、撤单和对账 | 安装 `longport` 额外依赖并配置模拟盘令牌 | 已有人工监督下的基础链路证据，失败场景仍需持续补充 |
+| `longport` | 长桥实盘读取和执行 | 安装 `longport` 额外依赖，使用仓库外实盘凭证，执行时设置 `QEXEC_ENABLE_LIVE=1` | 只读检查和保护机制已有证据，完整实盘订单证据仍有限 |
+| `ibkr-paper` | 依赖本地 IB Gateway 的盈透模拟盘最小链路 | 安装 `ibkr` 额外依赖，启动并登录网关，配置连接参数 | 当前限美股正股。连接、账户、行情和无报单流程已有证据，仍缺有效行情下的完整报单与成交证据 |
+
+## A 股文件契约
+
+`targets.json` 支持 `market: CN`，`local-dry-run` 可验证解析、合成估值和 100 股手数规则。`.SH`、`.SZ`、`.BJ` 应保留，`.XSHG` 和 `.XSHE` 会归一为对应交易所后缀。
+
+当前已注册后端没有提供经过验证的中国大陆市场真实报单能力。账户权限、券商接口和交易通道需要独立验收。
 
 ## 共享执行语义
 
-- 带有 `--execute` 参数的调仓命令已为长桥实盘、长桥模拟盘、Alpaca 模拟盘和盈透模拟盘打通了真实的券商底层代码链路，但各后端的成熟度存在差异（如上表所述）。
-- 目前 `--account` 参数仅用于账户或配置标签的解析与快速失败校验，暂不具备真实的多账户路由能力。
-- 长桥实盘、长桥模拟盘、Alpaca 模拟盘和盈透模拟盘的适配器目前均按单账户语义运行。传入不支持的账户标签会直接报错拦截。
-- `orders`、`exceptions` 以及 `order` 命令展示的是本地追踪状态视图。
-- 券商订单与成交记录查询是单独的只读查询命令；它们只在支持该能力的后端上可用，目前主要用于补充排障与审计视角，而不改变本地追踪状态的权威语义。
-- 订单追踪命令会把本地追踪状态的母订单、子订单与成交记录，与支持后端上的券商历史做联合展示；当后端不支持历史时，该命令仍可返回本地追踪记录，并附带只读历史不可用的提示。
-- 订单重试指令（`retry`）仅支持零成交且已处于终态的追踪订单。对于部分成交的订单，必须使用撤销剩余（`cancel-rest`）、继续执行剩余（`resume-remaining`）或接受部分成交（`accept-partial`）指令来处理。
-- 调仓的输入必须是规范的 `targets.json` 文件。旧版的纯代码列表、仅包含权重的文档或表格文件格式已不再作为对外支持的执行输入。
-- 上游研究证据、lineage sidecar 和执行层 paper/live 分层的边界见 `research-handoff-governance.md`。
+- 当前没有默认券商，每次运行需通过配置或 `--broker` 选择后端。
+- `--account` 用于账户标签解析和快速失败校验。各后端当前按单账户语义运行。
+- `qexec rebalance` 默认只生成计划。`--execute` 才会进入后端提交链路，后端能力和保护开关仍会继续校验。
+- `orders`、`exceptions` 和 `order` 展示本地追踪状态。
+- 券商历史查询提供只读补充视图，不改变本地追踪状态。
+- `retry` 只适用于零成交且已进入终态的追踪订单。部分成交使用 `cancel-rest`、`resume-remaining` 或 `accept-partial`。
+- 调仓指令只接受标准 `targets.json`。目标字段和市场推断见 [targets.md](targets.md)。
+- 研究证据和 lineage sidecar 的边界见 [research-handoff-governance.md](research-handoff-governance.md)。
 
-## 凭证加载规则
+## 凭证边界
 
-- 长桥模拟盘允许从项目本地的 `.env` 或 `.env.local` 文件中读取模拟盘令牌。
-- 长桥实盘默认优先读取 `~/.config/qexec/longport-live.env` 文件，其次读取当前进程的环境变量。项目本地的配置文件中绝对不能包含长桥的实盘凭证。
-- 系统会首先检查当前进程环境变量中的实盘开关，若未设置，则回退读取私有配置文件。
-- 使用 `qexec config --broker longport` 和 `qexec config --broker longport-paper` 命令可以清晰查看长桥各项核心参数的最终命中来源，便于操作员确认当前使用的是本地测试配置还是私有实盘配置。
-- 以 `LONGBRIDGE_` 开头的环境变量名已被弃用，仅作向下兼容保留。新配置与操作文档均应统一使用 `LONGPORT_` 前缀。
+- 长桥模拟盘可以读取项目本地 `.env` 或 `.env.local`。
+- 长桥实盘优先读取 `~/.config/qexec/longport-live.env`，也可读取当前进程环境变量。
+- 项目本地 `.env*` 和 `.envrc*` 不得包含长桥实盘凭证。
+- `LONGBRIDGE_` 前缀仅保留兼容读取，新配置统一使用 `LONGPORT_`。
 
-## 测试运行入口
+详细字段和来源优先级见 [configuration.md](configuration.md)。
 
-- 快速默认测试：`uv run pytest`
-- 端到端测试：`uv run pytest -m e2e`
-- 集成测试：`uv run pytest -m integration`
-- 按需生成测试覆盖率报告，例如：
+## 本地产物
 
-```bash
-uv run pytest --cov=src/quant_execution_engine --cov-report=term-missing -m 'not integration and not e2e and not slow'
-```
+| 路径 | 内容 |
+| --- | --- |
+| `outputs/orders/*.jsonl` | 调仓审计日志 |
+| `outputs/state/*.json` | 本地执行状态 |
+| `outputs/evidence/*.json` | 演练证据 |
+| `outputs/evidence-bundles/*` | 单次运行复查包 |
 
-涉及真实券商后端的冒烟测试证据，均依赖操作员的人工监督，且与底层运行环境强相关。各后端的冒烟测试操作手册中已详细说明了所需的凭证与本地运行环境的前置条件。
+这些路径默认被 Git 忽略。证据成熟度需要结合受监督演练和产物复查，不能只依据代码路径判断。
 
-## 输出目录说明
-
-- 调仓审计日志：`outputs/orders/*.jsonl`
-- 本地执行状态：`outputs/state/*.json`
-- 冒烟测试证据：`outputs/evidence/*.json`
-- 证据打包归档：`outputs/evidence-bundles/*`
-
-注意：输出目录已被代码版本控制忽略。所有证据文件仅作为本地复查档案留存，不应作为测试用例夹具随代码提交。
-
-## 项目工具
-
-面向量化操作员的冒烟测试工装：
+## 操作员工装
 
 - `project_tools/smoke_signal_harness.py`
 - `project_tools/smoke_target_harness.py`
 - `project_tools/smoke_operator_harness.py`
 
-仅供核心维护者使用的工具：
-
-- `project_tools/export_repo_source.py`
-- `project_tools/package.sh`
-
-这些维护者工具不属于产品业务流程，仅用于源码导出与归档打包等任务。
+`project_tools/export_repo_source.py` 和 `project_tools/package.sh` 用于源码导出与归档，不属于交易流程。

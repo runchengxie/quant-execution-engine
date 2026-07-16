@@ -20,18 +20,18 @@ from pathlib import Path
 # ── Per-project configuration ────────────────────────────────────────────────
 # Override these after importing or edit in-place per project.
 
-DEFAULT_ROOTS: tuple[str, ...] = ("src", "scripts", "tests")
+DEFAULT_ROOTS: tuple[str, ...] = ("src", "scripts", "tests", "project_tools")
 DEFAULT_LIMIT = 10
 
 # Ratchet budgets: freeze current state. After initial setup, these should match
 # the output of `--json` and only be tightened (never loosened).
 DEFAULT_RATCHET_BUDGETS: dict[str, int] = {
     "long_lines_over_100": 0,
-    "functions_over_100": 18,
-    "functions_over_250": 1,
+    "functions_over_100": 21,
+    "functions_over_250": 2,
     "functions_over_500": 0,
     "c901_file_ignores": 1,
-    "files_over_800": 6,
+    "files_over_800": 7,
     "files_over_1200": 3,
     "tests_over_1000": 3,
 }
