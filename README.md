@@ -18,6 +18,12 @@ targets.json → preflight → dry-run → execute → reconcile → evidence
 
 券商支持范围、成熟度和限制见 [docs/current-capabilities.md](docs/current-capabilities.md)。
 
+## 框架边界
+
+当前框架层由通用 `BrokerAdapter` 协议和类型化执行领域对象组成。已注册的具体券商后端仍以 [当前能力](docs/current-capabilities.md) 为准。
+
+当前 `main` 没有 vn.py 适配器、依赖或已注册后端。Qlib、LEAN、Backtrader 及其他研究或回测框架不在本仓库范围内。Gateway 框架集成需要独立设计、恢复语义和受监督证据，不能依据通用协议推断为现有能力。
+
 ## 安装
 
 支持 Python 3.10 至 3.12。`pyproject.toml` 的版本约束为 `>=3.10,<3.13`。
@@ -108,5 +114,6 @@ make test-all
 - [目标文件格式](docs/targets.md)
 - [测试和本地门禁](docs/testing.md)
 - [架构](docs/architecture.md)
+- [类型化执行领域](docs/typed-execution-domain.md)
 - [订单生命周期](docs/execution-foundation.md)
 - [长桥实盘演练](docs/longport-real-smoke.md)

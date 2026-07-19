@@ -17,7 +17,7 @@ PortfolioTarget
 - `OrderEvent` 与 `Fill` 表达券商边界返回的不可变事实。
 
 所有领域对象都是不可变 dataclass。数量、价格和金额使用 `Decimal`。时间使用带时区的 `datetime`。方向、订单类型、有效期、状态和事件类型使用字符串枚举。
-这些模块不导入任何券商 SDK、Qlib、LEAN 或 vn.py 类型。
+这些模块不导入券商 SDK，也不导入 Qlib、LEAN、Backtrader 或 vn.py 类型。当前 `main` 没有这些框架的执行适配器。
 
 ## 能力验证
 
@@ -39,7 +39,7 @@ PortfolioTarget
 - `order_event_from_v1`
 - `fill_from_v1`
 
-该模块是稳定的公开入口。通用 wire 基础类型、v1 迁移和 v2 编解码分别位于三个私有实现模块，调用方不应直接依赖这些私有模块。
+该模块是稳定的公开入口。通用线格式基础类型、v1 迁移和 v2 编解码分别位于三个私有实现模块，调用方不应直接依赖这些私有模块。
 
 旧格式允许无时区时间。迁移时必须通过 `naive_timezone` 明确解释该时间，默认值为 UTC。v2 读取器遇到无时区时间会拒绝读取。
 

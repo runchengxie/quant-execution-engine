@@ -8,6 +8,7 @@
 | --- | --- |
 | 查看当前券商和能力 | [current-capabilities.md](current-capabilities.md) |
 | 理解执行领域对象 | [typed-execution-domain.md](typed-execution-domain.md) |
+| 核对框架和适配器边界 | [architecture.md](architecture.md) |
 | 查询 `qexec` 命令 | [cli.md](cli.md) |
 | 配置凭证和风控 | [configuration.md](configuration.md) |
 | 查看 `targets.json` 格式 | [targets.md](targets.md) |

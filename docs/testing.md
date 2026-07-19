@@ -111,4 +111,4 @@ make test-all
 
 ## 自动化状态
 
-当前仓库没有启用 GitHub Actions 测试 workflow。质量检查在本地 Makefile 和 superproject 共享钩子中完成。
+当前仓库没有启用 GitHub Actions 测试工作流。质量检查在本地 Makefile 和 superproject 共享钩子中完成。

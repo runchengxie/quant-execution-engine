@@ -77,5 +77,24 @@ def test_docs_match_current_type_tools_and_automation() -> None:
 
     assert "mypy" not in pyproject
     assert "当前工具链不使用 `mypy`" in docs
-    assert "当前仓库没有启用 GitHub Actions 测试 workflow" in docs
+    assert "当前仓库没有启用 GitHub Actions 测试工作流" in docs
     assert ".github/workflows/tests.yml" not in docs
+
+
+def test_docs_record_current_framework_boundary() -> None:
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    agents = (ROOT / "AGENTS.md").read_text(encoding="utf-8")
+    architecture = (ROOT / "docs" / "architecture.md").read_text(encoding="utf-8")
+    capabilities = (ROOT / "docs" / "current-capabilities.md").read_text(encoding="utf-8")
+    docs = "\n".join((readme, agents, architecture, capabilities))
+
+    assert "通用 `BrokerAdapter`" in docs
+    assert "当前 `main` 没有 vn.py 适配器、依赖或已注册后端" in docs
+    assert "Qlib、LEAN、Backtrader" in docs
+    assert "不在本仓库范围内" in docs or "不在执行仓库范围内" in docs
+
+    pyproject = (ROOT / "pyproject.toml").read_text(encoding="utf-8").lower()
+    broker_dir = ROOT / "src" / "quant_execution_engine" / "broker"
+    for framework in ("qlib", "lean", "backtrader", "vnpy"):
+        assert framework not in pyproject
+        assert not any(framework in path.name.lower() for path in broker_dir.glob("*.py"))
