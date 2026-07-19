@@ -198,7 +198,7 @@ class OrderLifecycleRecoveryActionsMixin(OrderLifecycleStateReconcileOpsMixin):
             )
 
         quantity = remaining_quantity
-        if not quantity.is_integer():
+        if not float(quantity).is_integer():
             raise ValueError(
                 "resume-remaining currently only supports integer-share tracked orders"
             )

@@ -12,7 +12,6 @@ dev = [
   "pytest>=8",
   "pytest-cov",
   "ruff>=0.5",
-  "basedpyright>=1.39.9",
   "ty>=0.0.55",
 ]
 
@@ -68,35 +67,8 @@ max-complexity = 18
 [tool.ruff.format]
 quote-style = "double"
 
-[tool.basedpyright]
-include = ["src/quant_execution_engine"]
-exclude = [
-  ".venv",
-  "outputs",
-  "build",
-  "dist",
-]
-pythonVersion = "3.10"
-typeCheckingMode = "basic"
-reportMissingImports = false
-reportMissingTypeStubs = false
-
 [tool.ty.src]
-include = [
-  "src/quant_execution_engine/domain.py",
-  "src/quant_execution_engine/_serialization_common.py",
-  "src/quant_execution_engine/_serialization_v1.py",
-  "src/quant_execution_engine/_serialization_v2.py",
-  "src/quant_execution_engine/serialization.py",
-  "src/quant_execution_engine/targets.py",
-  "src/quant_execution_engine/risk.py",
-  "src/quant_execution_engine/preflight.py",
-  "src/quant_execution_engine/rebalance.py",
-  "src/quant_execution_engine/execution_state.py",
-  "src/quant_execution_engine/broker/base.py",
-  "src/quant_execution_engine/execution_service.py",
-  "src/quant_execution_engine/cli.py",
-]
+include = ["src/quant_execution_engine"]
 exclude = [
   ".venv",
   "outputs",
@@ -107,23 +79,6 @@ exclude = [
 [tool.ty.rules]
 redundant-cast = "ignore"
 unresolved-import = "ignore"
-
-[tool.maintainability.quality_targets]
-basedpyright_include_targets = [
-  "src/quant_execution_engine/domain.py",
-  "src/quant_execution_engine/_serialization_common.py",
-  "src/quant_execution_engine/_serialization_v1.py",
-  "src/quant_execution_engine/_serialization_v2.py",
-  "src/quant_execution_engine/serialization.py",
-  "src/quant_execution_engine/targets.py",
-  "src/quant_execution_engine/risk.py",
-  "src/quant_execution_engine/preflight.py",
-  "src/quant_execution_engine/rebalance.py",
-  "src/quant_execution_engine/execution_state.py",
-  "src/quant_execution_engine/broker/base.py",
-  "src/quant_execution_engine/execution_service.py",
-  "src/quant_execution_engine/cli.py",
-]
 
 [tool.coverage.run]
 source = ["src/quant_execution_engine"]

@@ -1,4 +1,3 @@
-# pyright: strict
 """Framework-neutral, immutable execution domain models.
 
 The models in this module are the typed boundary for new execution work.  The

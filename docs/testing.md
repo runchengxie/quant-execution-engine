@@ -12,7 +12,6 @@ make test-e2e
 make lint
 make format
 make typecheck
-make basedpyright
 make maintainability
 make quality
 ```
@@ -25,8 +24,7 @@ make quality
 | `make test-e2e` | 端到端测试 |
 | `make lint` | 对 `src/`、`tests/`、`scripts/` 和 `project_tools/` 运行 Ruff |
 | `make format` | 检查上述目录的 Ruff 格式 |
-| `make typecheck` | 对 `pyproject.toml` 中的 `ty` 范围做基础类型检查 |
-| `make basedpyright` | 对 `src/quant_execution_engine/` 做 BasedPyright 发布诊断 |
+| `make typecheck` | 使用 `ty` 检查整个 `src/quant_execution_engine/` 产品包 |
 | `make maintainability` | 检查全仓 Python 维护性预算 |
 | `make quality` | 依次运行 lint、format、typecheck、maintainability 和默认测试 |
 
@@ -81,7 +79,7 @@ uv run pytest \
 
 ## 类型检查
 
-`ty` 是日常基础门禁，其文件范围在 `[tool.ty.src]` 中维护。BasedPyright 的 `basic` 模式覆盖整个产品包，用于发布前诊断。当前工具链不使用 `mypy`。
+`ty` 是唯一类型检查器，其文件范围在 `[tool.ty.src]` 中维护。当前配置覆盖整个产品包，并把 warning 视为失败。迁移后没有缩小原发布检查范围。当前工具链不使用 `mypy`。
 
 ## 推送前检查
 
@@ -93,10 +91,9 @@ uv run pytest \
 make quality
 ```
 
-涉及类型边界、券商适配器或发布准备时，再运行：
+涉及券商适配器或发布准备时，再运行：
 
 ```bash
-make basedpyright
 make test-all
 ```
 

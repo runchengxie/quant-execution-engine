@@ -4,6 +4,7 @@ from collections.abc import Iterable
 from datetime import date, datetime
 from decimal import Decimal
 from typing import Any, cast
+from zoneinfo import ZoneInfo
 
 from .base import BrokerImportError
 
@@ -49,12 +50,6 @@ except ImportError as exc:  # pragma: no cover - executed when longport not avai
             TimeInForceType,
             TradeContext,
         )
-
-# Timezone support (Python 3.9+), fallback to local time determination when unavailable
-try:
-    from zoneinfo import ZoneInfo  # type: ignore
-except Exception:  # pragma: no cover
-    ZoneInfo = None  # type: ignore
 
 from ..fx import to_usd  # noqa: E402
 from ..logging import get_logger  # noqa: E402
@@ -877,7 +872,7 @@ class LongPortClient:
 
         # 2) Authoritative segment determination
         sessions = self._session_cache.get(market_str, [])
-        if sessions and ZoneInfo is not None:
+        if sessions:
             tz = ZoneInfo(_market_tz(market_str))
             now_ex = datetime.now(tz)
             hhmm = now_ex.hour * 100 + now_ex.minute

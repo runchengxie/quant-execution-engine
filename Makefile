@@ -8,7 +8,6 @@
 #   make lint                  Run ruff lint
 #   make format                Run ruff format check
 #   make typecheck             Run ty
-#   make basedpyright          Run BasedPyright advisory diagnostics
 #   make maintainability       Enforce maintainability ratchet budgets
 #   make quality               Run the local quality gate
 #   make preflight-paper       Preflight check against longport-paper
@@ -62,11 +61,7 @@ format-fix:
 
 .PHONY: typecheck
 typecheck:
-	uv run ty check
-
-.PHONY: basedpyright
-basedpyright:
-	uv run python -m basedpyright
+	uv run ty check --error-on-warning
 
 .PHONY: maintainability
 maintainability:
@@ -142,7 +137,6 @@ help:
 	@echo "  make lint                Ruff lint"
 	@echo "  make format              Ruff format check"
 	@echo "  make typecheck           ty check"
-	@echo "  make basedpyright        BasedPyright advisory diagnostics"
 	@echo "  make maintainability     Maintainability ratchet"
 	@echo "  make quality             Local gate: lint + format + typecheck + maintainability + test"
 	@echo

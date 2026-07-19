@@ -30,6 +30,7 @@ _DEFAULT_FMT = "[%(asctime)s] %(levelname)s %(name)s [run=%(run_id)s]: %(message
 _DEFAULT_DATEFMT = "%Y-%m-%d %H:%M:%S"
 
 _RUN_ID: ContextVar[str | None] = ContextVar("quant_execution_engine_run_id", default=None)
+_CONFIGURED_LOGGER_NAMES: set[str] = set()
 
 
 def get_run_id() -> str:
@@ -107,7 +108,7 @@ def setup_logging(
     # usage where you might first create a console logger and later attach a
     # file.
     # ------------------------------------------------------------------
-    if getattr(logger, "_configured", False):
+    if name in _CONFIGURED_LOGGER_NAMES:
         if log_file:
             out_dir = _ensure_outputs_dir()
             fh_path = out_dir / log_file
@@ -139,7 +140,7 @@ def setup_logging(
         logger.addHandler(fh)
 
     logger.addFilter(_RUN_ID_FILTER)
-    logger._configured = True  # type: ignore[attr-defined]
+    _CONFIGURED_LOGGER_NAMES.add(name)
     return logger
 
 

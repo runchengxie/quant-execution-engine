@@ -40,7 +40,6 @@ make quality
 发布或大范围改动还应运行：
 
 ```bash
-make basedpyright
 make test-all
 ```
 

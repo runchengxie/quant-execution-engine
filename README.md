@@ -97,11 +97,10 @@ outputs/evidence-bundles/*
 
 ```bash
 make quality
-make basedpyright
 make test-all
 ```
 
-`make quality` 覆盖全仓 Ruff 检查、格式检查、`ty` 配置范围、维护性预算和默认测试。完整范围见 [docs/testing.md](docs/testing.md)。
+`make quality` 覆盖全仓 Ruff 检查、格式检查、完整产品包的 `ty` 类型检查、维护性预算和默认测试。完整范围见 [docs/testing.md](docs/testing.md)。
 
 在 `research-workspace` 托管检出中，共享 `pre-push` 会按工作区清单派发本地检查。单独克隆本仓库时，应在推送前手动运行 `make quality`。
 

@@ -1,4 +1,3 @@
-# pyright: strict
 """Schema-v2 codec for immutable execution domain models."""
 
 from __future__ import annotations

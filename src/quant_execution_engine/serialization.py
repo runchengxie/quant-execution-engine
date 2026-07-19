@@ -1,4 +1,3 @@
-# pyright: strict
 """Public facade for typed execution serialization.
 
 The stable API remains in this module.  Implementation is split into common

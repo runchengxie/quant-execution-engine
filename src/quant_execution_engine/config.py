@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import importlib
 from types import ModuleType
 from typing import Any
 
@@ -12,7 +13,7 @@ logger = get_logger(__name__)
 
 yaml_module: ModuleType | None
 try:
-    import yaml as yaml_module
+    yaml_module = importlib.import_module("yaml")
 except ImportError:
     yaml_module = None
 

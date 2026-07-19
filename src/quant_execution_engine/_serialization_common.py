@@ -1,4 +1,3 @@
-# pyright: strict
 """Shared primitives for the typed execution serialization boundary."""
 
 from __future__ import annotations

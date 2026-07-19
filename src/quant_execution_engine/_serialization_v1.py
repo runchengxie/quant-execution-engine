@@ -1,4 +1,3 @@
-# pyright: strict
 """Explicit readers and compatibility writers for legacy execution payloads."""
 
 from __future__ import annotations

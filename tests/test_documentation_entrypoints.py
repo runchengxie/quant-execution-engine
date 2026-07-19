@@ -46,12 +46,22 @@ def test_testing_docs_match_makefile_targets() -> None:
         "lint",
         "format",
         "typecheck",
-        "basedpyright",
         "maintainability",
         "quality",
     ):
         assert f"`make {target}`" in docs
         assert f"{target}:" in makefile
+
+
+def test_ty_is_the_only_configured_type_checker() -> None:
+    legacy_checker = "".join(("based", "py", "right"))
+    pyproject = (ROOT / "pyproject.toml").read_text(encoding="utf-8").lower()
+    makefile = (ROOT / "Makefile").read_text(encoding="utf-8").lower()
+
+    assert "[tool.ty.src]" in pyproject
+    assert 'include = ["src/quant_execution_engine"]' in pyproject
+    assert legacy_checker not in pyproject
+    assert legacy_checker not in makefile
 
 
 def test_makefile_static_checks_cover_repository_python_roots() -> None:
