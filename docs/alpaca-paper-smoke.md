@@ -49,7 +49,7 @@ qexec reconcile --broker alpaca-paper
 qexec exceptions --broker alpaca-paper --status failure
 ```
 
-如果你只想通过自动化脚本来验证固定的操作流程，也可以直接使用配套的冒烟测试脚手架：
+如果你只想用自动化脚本验证固定操作流程，也可以直接使用配套的冒烟测试脚手架：
 
 ```bash
 PYTHONPATH=src python project_tools/smoke_operator_harness.py --broker alpaca-paper --preflight-only
