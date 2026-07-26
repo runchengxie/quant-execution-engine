@@ -50,23 +50,26 @@ def test_cli_dispatch_quote(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_main_routes_rebalance() -> None:
-    with patch.object(
-        cli,
-        "run_rebalance",
-        return_value=cli.CommandResult(exit_code=0),
-    ) as mock_run, patch.object(
-        sys,
-        "argv",
-        [
-            "qexec",
-            "rebalance",
-            "targets.json",
-            "--account",
-            "main-2",
-            "--execute",
-            "--target-gross-exposure",
-            "0.9",
-        ],
+    with (
+        patch.object(
+            cli,
+            "run_rebalance",
+            return_value=cli.CommandResult(exit_code=0),
+        ) as mock_run,
+        patch.object(
+            sys,
+            "argv",
+            [
+                "qexec",
+                "rebalance",
+                "targets.json",
+                "--account",
+                "main-2",
+                "--execute",
+                "--target-gross-exposure",
+                "0.9",
+            ],
+        ),
     ):
         result = cli.main()
 
@@ -81,23 +84,26 @@ def test_main_routes_rebalance() -> None:
 
 
 def test_main_routes_preflight() -> None:
-    with patch.object(
-        cli,
-        "run_preflight",
-        return_value=cli.CommandResult(exit_code=0),
-    ) as mock_run, patch.object(
-        sys,
-        "argv",
-        [
-            "qexec",
-            "preflight",
-            "AAPL",
-            "MSFT",
-            "--account",
-            "main",
-            "--broker",
-            "longport",
-        ],
+    with (
+        patch.object(
+            cli,
+            "run_preflight",
+            return_value=cli.CommandResult(exit_code=0),
+        ) as mock_run,
+        patch.object(
+            sys,
+            "argv",
+            [
+                "qexec",
+                "preflight",
+                "AAPL",
+                "MSFT",
+                "--account",
+                "main",
+                "--broker",
+                "longport",
+            ],
+        ),
     ):
         result = cli.main()
 
@@ -110,11 +116,14 @@ def test_main_routes_preflight() -> None:
 
 
 def test_main_routes_account() -> None:
-    with patch.object(
-        cli,
-        "run_account",
-        return_value=cli.CommandResult(exit_code=0),
-    ) as mock_run, patch.object(sys, "argv", ["qexec", "account", "--format", "json"]):
+    with (
+        patch.object(
+            cli,
+            "run_account",
+            return_value=cli.CommandResult(exit_code=0),
+        ) as mock_run,
+        patch.object(sys, "argv", ["qexec", "account", "--format", "json"]),
+    ):
         result = cli.main()
 
     assert result == 0
@@ -128,11 +137,14 @@ def test_main_routes_account() -> None:
 
 
 def test_main_routes_config() -> None:
-    with patch.object(
-        cli,
-        "run_config",
-        return_value=cli.CommandResult(exit_code=0),
-    ) as mock_run, patch.object(sys, "argv", ["qexec", "config"]):
+    with (
+        patch.object(
+            cli,
+            "run_config",
+            return_value=cli.CommandResult(exit_code=0),
+        ) as mock_run,
+        patch.object(sys, "argv", ["qexec", "config"]),
+    ):
         result = cli.main()
 
     assert result == 0
@@ -140,11 +152,14 @@ def test_main_routes_config() -> None:
 
 
 def test_main_routes_evidence_maturity() -> None:
-    with patch.object(
-        cli,
-        "run_evidence_maturity",
-        return_value=cli.CommandResult(exit_code=0),
-    ) as mock_run, patch.object(sys, "argv", ["qexec", "evidence-maturity", "--format", "json"]):
+    with (
+        patch.object(
+            cli,
+            "run_evidence_maturity",
+            return_value=cli.CommandResult(exit_code=0),
+        ) as mock_run,
+        patch.object(sys, "argv", ["qexec", "evidence-maturity", "--format", "json"]),
+    ):
         result = cli.main()
 
     assert result == 0
@@ -152,22 +167,25 @@ def test_main_routes_evidence_maturity() -> None:
 
 
 def test_main_routes_evidence_pack() -> None:
-    with patch.object(
-        cli,
-        "run_evidence_pack",
-        return_value=cli.CommandResult(exit_code=0),
-    ) as mock_run, patch.object(
-        sys,
-        "argv",
-        [
-            "qexec",
-            "evidence-pack",
-            "run-1",
-            "--output-dir",
-            "outputs/review",
-            "--operator-note",
-            "checked by operator",
-        ],
+    with (
+        patch.object(
+            cli,
+            "run_evidence_pack",
+            return_value=cli.CommandResult(exit_code=0),
+        ) as mock_run,
+        patch.object(
+            sys,
+            "argv",
+            [
+                "qexec",
+                "evidence-pack",
+                "run-1",
+                "--output-dir",
+                "outputs/review",
+                "--operator-note",
+                "checked by operator",
+            ],
+        ),
     ):
         result = cli.main()
 
@@ -229,23 +247,26 @@ def test_run_config_longport_reports_credential_sources(
 
 
 def test_main_routes_orders() -> None:
-    with patch.object(
-        cli,
-        "run_orders",
-        return_value=cli.CommandResult(exit_code=0),
-    ) as mock_run, patch.object(
-        sys,
-        "argv",
-        [
-            "qexec",
-            "orders",
-            "--account",
-            "main",
-            "--status",
-            "open",
-            "--symbol",
-            "AAPL",
-        ],
+    with (
+        patch.object(
+            cli,
+            "run_orders",
+            return_value=cli.CommandResult(exit_code=0),
+        ) as mock_run,
+        patch.object(
+            sys,
+            "argv",
+            [
+                "qexec",
+                "orders",
+                "--account",
+                "main",
+                "--status",
+                "open",
+                "--symbol",
+                "AAPL",
+            ],
+        ),
     ):
         result = cli.main()
 
@@ -259,27 +280,30 @@ def test_main_routes_orders() -> None:
 
 
 def test_main_routes_broker_orders() -> None:
-    with patch.object(
-        cli,
-        "run_broker_orders",
-        return_value=cli.CommandResult(exit_code=0),
-    ) as mock_run, patch.object(
-        sys,
-        "argv",
-        [
-            "qexec",
-            "broker-orders",
-            "--account",
-            "main",
-            "--status",
-            "open",
-            "--symbol",
-            "AAPL",
-            "--order-id",
-            "broker-1",
-            "--format",
-            "json",
-        ],
+    with (
+        patch.object(
+            cli,
+            "run_broker_orders",
+            return_value=cli.CommandResult(exit_code=0),
+        ) as mock_run,
+        patch.object(
+            sys,
+            "argv",
+            [
+                "qexec",
+                "broker-orders",
+                "--account",
+                "main",
+                "--status",
+                "open",
+                "--symbol",
+                "AAPL",
+                "--order-id",
+                "broker-1",
+                "--format",
+                "json",
+            ],
+        ),
     ):
         result = cli.main()
 
@@ -295,21 +319,24 @@ def test_main_routes_broker_orders() -> None:
 
 
 def test_main_routes_broker_fills() -> None:
-    with patch.object(
-        cli,
-        "run_broker_fills",
-        return_value=cli.CommandResult(exit_code=0),
-    ) as mock_run, patch.object(
-        sys,
-        "argv",
-        [
-            "qexec",
-            "broker-fills",
-            "--symbol",
-            "MSFT",
-            "--order-id",
-            "broker-2",
-        ],
+    with (
+        patch.object(
+            cli,
+            "run_broker_fills",
+            return_value=cli.CommandResult(exit_code=0),
+        ) as mock_run,
+        patch.object(
+            sys,
+            "argv",
+            [
+                "qexec",
+                "broker-fills",
+                "--symbol",
+                "MSFT",
+                "--order-id",
+                "broker-2",
+            ],
+        ),
     ):
         result = cli.main()
 
@@ -324,14 +351,17 @@ def test_main_routes_broker_fills() -> None:
 
 
 def test_main_routes_exceptions() -> None:
-    with patch.object(
-        cli,
-        "run_exceptions",
-        return_value=cli.CommandResult(exit_code=0),
-    ) as mock_run, patch.object(
-        sys,
-        "argv",
-        ["qexec", "exceptions", "--status", "failure", "--symbol", "MSFT"],
+    with (
+        patch.object(
+            cli,
+            "run_exceptions",
+            return_value=cli.CommandResult(exit_code=0),
+        ) as mock_run,
+        patch.object(
+            sys,
+            "argv",
+            ["qexec", "exceptions", "--status", "failure", "--symbol", "MSFT"],
+        ),
     ):
         result = cli.main()
 
@@ -345,11 +375,14 @@ def test_main_routes_exceptions() -> None:
 
 
 def test_main_routes_reconcile() -> None:
-    with patch.object(
-        cli,
-        "run_reconcile",
-        return_value=cli.CommandResult(exit_code=0),
-    ) as mock_run, patch.object(sys, "argv", ["qexec", "reconcile", "--broker", "alpaca-paper"]):
+    with (
+        patch.object(
+            cli,
+            "run_reconcile",
+            return_value=cli.CommandResult(exit_code=0),
+        ) as mock_run,
+        patch.object(sys, "argv", ["qexec", "reconcile", "--broker", "alpaca-paper"]),
+    ):
         result = cli.main()
 
     assert result == 0
@@ -357,14 +390,17 @@ def test_main_routes_reconcile() -> None:
 
 
 def test_main_routes_cancel() -> None:
-    with patch.object(
-        cli,
-        "run_cancel",
-        return_value=cli.CommandResult(exit_code=0),
-    ) as mock_run, patch.object(
-        sys,
-        "argv",
-        ["qexec", "cancel", "fake-order-1", "--account", "main"],
+    with (
+        patch.object(
+            cli,
+            "run_cancel",
+            return_value=cli.CommandResult(exit_code=0),
+        ) as mock_run,
+        patch.object(
+            sys,
+            "argv",
+            ["qexec", "cancel", "fake-order-1", "--account", "main"],
+        ),
     ):
         result = cli.main()
 
@@ -377,14 +413,17 @@ def test_main_routes_cancel() -> None:
 
 
 def test_main_routes_cancel_all() -> None:
-    with patch.object(
-        cli,
-        "run_cancel_all",
-        return_value=cli.CommandResult(exit_code=0),
-    ) as mock_run, patch.object(
-        sys,
-        "argv",
-        ["qexec", "cancel-all", "--broker", "alpaca-paper"],
+    with (
+        patch.object(
+            cli,
+            "run_cancel_all",
+            return_value=cli.CommandResult(exit_code=0),
+        ) as mock_run,
+        patch.object(
+            sys,
+            "argv",
+            ["qexec", "cancel-all", "--broker", "alpaca-paper"],
+        ),
     ):
         result = cli.main()
 
@@ -396,14 +435,17 @@ def test_main_routes_cancel_all() -> None:
 
 
 def test_main_routes_cancel_rest() -> None:
-    with patch.object(
-        cli,
-        "run_cancel_rest",
-        return_value=cli.CommandResult(exit_code=0),
-    ) as mock_run, patch.object(
-        sys,
-        "argv",
-        ["qexec", "cancel-rest", "fake-order-1", "--account", "main"],
+    with (
+        patch.object(
+            cli,
+            "run_cancel_rest",
+            return_value=cli.CommandResult(exit_code=0),
+        ) as mock_run,
+        patch.object(
+            sys,
+            "argv",
+            ["qexec", "cancel-rest", "fake-order-1", "--account", "main"],
+        ),
     ):
         result = cli.main()
 
@@ -416,14 +458,17 @@ def test_main_routes_cancel_rest() -> None:
 
 
 def test_main_routes_order() -> None:
-    with patch.object(
-        cli,
-        "run_order",
-        return_value=cli.CommandResult(exit_code=0),
-    ) as mock_run, patch.object(
-        sys,
-        "argv",
-        ["qexec", "order", "fake-order-1", "--broker", "alpaca-paper"],
+    with (
+        patch.object(
+            cli,
+            "run_order",
+            return_value=cli.CommandResult(exit_code=0),
+        ) as mock_run,
+        patch.object(
+            sys,
+            "argv",
+            ["qexec", "order", "fake-order-1", "--broker", "alpaca-paper"],
+        ),
     ):
         result = cli.main()
 
@@ -436,22 +481,25 @@ def test_main_routes_order() -> None:
 
 
 def test_main_routes_trace_order() -> None:
-    with patch.object(
-        cli,
-        "run_trace_order",
-        return_value=cli.CommandResult(exit_code=0),
-    ) as mock_run, patch.object(
-        sys,
-        "argv",
-        [
-            "qexec",
-            "trace-order",
-            "fake-order-1",
-            "--broker",
-            "alpaca-paper",
-            "--format",
-            "json",
-        ],
+    with (
+        patch.object(
+            cli,
+            "run_trace_order",
+            return_value=cli.CommandResult(exit_code=0),
+        ) as mock_run,
+        patch.object(
+            sys,
+            "argv",
+            [
+                "qexec",
+                "trace-order",
+                "fake-order-1",
+                "--broker",
+                "alpaca-paper",
+                "--format",
+                "json",
+            ],
+        ),
     ):
         result = cli.main()
 
@@ -465,14 +513,17 @@ def test_main_routes_trace_order() -> None:
 
 
 def test_main_routes_retry() -> None:
-    with patch.object(
-        cli,
-        "run_retry",
-        return_value=cli.CommandResult(exit_code=0),
-    ) as mock_run, patch.object(
-        sys,
-        "argv",
-        ["qexec", "retry", "fake-order-1", "--account", "main"],
+    with (
+        patch.object(
+            cli,
+            "run_retry",
+            return_value=cli.CommandResult(exit_code=0),
+        ) as mock_run,
+        patch.object(
+            sys,
+            "argv",
+            ["qexec", "retry", "fake-order-1", "--account", "main"],
+        ),
     ):
         result = cli.main()
 
@@ -485,14 +536,17 @@ def test_main_routes_retry() -> None:
 
 
 def test_main_routes_resume_remaining() -> None:
-    with patch.object(
-        cli,
-        "run_resume_remaining",
-        return_value=cli.CommandResult(exit_code=0),
-    ) as mock_run, patch.object(
-        sys,
-        "argv",
-        ["qexec", "resume-remaining", "fake-order-1", "--broker", "alpaca-paper"],
+    with (
+        patch.object(
+            cli,
+            "run_resume_remaining",
+            return_value=cli.CommandResult(exit_code=0),
+        ) as mock_run,
+        patch.object(
+            sys,
+            "argv",
+            ["qexec", "resume-remaining", "fake-order-1", "--broker", "alpaca-paper"],
+        ),
     ):
         result = cli.main()
 
@@ -505,14 +559,17 @@ def test_main_routes_resume_remaining() -> None:
 
 
 def test_main_routes_accept_partial() -> None:
-    with patch.object(
-        cli,
-        "run_accept_partial",
-        return_value=cli.CommandResult(exit_code=0),
-    ) as mock_run, patch.object(
-        sys,
-        "argv",
-        ["qexec", "accept-partial", "fake-order-1", "--account", "main"],
+    with (
+        patch.object(
+            cli,
+            "run_accept_partial",
+            return_value=cli.CommandResult(exit_code=0),
+        ) as mock_run,
+        patch.object(
+            sys,
+            "argv",
+            ["qexec", "accept-partial", "fake-order-1", "--account", "main"],
+        ),
     ):
         result = cli.main()
 
@@ -525,22 +582,25 @@ def test_main_routes_accept_partial() -> None:
 
 
 def test_main_routes_reprice() -> None:
-    with patch.object(
-        cli,
-        "run_reprice",
-        return_value=cli.CommandResult(exit_code=0),
-    ) as mock_run, patch.object(
-        sys,
-        "argv",
-        [
-            "qexec",
-            "reprice",
-            "fake-order-1",
-            "--limit-price",
-            "9.5",
-            "--broker",
-            "alpaca-paper",
-        ],
+    with (
+        patch.object(
+            cli,
+            "run_reprice",
+            return_value=cli.CommandResult(exit_code=0),
+        ) as mock_run,
+        patch.object(
+            sys,
+            "argv",
+            [
+                "qexec",
+                "reprice",
+                "fake-order-1",
+                "--limit-price",
+                "9.5",
+                "--broker",
+                "alpaca-paper",
+            ],
+        ),
     ):
         result = cli.main()
 
@@ -554,14 +614,17 @@ def test_main_routes_reprice() -> None:
 
 
 def test_main_routes_retry_stale() -> None:
-    with patch.object(
-        cli,
-        "run_retry_stale",
-        return_value=cli.CommandResult(exit_code=0),
-    ) as mock_run, patch.object(
-        sys,
-        "argv",
-        ["qexec", "retry-stale", "--older-than-minutes", "15", "--account", "main"],
+    with (
+        patch.object(
+            cli,
+            "run_retry_stale",
+            return_value=cli.CommandResult(exit_code=0),
+        ) as mock_run,
+        patch.object(
+            sys,
+            "argv",
+            ["qexec", "retry-stale", "--older-than-minutes", "15", "--account", "main"],
+        ),
     ):
         result = cli.main()
 
@@ -574,14 +637,17 @@ def test_main_routes_retry_stale() -> None:
 
 
 def test_main_routes_state_doctor() -> None:
-    with patch.object(
-        cli,
-        "run_state_doctor",
-        return_value=cli.CommandResult(exit_code=0),
-    ) as mock_run, patch.object(
-        sys,
-        "argv",
-        ["qexec", "state-doctor", "--account", "main", "--broker", "longport"],
+    with (
+        patch.object(
+            cli,
+            "run_state_doctor",
+            return_value=cli.CommandResult(exit_code=0),
+        ) as mock_run,
+        patch.object(
+            sys,
+            "argv",
+            ["qexec", "state-doctor", "--account", "main", "--broker", "longport"],
+        ),
     ):
         result = cli.main()
 
@@ -593,22 +659,25 @@ def test_main_routes_state_doctor() -> None:
 
 
 def test_main_routes_state_prune() -> None:
-    with patch.object(
-        cli,
-        "run_state_prune",
-        return_value=cli.CommandResult(exit_code=0),
-    ) as mock_run, patch.object(
-        sys,
-        "argv",
-        [
-            "qexec",
-            "state-prune",
-            "--older-than-days",
-            "45",
-            "--apply",
-            "--broker",
-            "alpaca-paper",
-        ],
+    with (
+        patch.object(
+            cli,
+            "run_state_prune",
+            return_value=cli.CommandResult(exit_code=0),
+        ) as mock_run,
+        patch.object(
+            sys,
+            "argv",
+            [
+                "qexec",
+                "state-prune",
+                "--older-than-days",
+                "45",
+                "--apply",
+                "--broker",
+                "alpaca-paper",
+            ],
+        ),
     ):
         result = cli.main()
 
@@ -622,22 +691,25 @@ def test_main_routes_state_prune() -> None:
 
 
 def test_main_routes_state_repair() -> None:
-    with patch.object(
-        cli,
-        "run_state_repair",
-        return_value=cli.CommandResult(exit_code=0),
-    ) as mock_run, patch.object(
-        sys,
-        "argv",
-        [
-            "qexec",
-            "state-repair",
-            "--clear-kill-switch",
-            "--dedupe-fills",
-            "--drop-orphan-fills",
-            "--drop-orphan-terminal-broker-orders",
-            "--recompute-parent-aggregates",
-        ],
+    with (
+        patch.object(
+            cli,
+            "run_state_repair",
+            return_value=cli.CommandResult(exit_code=0),
+        ) as mock_run,
+        patch.object(
+            sys,
+            "argv",
+            [
+                "qexec",
+                "state-repair",
+                "--clear-kill-switch",
+                "--dedupe-fills",
+                "--drop-orphan-fills",
+                "--drop-orphan-terminal-broker-orders",
+                "--recompute-parent-aggregates",
+            ],
+        ),
     ):
         result = cli.main()
 
@@ -1066,9 +1138,10 @@ def test_run_exceptions_filters_by_symbol(monkeypatch: pytest.MonkeyPatch) -> No
 
 
 def test_app_function() -> None:
-    with patch.object(cli, "main", return_value=0) as mock_main, patch.object(
-        sys, "exit"
-    ) as mock_exit:
+    with (
+        patch.object(cli, "main", return_value=0) as mock_main,
+        patch.object(sys, "exit") as mock_exit,
+    ):
         cli.app()
 
     mock_main.assert_called_once()

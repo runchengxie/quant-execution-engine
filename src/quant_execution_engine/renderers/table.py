@@ -51,8 +51,7 @@ def _append_child_selection_lines(lines: list[str], child: Any | None) -> None:
     if child is None:
         return
     lines.append(
-        f"- Selected Child: {child.child_order_id} "
-        f"(attempt {child.attempt}, status {child.status})"
+        f"- Selected Child: {child.child_order_id} (attempt {child.attempt}, status {child.status})"
     )
 
 

@@ -341,9 +341,7 @@ def _build_diffstat_table(
     diffstat: tuple[int, int, int, int],
     style_delta: Callable[[float, str], str],
 ) -> Any:
-    table: Any = Table(
-        title="Diffstat", show_header=True, header_style="bold", box=box.MINIMAL
-    )
+    table: Any = Table(title="Diffstat", show_header=True, header_style="bold", box=box.MINIMAL)
     table.add_column("Metric")
     table.add_column("Count", justify="right")
     for label, value in zip(("Added", "Removed", "Increased", "Decreased"), diffstat, strict=True):
@@ -472,9 +470,7 @@ def _add_position_row(
         str(pos["tgt_qty"]),
         f"{pos['target_frac']:.3f}" if pos["target_frac"] is not None else "-",
         str(pos["rounded"]) if pos["rounded"] is not None else "-",
-        style_delta(delta_frac, f"{delta_frac:.3f}")
-        if pos["rounding_loss"] is not None
-        else "-",
+        style_delta(delta_frac, f"{delta_frac:.3f}") if pos["rounding_loss"] is not None else "-",
         fmt_money(pos["est_fee"]),
         _markup_action(pos["action"]),
     )
