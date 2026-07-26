@@ -292,7 +292,7 @@ def collect_file_tree(
     return files
 
 
-def combine_project_files(  # noqa: C901 - high complexity due to multiple nested checks
+def combine_project_files(
     project_root: Path = PROJECT_ROOT,
     output_filename: str = OUTPUT_FILENAME,
 ) -> None:

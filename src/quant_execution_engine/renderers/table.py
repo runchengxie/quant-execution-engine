@@ -3,6 +3,10 @@
 Provides table format data rendering functionality.
 """
 
+from __future__ import annotations
+
+from typing import Any
+
 from ..broker.base import BrokerFillRecord, BrokerOrderRecord, BrokerReconcileReport
 from ..diagnostics import diagnose_order_issue, diagnose_warning_message
 from ..execution import (
@@ -19,6 +23,37 @@ from ..execution import (
 from ..models import AccountSnapshot, Order, Quote, RebalanceResult
 from ..preflight import PreflightResult
 from ..state_tools import StateDoctorResult, StatePruneResult, StateRepairResult
+
+
+def _append_diagnostic(lines: list[str], diagnostic: Any | None) -> None:
+    if diagnostic is None:
+        return
+    lines.append(f"- Diagnostic: [{diagnostic.code}] {diagnostic.summary}")
+    if diagnostic.action_hint:
+        lines.append(f"- Suggested Next Step: {diagnostic.action_hint}")
+
+
+def _append_parent_lines(lines: list[str], parent: Any | None) -> None:
+    if parent is None:
+        return
+    lines.extend(
+        [
+            f"- Parent: {parent.parent_order_id}",
+            f"- Parent Status: {parent.status}",
+            "- Parent Filled / Remaining: "
+            f"{parent.filled_quantity:g} / "
+            f"{parent.remaining_quantity:g}",
+        ]
+    )
+
+
+def _append_child_selection_lines(lines: list[str], child: Any | None) -> None:
+    if child is None:
+        return
+    lines.append(
+        f"- Selected Child: {child.child_order_id} "
+        f"(attempt {child.attempt}, status {child.status})"
+    )
 
 
 def render_quotes(quotes: list[Quote]) -> str:
@@ -538,16 +573,10 @@ def render_tracked_order_detail(tracked: ExecutionTrackedOrder) -> str:
             ]
         )
         diagnostic = diagnose_order_issue(tracked.broker_order)
-        if diagnostic is not None:
-            lines.append(f"- Diagnostic: [{diagnostic.code}] {diagnostic.summary}")
-            if diagnostic.action_hint:
-                lines.append(f"- Suggested Next Step: {diagnostic.action_hint}")
+        _append_diagnostic(lines, diagnostic)
     elif tracked.child is not None:
         diagnostic = diagnose_order_issue(tracked.child)
-        if diagnostic is not None:
-            lines.append(f"- Diagnostic: [{diagnostic.code}] {diagnostic.summary}")
-            if diagnostic.action_hint:
-                lines.append(f"- Suggested Next Step: {diagnostic.action_hint}")
+        _append_diagnostic(lines, diagnostic)
     lines.append(f"- Fill Events: {len(tracked.fill_events)}")
     for fill in tracked.fill_events:
         lines.append(f"  * {fill.fill_id}: {fill.quantity:g} @ {fill.price:g} on {fill.filled_at}")
@@ -574,21 +603,8 @@ def render_order_trace(trace: ExecutionOrderTrace) -> str:
         )
         if trace.intent.limit_price is not None:
             lines.append(f"- Intent Limit Price: {trace.intent.limit_price}")
-    if trace.parent is not None:
-        lines.extend(
-            [
-                f"- Parent: {trace.parent.parent_order_id}",
-                f"- Parent Status: {trace.parent.status}",
-                "- Parent Filled / Remaining: "
-                f"{trace.parent.filled_quantity:g} / "
-                f"{trace.parent.remaining_quantity:g}",
-            ]
-        )
-    if trace.child is not None:
-        lines.append(
-            f"- Selected Child: {trace.child.child_order_id} "
-            f"(attempt {trace.child.attempt}, status {trace.child.status})"
-        )
+    _append_parent_lines(lines, trace.parent)
+    _append_child_selection_lines(lines, trace.child)
     if trace.broker_order is not None:
         lines.append(
             "- Selected Broker Order: "
@@ -597,10 +613,7 @@ def render_order_trace(trace: ExecutionOrderTrace) -> str:
             f"remaining {float(trace.broker_order.remaining_quantity or 0.0):g})"
         )
         diagnostic = diagnose_order_issue(trace.broker_order)
-        if diagnostic is not None:
-            lines.append(f"- Diagnostic: [{diagnostic.code}] {diagnostic.summary}")
-            if diagnostic.action_hint:
-                lines.append(f"- Suggested Next Step: {diagnostic.action_hint}")
+        _append_diagnostic(lines, diagnostic)
 
     lines.append(f"- Local Child Attempts: {len(trace.child_orders)}")
     for child in trace.child_orders:

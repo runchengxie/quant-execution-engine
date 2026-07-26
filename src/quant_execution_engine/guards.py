@@ -83,8 +83,7 @@ def resolve_live_enable_value() -> str | None:
     current = os.getenv(LIVE_ENABLE_ENV_VAR)
     if current is not None:
         return current
-    fallback = _read_env_value_from_file(DEFAULT_USER_LIVE_ENV_PATH, LIVE_ENABLE_ENV_VAR)
-    return fallback
+    return _read_env_value_from_file(DEFAULT_USER_LIVE_ENV_PATH, LIVE_ENABLE_ENV_VAR)
 
 
 def iter_repo_local_env_files(project_root: Path) -> list[Path]:

@@ -210,7 +210,7 @@ class RebalanceService:
     ) -> tuple[Position, Order | None]:
         """Build target position and corresponding order for a symbol."""
         lot_size = client.lot_size(lb_symbol)
-        target_qty_int = int(math.floor(float(target_qty_raw) + 1e-9))
+        target_qty_int = math.floor(float(target_qty_raw) + 1e-9)
         target_qty = (target_qty_int // lot_size) * lot_size
         target_qty_frac = Decimal(0)
         if price > 0 and frac_enable:

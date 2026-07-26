@@ -45,8 +45,8 @@ from ._serialization_v2 import (
 )
 
 __all__ = [
-    "DomainModel",
     "SCHEMA_VERSION",
+    "DomainModel",
     "WireFormatError",
     "WirePayload",
     "WireScalar",

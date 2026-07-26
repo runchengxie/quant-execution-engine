@@ -51,7 +51,10 @@ line-length = 100
 # "E", "F" correspond to Flake8's native rules.
 # "I" corresponds to isort.
 # "UP" corresponds to pyupgrade.
-select = ["E", "F", "I", "UP", "B", "C90"] # B is flake8-bugbear
+# "SIM"/"RUF"/"RET" added 2026-07-26 to align with the other workspace
+# submodules' broad Ruff gate (previously only E,F,I,UP,B,C90).
+select = ["E", "F", "I", "UP", "B", "C90", "SIM", "RUF", "RET"] # B is flake8-bugbear
+allowed-confusables = ["：", "，", "；", "（", "）"]
 
 # Or, enable all rules and then ignore the ones you don't need
 # select = ["ALL"]
@@ -59,9 +62,13 @@ select = ["E", "F", "I", "UP", "B", "C90"] # B is flake8-bugbear
 
 
 [tool.ruff.lint.mccabe]
-max-complexity = 18
+max-complexity = 14
 
 [tool.ruff.lint.per-file-ignores]
+# Temporary: cli.py main()/run_config() are the broad command dispatcher while
+# broker/execution command groups are still being extracted behind focused tests.
+# Tracked in docs/quality-coverage-governance.yml per_file_ignore_register; remove
+# after the CLI command-family split (next qexec 2.0 release review).
 "src/quant_execution_engine/cli.py" = ["C901"]
 
 [tool.ruff.format]
@@ -78,6 +85,9 @@ exclude = [
 
 [tool.ty.rules]
 redundant-cast = "ignore"
+# Optional broker SDKs (longport/longbridge) are not installed in the base venv;
+# their imports are guarded at runtime. Keep unresolved-import ignored so base
+# typecheck does not require the optional `longport`/`ibkr` extras.
 unresolved-import = "ignore"
 
 [tool.coverage.run]

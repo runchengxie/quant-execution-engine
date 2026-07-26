@@ -201,10 +201,7 @@ class IbkrRuntime:
     def _managed_accounts(self) -> list[str]:
         ib = self._get_ib()
         managed = getattr(ib, "managedAccounts", None)
-        if callable(managed):
-            raw = managed()
-        else:
-            raw = managed or []
+        raw = managed() if callable(managed) else managed or []
         return [str(account).strip() for account in _as_list(raw) if str(account).strip()]
 
     def _raw_account_values(self) -> list[Any]:

@@ -150,7 +150,7 @@ def discretize_quantity(quantity: float, *, lot_size: int) -> int:
         raise ValueError("lot_size must be > 0")
     if not math.isfinite(float(quantity)):
         raise ValueError("quantity must be finite")
-    return int(round(float(quantity) / lot_size)) * lot_size
+    return round(float(quantity) / lot_size) * lot_size
 
 
 def participation_capped_quantity(
@@ -195,7 +195,7 @@ def build_dynamic_execution_decision(
         market_price=market,
         omega=omega,
     )
-    raw_target = int(round(normalized_target * config.max_position))
+    raw_target = round(normalized_target * config.max_position)
     target = discretize_quantity(raw_target, lot_size=config.lot_size)
     target = max(-config.max_position, min(config.max_position, target))
     order = target - int(current_quantity)

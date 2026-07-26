@@ -142,19 +142,20 @@ def test_submit_limit_with_custom_tif() -> None:
     mock_trade_context = Mock()
     mock_trade_context.submit_order.return_value = SimpleNamespace(order_id="11111")
 
-    with patch("quant_execution_engine.broker.longport.get_config"):
-        with patch("quant_execution_engine.broker.longport.OrderType") as mock_ot:
-            with patch("quant_execution_engine.broker.longport.OrderSide") as mock_os:
-                with patch("quant_execution_engine.broker.longport.TimeInForceType") as mock_tif:
-                    mock_ot.LO = mock_order_type
-                    mock_os.Buy = mock_order_side
-                    mock_tif.GTC = mock_tif_gtc
+    with patch("quant_execution_engine.broker.longport.get_config"), patch(
+        "quant_execution_engine.broker.longport.OrderType"
+    ) as mock_ot, patch("quant_execution_engine.broker.longport.OrderSide") as mock_os, patch(
+        "quant_execution_engine.broker.longport.TimeInForceType"
+    ) as mock_tif:
+        mock_ot.LO = mock_order_type
+        mock_os.Buy = mock_order_side
+        mock_tif.GTC = mock_tif_gtc
 
-                    client = LongPortClient.__new__(LongPortClient)
-                    client.q = Mock()
-                    client.t = mock_trade_context
+        client = LongPortClient.__new__(LongPortClient)
+        client.q = Mock()
+        client.t = mock_trade_context
 
-                    client.submit_limit("GOOGL", 2500.0, 10, mock_tif_gtc)
+        client.submit_limit("GOOGL", 2500.0, 10, mock_tif_gtc)
 
     mock_trade_context.submit_order.assert_called_with(
         symbol="GOOGL.US",
@@ -203,18 +204,16 @@ def test_submit_market_preserves_sdk_enum_objects() -> None:
     mock_trade_context = Mock()
     mock_trade_context.submit_order.return_value = SimpleNamespace(order_id="33333")
 
-    with patch("quant_execution_engine.broker.longport.get_config"):
-        with patch("quant_execution_engine.broker.longport.OrderType", FakeOrderType):
-            with patch("quant_execution_engine.broker.longport.OrderSide", FakeOrderSide):
-                with patch(
-                    "quant_execution_engine.broker.longport.TimeInForceType",
-                    FakeTif,
-                ):
-                    client = LongPortClient.__new__(LongPortClient)
-                    client.q = Mock()
-                    client.t = mock_trade_context
+    with patch("quant_execution_engine.broker.longport.get_config"), patch(
+        "quant_execution_engine.broker.longport.OrderType", FakeOrderType
+    ), patch("quant_execution_engine.broker.longport.OrderSide", FakeOrderSide), patch(
+        "quant_execution_engine.broker.longport.TimeInForceType", FakeTif
+    ):
+        client = LongPortClient.__new__(LongPortClient)
+        client.q = Mock()
+        client.t = mock_trade_context
 
-                    client.submit_market("AAPL", 1)
+        client.submit_market("AAPL", 1)
 
     mock_trade_context.submit_order.assert_called_with(
         symbol="AAPL.US",

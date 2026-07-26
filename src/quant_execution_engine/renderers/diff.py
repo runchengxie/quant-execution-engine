@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import importlib.util
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from typing import Any
 
@@ -11,6 +11,9 @@ from ..models import AccountSnapshot, Order, Position, RebalanceResult
 from ..risk import format_risk_bypass_summary, summarize_risk_decisions
 
 _HAS_RICH = importlib.util.find_spec("rich") is not None
+if _HAS_RICH:
+    from rich import box  # type: ignore[import-not-found]
+    from rich.table import Table  # type: ignore[import-not-found]
 
 
 def _fmt_money(value: float) -> str:
@@ -300,6 +303,58 @@ def render_rebalance_diff(
     return RenderedRebalanceDiff(text=text_output, rich=rich_renderable)
 
 
+def _build_summary_table(
+    summary_rows: list[tuple[str, float, float, float]],
+    fees: float,
+    fmt_money: Callable[[float], str],
+    style_delta: Callable[[float, str], str],
+    signed_money: Callable[[float], str],
+) -> Any:
+    table: Any = Table(
+        title="Totals",
+        show_header=True,
+        header_style="bold",
+        box=box.MINIMAL_DOUBLE_HEAD,
+    )
+    table.add_column("Bucket")
+    table.add_column("Before", justify="right")
+    table.add_column("After", justify="right")
+    table.add_column("Δ", justify="right")
+    for label, before_value, after_value, delta_value in summary_rows:
+        table.add_row(
+            label,
+            fmt_money(before_value),
+            fmt_money(after_value),
+            style_delta(delta_value, signed_money(delta_value)),
+        )
+    if fees:
+        table.add_row(
+            "Fees",
+            "-",
+            fmt_money(fees),
+            style_delta(-fees, signed_money(-fees)),
+        )
+    return table
+
+
+def _build_diffstat_table(
+    diffstat: tuple[int, int, int, int],
+    style_delta: Callable[[float, str], str],
+) -> Any:
+    table: Any = Table(
+        title="Diffstat", show_header=True, header_style="bold", box=box.MINIMAL
+    )
+    table.add_column("Metric")
+    table.add_column("Count", justify="right")
+    for label, value in zip(("Added", "Removed", "Increased", "Decreased"), diffstat, strict=True):
+        if label in {"Added", "Increased"}:
+            styled = style_delta(value, str(value))
+        else:
+            styled = style_delta(-value, str(value))
+        table.add_row(label, styled)
+    return table
+
+
 def _build_rich_diff(
     *,
     env: str,
@@ -315,10 +370,8 @@ def _build_rich_diff(
     if not _HAS_RICH:
         return None
 
-    from rich import box  # type: ignore[import-not-found]
     from rich.console import Group  # type: ignore[import-not-found]
     from rich.panel import Panel  # type: ignore[import-not-found]
-    from rich.table import Table  # type: ignore[import-not-found]
 
     def _style_delta(value: float, text: str) -> str:
         if value > 0:
@@ -345,40 +398,10 @@ def _build_rich_diff(
     else:
         header_table.add_row("", subtitle)
 
-    summary_table = Table(
-        title="Totals",
-        show_header=True,
-        header_style="bold",
-        box=box.MINIMAL_DOUBLE_HEAD,
+    summary_table = _build_summary_table(
+        summary_rows, fees, _fmt_money, _style_delta, _signed_money
     )
-    summary_table.add_column("Bucket")
-    summary_table.add_column("Before", justify="right")
-    summary_table.add_column("After", justify="right")
-    summary_table.add_column("Δ", justify="right")
-    for label, before_value, after_value, delta_value in summary_rows:
-        summary_table.add_row(
-            label,
-            _fmt_money(before_value),
-            _fmt_money(after_value),
-            _style_delta(delta_value, _signed_money(delta_value)),
-        )
-    if fees:
-        summary_table.add_row(
-            "Fees",
-            "-",
-            _fmt_money(fees),
-            _style_delta(-fees, _signed_money(-fees)),
-        )
-
-    diff_table = Table(title="Diffstat", show_header=True, header_style="bold", box=box.MINIMAL)
-    diff_table.add_column("Metric")
-    diff_table.add_column("Count", justify="right")
-    for label, value in zip(("Added", "Removed", "Increased", "Decreased"), diffstat, strict=True):
-        if label in {"Added", "Increased"}:
-            styled = _style_delta(value, str(value))
-        else:
-            styled = _style_delta(-value, str(value))
-        diff_table.add_row(label, styled)
+    diff_table = _build_diffstat_table(diffstat, _style_delta)
 
     positions_table = Table(
         title="Per-position", show_header=True, header_style="bold", box=box.MINIMAL
@@ -395,30 +418,8 @@ def _build_rich_diff(
     positions_table.add_column("Δ frac", justify="right")
     positions_table.add_column("Est. Fees", justify="right")
     positions_table.add_column("Action")
-
     for pos in positions:
-        delta_frac = pos["rounding_loss"] or 0.0
-        action = pos["action"]
-        if action.startswith("BUY"):
-            action = f"[green]{action}[/green]"
-        elif action.startswith("SELL"):
-            action = f"[red]{action}[/red]"
-        positions_table.add_row(
-            pos["symbol"],
-            _fmt_pct(pos["cur_weight"]),
-            _fmt_money(pos["cur_val"]),
-            str(pos["cur_qty"]),
-            _fmt_pct(pos["tgt_weight"]),
-            _fmt_money(pos["tgt_val"]),
-            str(pos["tgt_qty"]),
-            f"{pos['target_frac']:.3f}" if pos["target_frac"] is not None else "-",
-            str(pos["rounded"]) if pos["rounded"] is not None else "-",
-            _style_delta(delta_frac, f"{delta_frac:.3f}")
-            if pos["rounding_loss"] is not None
-            else "-",
-            _fmt_money(pos["est_fee"]),
-            action,
-        )
+        _add_position_row(positions_table, pos, _style_delta, _fmt_pct, _fmt_money, _signed_money)
 
     orders_table = Table(title="Orders", show_header=True, header_style="bold", box=box.MINIMAL)
     orders_table.add_column("Side")
@@ -432,18 +433,7 @@ def _build_rich_diff(
         orders_table.add_row("-", "(none)", "-", "-", "-", "-")
     else:
         for order in orders:
-            side = order["side"].upper()
-            side_markup = f"[{'green' if side == 'BUY' else 'red'}]{order['side']}[/]"
-            delta_value = order["est_amount"] if side == "BUY" else -order["est_amount"]
-            orders_table.add_row(
-                side_markup,
-                order["symbol"],
-                str(order["quantity"]),
-                order["price_display"],
-                _style_delta(delta_value, _signed_money(order["est_amount"])),
-                order.get("status", ""),
-                order.get("detail", "") or "-",
-            )
+            _add_order_row(orders_table, order, _style_delta, _signed_money)
 
     rich_group: object = Group(
         Panel(header_table, border_style="cyan"),
@@ -453,3 +443,58 @@ def _build_rich_diff(
         orders_table,
     )
     return rich_group
+
+
+def _markup_action(action: str) -> str:
+    if action.startswith("BUY"):
+        return f"[green]{action}[/green]"
+    if action.startswith("SELL"):
+        return f"[red]{action}[/red]"
+    return action
+
+
+def _add_position_row(
+    table: Any,
+    pos: dict[str, Any],
+    style_delta: Callable[[float, str], str],
+    fmt_pct: Callable[[float], str],
+    fmt_money: Callable[[float], str],
+    signed_money: Callable[[float], str],
+) -> None:
+    delta_frac = pos["rounding_loss"] or 0.0
+    table.add_row(
+        pos["symbol"],
+        fmt_pct(pos["cur_weight"]),
+        fmt_money(pos["cur_val"]),
+        str(pos["cur_qty"]),
+        fmt_pct(pos["tgt_weight"]),
+        fmt_money(pos["tgt_val"]),
+        str(pos["tgt_qty"]),
+        f"{pos['target_frac']:.3f}" if pos["target_frac"] is not None else "-",
+        str(pos["rounded"]) if pos["rounded"] is not None else "-",
+        style_delta(delta_frac, f"{delta_frac:.3f}")
+        if pos["rounding_loss"] is not None
+        else "-",
+        fmt_money(pos["est_fee"]),
+        _markup_action(pos["action"]),
+    )
+
+
+def _add_order_row(
+    table: Any,
+    order: dict[str, Any],
+    style_delta: Callable[[float, str], str],
+    signed_money: Callable[[float], str],
+) -> None:
+    side = order["side"].upper()
+    side_markup = f"[{'green' if side == 'BUY' else 'red'}]{order['side']}[/]"
+    delta_value = order["est_amount"] if side == "BUY" else -order["est_amount"]
+    table.add_row(
+        side_markup,
+        order["symbol"],
+        str(order["quantity"]),
+        order["price_display"],
+        style_delta(delta_value, signed_money(order["est_amount"])),
+        order.get("status", ""),
+        order.get("detail", "") or "-",
+    )
