@@ -31,7 +31,7 @@ DEFAULT_RATCHET_BUDGETS: dict[str, int] = {
     "functions_over_250": 2,
     "functions_over_500": 0,
     "c901_file_ignores": 2,
-    "files_over_800": 6,
+    "files_over_800": 5,
     "files_over_1200": 2,
     "tests_over_1000": 3,
 }

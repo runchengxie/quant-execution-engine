@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from types import SimpleNamespace
@@ -30,10 +31,12 @@ def _load_smoke_operator_module():
     script_path = (
         Path(__file__).resolve().parents[2] / "project_tools" / "smoke_operator_harness.py"
     )
-    spec = importlib.util.spec_from_file_location("smoke_operator_harness", script_path)
+    qualified_name = "project_tools.smoke_operator_harness"
+    spec = importlib.util.spec_from_file_location(qualified_name, script_path)
     assert spec is not None
     assert spec.loader is not None
     module = importlib.util.module_from_spec(spec)
+    sys.modules[qualified_name] = module
     spec.loader.exec_module(module)
     return module
 

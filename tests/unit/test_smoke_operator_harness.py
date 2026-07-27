@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import importlib.util
 import json
+import sys
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -29,10 +30,15 @@ def load_smoke_operator_module():
     script_path = (
         Path(__file__).resolve().parents[2] / "project_tools" / "smoke_operator_harness.py"
     )
-    spec = importlib.util.spec_from_file_location("smoke_operator_harness", script_path)
+    # Load under the qualified module name and register it in sys.modules so the
+    # package's lazy `from ...smoke_operator_harness import PROJECT_ROOT` resolves
+    # to the exact same module object the tests hold (no double-import).
+    qualified_name = "project_tools.smoke_operator_harness"
+    spec = importlib.util.spec_from_file_location(qualified_name, script_path)
     assert spec is not None
     assert spec.loader is not None
     module = importlib.util.module_from_spec(spec)
+    sys.modules[qualified_name] = module
     spec.loader.exec_module(module)
     return module
 
