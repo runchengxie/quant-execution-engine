@@ -10,6 +10,7 @@ from quant_execution_engine.broker.base import (
     BrokerOrderRequest,
     ResolvedBrokerAccount,
 )
+from quant_execution_engine.cli.commands import orders_mutate as cli_orders_mutate
 from quant_execution_engine.diagnostics import (
     diagnose_order_issue,
     diagnose_warning_message,
@@ -195,7 +196,7 @@ def test_order_guidance_is_advisory_and_does_not_mutate(
     store.save(state)
     adapter = _MutationRecordingAdapter()
 
-    monkeypatch.setattr(cli, "get_broker_adapter", lambda broker_name=None: adapter)
+    monkeypatch.setattr(cli_orders_mutate, "get_broker_adapter", lambda broker_name=None: adapter)
     monkeypatch.setattr(execution, "ExecutionStateStore", lambda: store)
 
     result = cli.run_order(order_ref="broker-1", account="main", broker="fake")

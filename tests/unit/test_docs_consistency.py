@@ -12,7 +12,7 @@ from quant_execution_engine.broker.factory import (
     LONGPORT_BROKERS,
     PAPER_BROKERS,
 )
-from quant_execution_engine.cli_parser import create_parser
+from quant_execution_engine.cli.parser import create_parser
 
 pytestmark = pytest.mark.unit
 

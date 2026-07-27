@@ -4,6 +4,7 @@ from unittest.mock import patch
 import pytest
 
 import quant_execution_engine.cli as cli
+from quant_execution_engine.cli.commands import account as cli_account
 from quant_execution_engine.models import AccountSnapshot, Position
 
 
@@ -29,7 +30,7 @@ class TestAccountTableOutput:
     def test_account_prints_positions_table(self) -> None:
         snapshot = make_snapshot(1234.56, [("AAPL.US", 10, 199.99)])
 
-        with patch("quant_execution_engine.cli.get_account_snapshot", return_value=snapshot):
+        with patch.object(cli_account, "get_account_snapshot", return_value=snapshot):
             result = cli.run_account(
                 only_funds=False,
                 only_positions=False,
@@ -46,7 +47,7 @@ class TestAccountTableOutput:
     def test_table_output_only_funds(self) -> None:
         snapshot = make_snapshot(2500.75, [("AAPL.US", 10, 150.0)])
 
-        with patch("quant_execution_engine.cli.get_account_snapshot", return_value=snapshot):
+        with patch.object(cli_account, "get_account_snapshot", return_value=snapshot):
             result = cli.run_account(
                 only_funds=True,
                 only_positions=False,
@@ -62,7 +63,7 @@ class TestAccountTableOutput:
     def test_table_output_only_positions(self) -> None:
         snapshot = make_snapshot(1000.0, [("GOOGL.US", 2, 2500.0), ("AMZN.US", 1, 3000.0)])
 
-        with patch("quant_execution_engine.cli.get_account_snapshot", return_value=snapshot):
+        with patch.object(cli_account, "get_account_snapshot", return_value=snapshot):
             result = cli.run_account(
                 only_funds=False,
                 only_positions=True,
@@ -79,7 +80,7 @@ class TestAccountTableOutput:
     def test_table_output_no_positions(self) -> None:
         snapshot = make_snapshot(1000.0, [])
 
-        with patch("quant_execution_engine.cli.get_account_snapshot", return_value=snapshot):
+        with patch.object(cli_account, "get_account_snapshot", return_value=snapshot):
             result = cli.run_account(
                 only_funds=False,
                 only_positions=False,
@@ -97,7 +98,7 @@ class TestAccountJsonOutput:
     def test_json_output(self) -> None:
         snapshot = make_snapshot(1500.5, [("AAPL.US", 10, 150.05)])
 
-        with patch("quant_execution_engine.cli.get_account_snapshot", return_value=snapshot):
+        with patch.object(cli_account, "get_account_snapshot", return_value=snapshot):
             result = cli.run_account(fmt="json", broker="longport-paper")
 
         assert result.exit_code == 0
@@ -113,7 +114,7 @@ class TestAccountJsonOutput:
 class TestAccountErrorHandling:
     def test_import_error_handling(self) -> None:
         with patch(
-            "quant_execution_engine.cli.get_account_snapshot",
+            "quant_execution_engine.cli.commands.account.get_account_snapshot",
             side_effect=ImportError("No module named 'longport'"),
         ):
             result = cli.run_account(broker="longport")
@@ -124,7 +125,7 @@ class TestAccountErrorHandling:
 
     def test_client_connection_error(self) -> None:
         with patch(
-            "quant_execution_engine.cli.get_account_snapshot",
+            "quant_execution_engine.cli.commands.account.get_account_snapshot",
             side_effect=Exception("Connection failed"),
         ):
             result = cli.run_account(fmt="table", broker="longport-paper")
@@ -138,7 +139,7 @@ class TestAccountParameterValidation:
     def test_invalid_format_falls_back_to_table(self) -> None:
         snapshot = make_snapshot(1000.0, [])
 
-        with patch("quant_execution_engine.cli.get_account_snapshot", return_value=snapshot):
+        with patch.object(cli_account, "get_account_snapshot", return_value=snapshot):
             result = cli.run_account(fmt="xml", broker="longport-paper")
 
         assert result.exit_code == 0
@@ -149,7 +150,7 @@ class TestAccountParameterValidation:
     def test_conflicting_flags_prefer_funds_view(self) -> None:
         snapshot = make_snapshot(1000.0, [("AAPL.US", 10, 150.0)])
 
-        with patch("quant_execution_engine.cli.get_account_snapshot", return_value=snapshot):
+        with patch.object(cli_account, "get_account_snapshot", return_value=snapshot):
             result = cli.run_account(
                 only_funds=True,
                 only_positions=True,
@@ -168,7 +169,7 @@ def test_run_account_uses_paper_env_for_alpaca() -> None:
     snapshot = make_snapshot(1000.0, [])
 
     with patch(
-        "quant_execution_engine.cli.get_account_snapshot", return_value=snapshot
+        "quant_execution_engine.cli.commands.account.get_account_snapshot", return_value=snapshot
     ) as mock_get:
         result = cli.run_account(broker="alpaca-paper")
 

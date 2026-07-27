@@ -21,6 +21,7 @@ from quant_execution_engine.broker.ibkr_runtime import (
     IbkrRuntimeConfig,
     resolve_ibkr_runtime_config,
 )
+from quant_execution_engine.cli.commands import account as cli_account
 
 pytestmark = pytest.mark.unit
 
@@ -387,7 +388,7 @@ def test_run_config_ibkr_reports_runtime_fields(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(
-        cli,
+        cli_account,
         "probe_ibkr_runtime_config",
         lambda: IbkrRuntimeConfig(
             host="127.0.0.1",

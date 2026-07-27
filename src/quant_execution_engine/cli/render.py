@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from .paths import PROJECT_ROOT
+from ..paths import PROJECT_ROOT
 
 
 class ReportError(RuntimeError):

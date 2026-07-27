@@ -65,11 +65,12 @@ allowed-confusables = ["：", "，", "；", "（", "）"]
 max-complexity = 14
 
 [tool.ruff.lint.per-file-ignores]
-# Temporary: cli.py main()/run_config() are the broad command dispatcher while
-# broker/execution command groups are still being extracted behind focused tests.
+# Temporary: the broad command dispatcher / run_config() remain complex while
+# broker/execution command groups are being extracted behind focused tests.
 # Tracked in docs/quality-coverage-governance.yml per_file_ignore_register; remove
 # after the CLI command-family split (next qexec 2.0 release review).
-"src/quant_execution_engine/cli.py" = ["C901"]
+"src/quant_execution_engine/cli/__init__.py" = ["C901", "E402"]
+"src/quant_execution_engine/cli/commands/account.py" = ["C901"]
 
 [tool.ruff.format]
 quote-style = "double"

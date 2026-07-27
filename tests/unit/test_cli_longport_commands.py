@@ -14,6 +14,9 @@ from quant_execution_engine.broker.base import (
     BrokerOrderRecord,
     ResolvedBrokerAccount,
 )
+from quant_execution_engine.cli.commands import account as cli_account
+from quant_execution_engine.cli.commands import orders as cli_orders
+from quant_execution_engine.cli.commands import rebalance as cli_rebalance
 from quant_execution_engine.execution import (
     ExecutionExceptionRecord,
     ExecutionState,
@@ -201,7 +204,7 @@ def test_run_config_longport_reports_credential_sources(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(
-        cli,
+        cli_account,
         "probe_longport_credentials",
         lambda env_name: SimpleNamespace(
             env_name=env_name,
@@ -217,7 +220,7 @@ def test_run_config_longport_reports_credential_sources(
         ),
     )
     monkeypatch.setattr(
-        cli,
+        cli_account,
         "resolve_longport_runtime_value",
         lambda names, *, env_name, default="": (
             ("cn", "repo-local .env (LONGPORT_REGION)")
@@ -756,7 +759,7 @@ def test_main_unknown_command(caplog: pytest.LogCaptureFixture) -> None:
 
 def test_run_quote_import_error() -> None:
     with patch(
-        "quant_execution_engine.cli.get_quotes",
+        "quant_execution_engine.cli.commands.account.get_quotes",
         side_effect=ImportError("No module named 'longport'"),
     ):
         result = cli.run_quote(["AAPL"], broker="longport")
@@ -768,7 +771,7 @@ def test_run_quote_import_error() -> None:
 
 def test_run_config_requires_explicit_or_configured_broker() -> None:
     with patch(
-        "quant_execution_engine.cli.resolve_broker_name",
+        "quant_execution_engine.cli.commands.account.resolve_broker_name",
         side_effect=Exception("broker backend is not configured"),
     ):
         result = cli.run_config(True, broker=None)
@@ -829,7 +832,7 @@ def test_run_rebalance_live_requires_explicit_enable(
     monkeypatch.delenv("QEXEC_ENABLE_LIVE", raising=False)
     monkeypatch.setattr(guards, "resolve_live_enable_value", lambda: None)
 
-    with patch.object(cli, "read_targets_json") as mock_read_targets:
+    with patch.object(cli_rebalance, "read_targets_json") as mock_read_targets:
         result = cli.run_rebalance(str(target_file), dry_run=False, broker="longport")
 
     assert result.exit_code == 1
@@ -850,7 +853,7 @@ def test_run_rebalance_live_rejects_repo_local_longport_secrets(
     monkeypatch.setenv("QEXEC_ENABLE_LIVE", "1")
     monkeypatch.setattr(guards, "PROJECT_ROOT", tmp_path)
 
-    with patch.object(cli, "read_targets_json") as mock_read_targets:
+    with patch.object(cli_rebalance, "read_targets_json") as mock_read_targets:
         result = cli.run_rebalance(str(target_file), dry_run=False, broker="longport")
 
     assert result.exit_code == 1
@@ -875,7 +878,7 @@ def test_run_rebalance_live_ignores_placeholder_repo_env_values(
     monkeypatch.setenv("QEXEC_ENABLE_LIVE", "1")
     monkeypatch.setattr(guards, "PROJECT_ROOT", tmp_path)
 
-    with patch.object(cli, "read_targets_json", side_effect=RuntimeError("after-guard")):
+    with patch.object(cli_rebalance, "read_targets_json", side_effect=RuntimeError("after-guard")):
         result = cli.run_rebalance(str(target_file), dry_run=False, broker="longport")
 
     assert result.exit_code == 1
@@ -896,7 +899,7 @@ def test_run_rebalance_live_ignores_repo_envrc_secret_references(
     monkeypatch.setenv("QEXEC_ENABLE_LIVE", "1")
     monkeypatch.setattr(guards, "PROJECT_ROOT", tmp_path)
 
-    with patch.object(cli, "read_targets_json", side_effect=RuntimeError("after-guard")):
+    with patch.object(cli_rebalance, "read_targets_json", side_effect=RuntimeError("after-guard")):
         result = cli.run_rebalance(str(target_file), dry_run=False, broker="longport")
 
     assert result.exit_code == 1
@@ -910,7 +913,7 @@ def test_run_rebalance_paper_execute_does_not_require_live_enable(
     target_file.write_text("{}", encoding="utf-8")
     monkeypatch.delenv("QEXEC_ENABLE_LIVE", raising=False)
 
-    with patch.object(cli, "read_targets_json", side_effect=RuntimeError("after-guard")):
+    with patch.object(cli_rebalance, "read_targets_json", side_effect=RuntimeError("after-guard")):
         result = cli.run_rebalance(
             str(target_file),
             dry_run=False,
@@ -928,7 +931,7 @@ def test_run_rebalance_longport_paper_execute_does_not_require_live_enable(
     target_file.write_text("{}", encoding="utf-8")
     monkeypatch.delenv("QEXEC_ENABLE_LIVE", raising=False)
 
-    with patch.object(cli, "read_targets_json", side_effect=RuntimeError("after-guard")):
+    with patch.object(cli_rebalance, "read_targets_json", side_effect=RuntimeError("after-guard")):
         result = cli.run_rebalance(
             str(target_file),
             dry_run=False,
@@ -963,8 +966,8 @@ def test_run_orders_filters_by_symbol(tmp_path: Path, monkeypatch: pytest.Monkey
         ),
     ]
     store.save(state)
-    monkeypatch.setattr(cli, "get_broker_adapter", lambda broker_name=None: CliAdapter())
-    monkeypatch.setattr(cli, "ExecutionStateStore", lambda: store)
+    monkeypatch.setattr(cli_orders, "get_broker_adapter", lambda broker_name=None: CliAdapter())
+    monkeypatch.setattr(cli_orders, "ExecutionStateStore", lambda: store)
 
     result = cli.run_orders(account="main", broker=None, symbol_filter="AAPL")
 
@@ -1014,7 +1017,9 @@ def test_run_broker_orders_filters_by_status_symbol_and_order_id(
                 ),
             ]
 
-    monkeypatch.setattr(cli, "get_broker_adapter", lambda broker_name=None: FakeHistoryAdapter())
+    monkeypatch.setattr(
+        cli_orders, "get_broker_adapter", lambda broker_name=None: FakeHistoryAdapter()
+    )
 
     result = cli.run_broker_orders(
         account="main",
@@ -1070,7 +1075,9 @@ def test_run_broker_fills_filters_by_symbol_and_order_id(
                 ),
             ]
 
-    monkeypatch.setattr(cli, "get_broker_adapter", lambda broker_name=None: FakeHistoryAdapter())
+    monkeypatch.setattr(
+        cli_orders, "get_broker_adapter", lambda broker_name=None: FakeHistoryAdapter()
+    )
 
     result = cli.run_broker_fills(
         account="main",
@@ -1126,8 +1133,8 @@ def test_run_exceptions_filters_by_symbol(monkeypatch: pytest.MonkeyPatch) -> No
                 ),
             ]
 
-    monkeypatch.setattr(cli, "get_broker_adapter", lambda broker_name=None: CliAdapter())
-    monkeypatch.setattr(cli, "OrderLifecycleService", FakeExceptionService)
+    monkeypatch.setattr(cli_account, "get_broker_adapter", lambda broker_name=None: CliAdapter())
+    monkeypatch.setattr(cli_account, "OrderLifecycleService", FakeExceptionService)
 
     result = cli.run_exceptions(account="main", broker=None, symbol_filter="MSFT")
 
