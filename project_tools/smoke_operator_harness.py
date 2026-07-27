@@ -10,7 +10,16 @@ from __future__ import annotations
 
 import os  # noqa: F401  (kept for test monkeypatching via module.os)
 import subprocess  # noqa: F401  (kept for test monkeypatching via module.subprocess)
+import sys
 from pathlib import Path
+
+# When run directly as a script (`python project_tools/smoke_operator_harness.py`),
+# only this file's directory is prepended to sys.path, so the sibling
+# ``project_tools`` package would be unimportable. Insert the repo root so the
+# package resolves regardless of how the module is invoked.
+_REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
 
 from project_tools.smoke_operator import (
     IBKR_SMOKE_ENV_KEYS,

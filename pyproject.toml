@@ -71,6 +71,10 @@ max-complexity = 14
 # after the CLI command-family split (next qexec 2.0 release review).
 "src/quant_execution_engine/cli/__init__.py" = ["C901", "E402"]
 "src/quant_execution_engine/cli/commands/account.py" = ["C901"]
+# Compatibility facade: runs a sys.path bootstrap before importing the
+# project_tools.smoke_operator package so it can be executed as a standalone
+# script. The bootstrap is intentional code before the package import.
+"project_tools/smoke_operator_harness.py" = ["E402"]
 
 [tool.ruff.format]
 quote-style = "double"
