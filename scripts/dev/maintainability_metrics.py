@@ -27,11 +27,11 @@ DEFAULT_LIMIT = 10
 # the output of `--json` and only be tightened (never loosened).
 DEFAULT_RATCHET_BUDGETS: dict[str, int] = {
     "long_lines_over_100": 0,
-    "functions_over_100": 19,
+    "functions_over_100": 18,
     "functions_over_250": 2,
     "functions_over_500": 0,
     "c901_file_ignores": 2,
-    "files_over_800": 5,
+    "files_over_800": 3,
     "files_over_1200": 2,
     "tests_over_1000": 3,
 }
