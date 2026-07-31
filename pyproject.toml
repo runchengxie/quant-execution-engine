@@ -1,7 +1,7 @@
 [project]
 name = "quant-execution-engine"
 version = "0.2.0"
-requires-python = ">=3.10, <3.13"
+requires-python = ">=3.11, <3.13"
 
 dependencies = [
   "pyyaml",
@@ -13,6 +13,7 @@ dev = [
   "pytest-cov",
   "ruff>=0.5",
   "ty>=0.0.55",
+  "research-dev-metrics",
 ]
 
 [project.optional-dependencies]
@@ -30,6 +31,9 @@ full = [
 [project.scripts]
 stockq = "quant_execution_engine.cli:app"
 qexec = "quant_execution_engine.cli:app"
+
+[tool.uv.sources]
+research-dev-metrics = { git = "https://github.com/runchengxie/research-dev-metrics.git", rev = "e1d6e278b0645a23adb523ada9fa8d4743c2e3bf" }
 
 [tool.setuptools]
 package-dir = {"" = "src"}
