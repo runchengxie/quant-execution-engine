@@ -93,9 +93,9 @@ def test_domain_models_are_frozen_and_metadata_is_immutable() -> None:
     intent = _intent()
 
     with pytest.raises(FrozenInstanceError):
-        intent.quantity = Decimal("2")  # type: ignore[misc]
+        intent.quantity = Decimal("2")  # ty: ignore[invalid-assignment]
     with pytest.raises(TypeError):
-        intent.metadata["reason"] = "manual"  # type: ignore[index]
+        intent.metadata["reason"] = "manual"  # ty: ignore[invalid-assignment]
 
     assert isinstance(OrderSide.BUY, str)
     assert str(OrderSide.BUY) == "BUY"
@@ -104,7 +104,7 @@ def test_domain_models_are_frozen_and_metadata_is_immutable() -> None:
         OrderIntent(
             intent_id="untyped",
             instrument=_instrument(),
-            side="BUY",  # type: ignore[arg-type]
+            side="BUY",  # ty: ignore[invalid-argument-type]
             quantity=Decimal("1"),
             order_type=OrderType.MARKET,
             created_at=UTC_NOW,
@@ -113,7 +113,7 @@ def test_domain_models_are_frozen_and_metadata_is_immutable() -> None:
     with pytest.raises(TypeError, match="instrument must be InstrumentId"):
         OrderIntent(
             intent_id="bad-instrument",
-            instrument="AAPL.US",  # type: ignore[arg-type]
+            instrument="AAPL.US",  # ty: ignore[invalid-argument-type]
             side=OrderSide.BUY,
             quantity=Decimal("1"),
             order_type=OrderType.MARKET,
@@ -121,7 +121,7 @@ def test_domain_models_are_frozen_and_metadata_is_immutable() -> None:
         )
 
     with pytest.raises(TypeError, match="currency must be a string"):
-        InstrumentId(symbol="AAPL", market="US", currency=123)  # type: ignore[arg-type]
+        InstrumentId(symbol="AAPL", market="US", currency=123)  # ty: ignore[invalid-argument-type]
 
 
 def test_domain_rejects_naive_datetime_but_legacy_reader_migrates_it() -> None:

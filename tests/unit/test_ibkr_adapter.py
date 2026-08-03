@@ -247,14 +247,14 @@ def test_factory_returns_ibkr_adapter_with_injected_runtime() -> None:
 
 
 def test_ibkr_resolve_account_rejects_non_main() -> None:
-    adapter = IbkrPaperBrokerAdapter(client=FakeIbkrRuntime())
+    adapter = IbkrPaperBrokerAdapter(client=FakeIbkrRuntime())  # ty: ignore[invalid-argument-type]
 
     with pytest.raises(BrokerValidationError, match="does not support switching broker accounts"):
         adapter.resolve_account("secondary")
 
 
 def test_ibkr_get_quotes_normalizes_market_data() -> None:
-    adapter = IbkrPaperBrokerAdapter(client=FakeIbkrRuntime())
+    adapter = IbkrPaperBrokerAdapter(client=FakeIbkrRuntime())  # ty: ignore[invalid-argument-type]
 
     quotes = adapter.get_quotes(["AAPL"], include_depth=True)
 
@@ -327,14 +327,14 @@ def test_ibkr_runtime_falls_back_to_delayed_market_data(
 
 
 def test_ibkr_market_scope_validation_rejects_non_us_quotes() -> None:
-    adapter = IbkrPaperBrokerAdapter(client=FakeIbkrRuntime())
+    adapter = IbkrPaperBrokerAdapter(client=FakeIbkrRuntime())  # ty: ignore[invalid-argument-type]
 
     with pytest.raises(BrokerValidationError, match="US equities"):
         adapter.get_quotes(["700.HK"])
 
 
 def test_ibkr_account_snapshot_uses_runtime_data() -> None:
-    adapter = IbkrPaperBrokerAdapter(client=FakeIbkrRuntime())
+    adapter = IbkrPaperBrokerAdapter(client=FakeIbkrRuntime())  # ty: ignore[invalid-argument-type]
 
     snapshot = adapter.get_account_snapshot(include_quotes=True)
 
@@ -346,7 +346,7 @@ def test_ibkr_account_snapshot_uses_runtime_data() -> None:
 
 def test_ibkr_submit_and_query_normalize_order_records() -> None:
     runtime = FakeIbkrRuntime()
-    adapter = IbkrPaperBrokerAdapter(client=runtime)
+    adapter = IbkrPaperBrokerAdapter(client=runtime)  # ty: ignore[invalid-argument-type]
 
     record = adapter.submit_order(
         BrokerOrderRequest(
@@ -367,7 +367,7 @@ def test_ibkr_submit_and_query_normalize_order_records() -> None:
 
 
 def test_ibkr_get_order_falls_back_to_fills() -> None:
-    adapter = IbkrPaperBrokerAdapter(client=FakeIbkrRuntime())
+    adapter = IbkrPaperBrokerAdapter(client=FakeIbkrRuntime())  # ty: ignore[invalid-argument-type]
 
     record = adapter.get_order("missing")
 
@@ -378,7 +378,7 @@ def test_ibkr_get_order_falls_back_to_fills() -> None:
 
 def test_ibkr_list_open_orders_and_cancel() -> None:
     runtime = FakeIbkrRuntime()
-    adapter = IbkrPaperBrokerAdapter(client=runtime)
+    adapter = IbkrPaperBrokerAdapter(client=runtime)  # ty: ignore[invalid-argument-type]
 
     open_orders = adapter.list_open_orders()
     adapter.cancel_order("11")

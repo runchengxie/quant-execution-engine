@@ -59,7 +59,7 @@ def test_ty_is_the_only_configured_type_checker() -> None:
     makefile = (ROOT / "Makefile").read_text(encoding="utf-8").lower()
 
     assert "[tool.ty.src]" in pyproject
-    assert 'include = ["src/quant_execution_engine"]' in pyproject
+    assert 'include = ["src", "scripts", "tests"]' in pyproject
     assert legacy_checker not in pyproject
     assert legacy_checker not in makefile
 
