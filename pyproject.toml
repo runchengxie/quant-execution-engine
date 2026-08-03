@@ -84,7 +84,7 @@ max-complexity = 14
 quote-style = "double"
 
 [tool.ty.src]
-include = ["src/quant_execution_engine"]
+include = ["src", "scripts", "tests"]
 exclude = [
   ".venv",
   "outputs",

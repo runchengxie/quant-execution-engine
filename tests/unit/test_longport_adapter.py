@@ -38,7 +38,7 @@ def test_longport_adapter_list_order_history_uses_history_api() -> None:
             return None
 
     client = FakeClient()
-    adapter = LongPortPaperBrokerAdapter(client=client)
+    adapter = LongPortPaperBrokerAdapter(client=client)  # ty: ignore[invalid-argument-type]
 
     records = adapter.list_order_history(symbol="AAPL", broker_order_id="broker-1")
 
@@ -82,7 +82,7 @@ def test_longport_adapter_list_fill_history_uses_history_api() -> None:
             return None
 
     client = FakeClient()
-    adapter = LongPortPaperBrokerAdapter(client=client)
+    adapter = LongPortPaperBrokerAdapter(client=client)  # ty: ignore[invalid-argument-type]
 
     fills = adapter.list_fill_history(symbol="AAPL", broker_order_id="broker-1")
 

@@ -95,7 +95,7 @@ def test_candles_real_api() -> None:
 
     try:
         try:
-            from longport.openapi import Period  # type: ignore
+            from longport.openapi import Period
         except Exception:
             pytest.skip("LongPort Period enum unavailable in installed SDK")
 
