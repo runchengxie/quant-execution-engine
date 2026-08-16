@@ -58,6 +58,14 @@ uv run pytest \
   -m 'not integration and not e2e and not slow'
 ```
 
+依赖审计和静态安全扫描按仓库运行：
+
+```bash
+uv run --group dev pip-audit
+uvx deptry .
+uvx bandit -q -r src -lll
+```
+
 ## 维护性预算
 
 `scripts/dev/maintainability_metrics.py` 统计 `src/`、`tests/`、`scripts/` 和 `project_tools/`。`--ratchet` 在任一指标超过预算时失败。
