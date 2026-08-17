@@ -33,6 +33,7 @@ if TYPE_CHECKING:
     from .local_dry_run import LocalDryRunBrokerAdapter
     from .longport import LongPortClient, _to_lb_symbol, get_config, getenv_both
     from .longport_adapter import LongPortBrokerAdapter, LongPortPaperBrokerAdapter
+    from .mock_sim import MockSimBrokerAdapter
 
 __all__ = [
     "BrokerAdapter",
@@ -47,6 +48,7 @@ __all__ = [
     "LongPortBrokerAdapter",
     "LongPortClient",
     "LongPortPaperBrokerAdapter",
+    "MockSimBrokerAdapter",
     "ResolvedBrokerAccount",
     "_to_lb_symbol",
     "get_account_config",
@@ -72,6 +74,7 @@ def __getattr__(name: str) -> Any:
         "LongPortBrokerAdapter",
         "LongPortPaperBrokerAdapter",
         "LongPortClient",
+        "MockSimBrokerAdapter",
         "probe_ibkr_runtime_config",
         "resolve_ibkr_runtime_config",
         "_to_lb_symbol",
@@ -94,6 +97,7 @@ def __getattr__(name: str) -> Any:
             LongPortBrokerAdapter,
             LongPortPaperBrokerAdapter,
         )
+        from .mock_sim import MockSimBrokerAdapter
 
         exports = {
             "IbkrPaperBrokerAdapter": IbkrPaperBrokerAdapter,
@@ -101,6 +105,7 @@ def __getattr__(name: str) -> Any:
             "LongPortBrokerAdapter": LongPortBrokerAdapter,
             "LongPortPaperBrokerAdapter": LongPortPaperBrokerAdapter,
             "LongPortClient": LongPortClient,
+            "MockSimBrokerAdapter": MockSimBrokerAdapter,
             "probe_ibkr_runtime_config": probe_ibkr_runtime_config,
             "resolve_ibkr_runtime_config": resolve_ibkr_runtime_config,
             "_to_lb_symbol": _to_lb_symbol,

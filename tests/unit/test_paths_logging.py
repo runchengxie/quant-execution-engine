@@ -29,6 +29,15 @@ def test_outputs_dir_exists_under_project_root() -> None:
     assert paths.OUTPUTS_DIR.is_dir()
 
 
+def test_outputs_dir_honors_qexec_outputs_dir_override(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    target = tmp_path / "isolated"
+    monkeypatch.setenv("QEXEC_OUTPUTS_DIR", str(target))
+
+    assert paths.outputs_dir() == target.resolve()
+
+
 def test_setup_logging_writes_file(tmp_path: Path) -> None:
     with patch("quant_execution_engine.logging.OUTPUTS_DIR", tmp_path):
         logger = setup_logging("qexec_file_logger", log_file="engine.log")

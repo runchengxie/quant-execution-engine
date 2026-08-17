@@ -9,9 +9,12 @@ from pathlib import Path
 from typing import Any, cast
 
 from ._evidence_models import EvidenceArtifact
+from .paths import PROJECT_ROOT, outputs_dir
 
 
-def _outputs_dir(project_root: Path) -> Path:
+def _outputs_dir(project_root: Path | None) -> Path:
+    if project_root is None or project_root == PROJECT_ROOT:
+        return outputs_dir()
     return project_root / "outputs"
 
 
@@ -23,11 +26,14 @@ def _evidence_dir(project_root: Path) -> Path:
     return _outputs_dir(project_root) / "evidence"
 
 
-def _resolve_project_path(project_root: Path, raw_path: str | None) -> Path | None:
+def _resolve_project_path(project_root: Path | None, raw_path: str | None) -> Path | None:
     if not raw_path:
         return None
     path = Path(str(raw_path))
-    return path if path.is_absolute() else project_root / path
+    if path.is_absolute():
+        return path
+    base = project_root if project_root is not None else Path.cwd()
+    return base / path
 
 
 def _is_sensitive_path(path: Path) -> bool:

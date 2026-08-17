@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from .broker.factory import get_broker_capabilities
-from .paths import PROJECT_ROOT
+from .paths import outputs_dir
 
 
 @dataclass(slots=True)
@@ -37,11 +37,13 @@ class BrokerEvidenceMaturity:
         }
 
 
-def _evidence_dir(project_root: Path) -> Path:
+def _evidence_dir(project_root: Path | None) -> Path:
+    if project_root is None:
+        return outputs_dir() / "evidence"
     return project_root / "outputs" / "evidence"
 
 
-def _candidate_evidence_files(project_root: Path, broker_name: str) -> list[Path]:
+def _candidate_evidence_files(project_root: Path | None, broker_name: str) -> list[Path]:
     directory = _evidence_dir(project_root)
     if not directory.exists():
         return []
@@ -61,7 +63,7 @@ def _candidate_evidence_files(project_root: Path, broker_name: str) -> list[Path
     return sorted(candidates, key=lambda item: (item.stat().st_mtime, item.name))
 
 
-def _latest_evidence_path(project_root: Path, broker_name: str) -> str | None:
+def _latest_evidence_path(project_root: Path | None, broker_name: str) -> str | None:
     candidates = _candidate_evidence_files(project_root, broker_name)
     if not candidates:
         return None
@@ -87,13 +89,14 @@ def build_broker_evidence_maturity_report(
 ) -> list[BrokerEvidenceMaturity]:
     """Return evidence maturity records for supported execution backends."""
 
-    root = project_root or PROJECT_ROOT
-    longport_real_evidence = _latest_evidence_path(root, "longport")
-    longport_paper_evidence = _latest_evidence_path(root, "longport-paper")
-    alpaca_evidence = _latest_evidence_path(root, "alpaca-paper") or _latest_evidence_path(
-        root, "alpaca"
+    longport_real_evidence = _latest_evidence_path(project_root, "longport")
+    longport_paper_evidence = _latest_evidence_path(project_root, "longport-paper")
+    alpaca_evidence = _latest_evidence_path(project_root, "alpaca-paper") or _latest_evidence_path(
+        project_root, "alpaca"
     )
-    ibkr_evidence = _latest_evidence_path(root, "ibkr-paper")
+    ibkr_evidence = _latest_evidence_path(project_root, "ibkr-paper")
+    local_dry_run_evidence = _latest_evidence_path(project_root, "local-dry-run")
+    mock_sim_evidence = _latest_evidence_path(project_root, "mock-sim")
 
     return [
         BrokerEvidenceMaturity(
@@ -159,6 +162,56 @@ def build_broker_evidence_maturity_report(
             notes=[
                 "Gateway/account/reconcile evidence proves runtime reachability "
                 "but not full broker-order maturity."
+            ],
+        ),
+        *_offline_backend_records(
+            project_root=project_root,
+            local_dry_run_evidence=local_dry_run_evidence,
+            mock_sim_evidence=mock_sim_evidence,
+        ),
+    ]
+
+
+def _offline_backend_records(
+    *,
+    project_root: Path | None,
+    local_dry_run_evidence: str | None,
+    mock_sim_evidence: str | None,
+) -> list[BrokerEvidenceMaturity]:
+    return [
+        BrokerEvidenceMaturity(
+            broker_name="local-dry-run",
+            broker_mode="paper",
+            code_path_state=_code_path_state("local-dry-run"),
+            evidence_state="present" if local_dry_run_evidence else "missing",
+            latest_evidence_path=local_dry_run_evidence,
+            missing_evidence=(
+                [] if local_dry_run_evidence else ["offline dry-run chain evidence JSON"]
+            ),
+            recommended_next_smoke=None
+            if local_dry_run_evidence
+            else "Run `python project_tools/evidence_offline_chain.py --broker local-dry-run`.",
+            notes=[
+                "File-contract dry-run only: no submit, cancel, order query, or reconcile.",
+                "Evidence here never implies broker-order maturity for other backends.",
+            ],
+        ),
+        BrokerEvidenceMaturity(
+            broker_name="mock-sim",
+            broker_mode="paper",
+            code_path_state=_code_path_state("mock-sim"),
+            evidence_state="present" if mock_sim_evidence else "missing",
+            latest_evidence_path=mock_sim_evidence,
+            missing_evidence=([] if mock_sim_evidence else ["offline mock chain evidence JSON"]),
+            recommended_next_smoke=None
+            if mock_sim_evidence
+            else (
+                "Run `python project_tools/evidence_offline_chain.py --broker mock-sim --execute`."
+            ),
+            notes=[
+                "Deterministic offline simulator with submit, cancel, query, fill, "
+                "and reconcile on disk.",
+                "Simulation evidence never transfers to real broker backends.",
             ],
         ),
     ]

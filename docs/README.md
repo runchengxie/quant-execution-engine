@@ -13,6 +13,7 @@
 | 配置凭证和风控 | [configuration.md](configuration.md) |
 | 查看 `targets.json` 格式 | [targets.md](targets.md) |
 | 理解研究交接和审计 | [research-handoff-governance.md](research-handoff-governance.md) |
+| 运行离线证据链 | [evidence.md](evidence.md) |
 | 运行测试 | [testing.md](testing.md) |
 | 理解架构 | [architecture.md](architecture.md) |
 | 理解订单生命周期 | [execution-foundation.md](execution-foundation.md) |

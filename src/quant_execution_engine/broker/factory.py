@@ -9,7 +9,7 @@ from ..config import load_cfg
 from .base import BrokerAdapter, BrokerCapabilityMatrix, BrokerValidationError
 
 PAPER_BROKERS = frozenset(
-    {"alpaca", "alpaca-paper", "ibkr-paper", "longport-paper", "local-dry-run"}
+    {"alpaca", "alpaca-paper", "ibkr-paper", "longport-paper", "local-dry-run", "mock-sim"}
 )
 LONGPORT_BROKERS = frozenset({"longport", "longport-paper"})
 ALPACA_BROKERS = frozenset({"alpaca", "alpaca-paper"})
@@ -61,6 +61,11 @@ def _load_ibkr_adapter_cls() -> _BrokerAdapterFactory:
 def _load_local_dry_run_adapter_cls() -> _BrokerAdapterFactory:
     module = import_module(".local_dry_run", __package__)
     return cast(_BrokerAdapterFactory, module.LocalDryRunBrokerAdapter)
+
+
+def _load_mock_sim_adapter_cls() -> _BrokerAdapterFactory:
+    module = import_module(".mock_sim", __package__)
+    return cast(_BrokerAdapterFactory, module.MockSimBrokerAdapter)
 
 
 def _load_longport_runtime() -> tuple[_BrokerAdapterFactory, _BrokerAdapterFactory, type[Any]]:
@@ -128,6 +133,9 @@ def get_broker_capabilities(broker_name: str | None = None) -> BrokerCapabilityM
     if backend == "local-dry-run":
         LocalDryRunBrokerAdapter = _load_local_dry_run_adapter_cls()
         return LocalDryRunBrokerAdapter.capabilities
+    if backend == "mock-sim":
+        MockSimBrokerAdapter = _load_mock_sim_adapter_cls()
+        return MockSimBrokerAdapter.capabilities
     if backend in ALPACA_BROKERS:
         AlpacaPaperBrokerAdapter = _load_alpaca_adapter_cls()
         return AlpacaPaperBrokerAdapter.capabilities
@@ -159,6 +167,11 @@ def get_broker_adapter(
             raise BrokerValidationError("local-dry-run does not accept custom clients")
         LocalDryRunBrokerAdapter = _load_local_dry_run_adapter_cls()
         return LocalDryRunBrokerAdapter()
+    if backend == "mock-sim":
+        if client is not None:
+            raise BrokerValidationError("mock-sim does not accept custom clients")
+        MockSimBrokerAdapter = _load_mock_sim_adapter_cls()
+        return MockSimBrokerAdapter()
     if backend in ALPACA_BROKERS:
         if client is not None:
             raise BrokerValidationError(

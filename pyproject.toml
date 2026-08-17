@@ -80,6 +80,9 @@ max-complexity = 14
 # project_tools.smoke_operator package so it can be executed as a standalone
 # script. The bootstrap is intentional code before the package import.
 "project_tools/smoke_operator_harness.py" = ["E402"]
+# Standalone offline evidence harness: same sys.path bootstrap before the
+# package import.
+"project_tools/evidence_offline_chain.py" = ["E402"]
 
 [tool.ruff.format]
 quote-style = "double"

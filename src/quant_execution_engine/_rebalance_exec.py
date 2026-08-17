@@ -7,6 +7,7 @@ Builds on :class:`RebalancePlanMixin`: order execution through
 from __future__ import annotations
 
 import json
+import os
 from datetime import datetime
 from pathlib import Path
 
@@ -72,7 +73,11 @@ class RebalanceExecutionMixin(RebalancePlanMixin):
         Returns:
             Path: Log file path
         """
-        log_dir = Path("outputs/orders")
+        override = os.getenv("QEXEC_OUTPUTS_DIR")
+        if override:
+            log_dir = Path(override).expanduser().resolve() / "orders"
+        else:
+            log_dir = Path("outputs/orders")
         log_dir.mkdir(parents=True, exist_ok=True)
 
         timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")

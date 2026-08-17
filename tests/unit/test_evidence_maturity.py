@@ -51,6 +51,35 @@ def test_build_broker_evidence_maturity_report_uses_local_evidence(
         "effective-market-data broker submit/query/cancel or fill evidence"
         in by_broker["ibkr-paper"].missing_evidence
     )
+    assert by_broker["local-dry-run"].evidence_state == "missing"
+    assert by_broker["mock-sim"].evidence_state == "missing"
+
+
+def test_build_report_marks_offline_backends_present_when_evidence_exists(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    local_path = _write_evidence(tmp_path, "local-dry-run-chain.json", "local-dry-run")
+    mock_path = _write_evidence(tmp_path, "mock-sim-chain.json", "mock-sim")
+
+    monkeypatch.setattr(
+        evidence_maturity,
+        "get_broker_capabilities",
+        lambda broker_name: SimpleNamespace(
+            supports_live_submit=False,
+            supports_cancel=True,
+            supports_order_query=True,
+            supports_reconcile=True,
+            notes={},
+        ),
+    )
+
+    records = evidence_maturity.build_broker_evidence_maturity_report(project_root=tmp_path)
+    by_broker = {record.broker_name: record for record in records}
+
+    assert by_broker["local-dry-run"].evidence_state == "present"
+    assert by_broker["local-dry-run"].latest_evidence_path == str(local_path)
+    assert by_broker["mock-sim"].evidence_state == "present"
+    assert by_broker["mock-sim"].latest_evidence_path == str(mock_path)
 
 
 def test_render_broker_evidence_maturity_surfaces_next_smoke() -> None:
