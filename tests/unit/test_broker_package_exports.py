@@ -10,6 +10,7 @@ def test_lazy_broker_exports_remain_resolvable() -> None:
         "LongPortBrokerAdapter",
         "LongPortClient",
         "LongPortPaperBrokerAdapter",
+        "MockSimBrokerAdapter",
         "_to_lb_symbol",
         "get_config",
         "getenv_both",

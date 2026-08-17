@@ -60,6 +60,8 @@ qexec preflight --broker local-dry-run
 qexec rebalance examples/targets.local-dry-run.json --broker local-dry-run
 ```
 
+需要离线验证完整报单与对账链路时，可以用 `mock-sim` 模拟券商后端。它把提交、成交、查询、撤单和对账持久化到运行目录，支持中断后从同一目录恢复。离线的可复现证据链见 [docs/evidence.md](docs/evidence.md)。
+
 准备好长桥模拟盘依赖和凭证后，可以运行：
 
 ```bash

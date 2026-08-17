@@ -104,6 +104,18 @@
 - `qexec config --broker ibkr-paper` 会显示主机、模拟盘端口、客户编号、账户编号与超时时间的有效值和来源。
 - 真实多账户路由不在当前范围内。`--account` 仍只接受 `main`。
 
+### 离线证据链
+
+`local-dry-run` 和 `mock-sim` 不需要凭证，也不走网络。它们通过环境变量把审计日志、执行状态和证据 JSON 重定向到隔离运行目录：
+
+- `QEXEC_OUTPUTS_DIR`：把审计日志、执行状态和证据产物写入该目录，未设置时使用仓库根目录下的 `outputs/`。
+- `QEXEC_MOCK_SIM_STATE_DIR`：`mock-sim` 的模拟券商侧状态目录，默认 `outputs/mock-sim`。
+- `QEXEC_MOCK_SIM_CLOCK`：`mock-sim` 的合成时间戳，默认 `2026-01-01T00:00:00+00:00`。
+- `QEXEC_MOCK_SIM_PRICE`：`mock-sim` 的合成价格覆盖，未设置时按标的确定性生成。
+- `QEXEC_MOCK_SIM_CASH_USD`：`mock-sim` 的初始现金，默认 `1000000`。
+
+`mock-sim` 的确定性合成时间与价格让同一次运行可以稳定复现。运行方式见 [evidence.md](evidence.md)。
+
 ### 安装模型
 
 - 最小命令行安装：`uv sync --extra cli`
