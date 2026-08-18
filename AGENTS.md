@@ -24,10 +24,37 @@
 
 ## 开发流程
 
-- 仓库统一使用 `main`。
-- 并行会话使用独立克隆，并在各自的 `main` 上工作。
+- 仓库统一使用 `main`。功能分支（`feat/*`、`fix/*`、`hotfix/*`、`release/*`）只用于拉取请求流程、临时存在。
+- 本仓可能由多个 agent 并行开发。每个改动都必须使用独立 worktree 与功能分支，避免多个 agent 在同一检出目录竞争同一组文件。新的并行任务必须新建 worktree，不要直接在主检出目录的 `main` 上提交改动。
+- 每个改动遵循以下顺序：
+
+  1. 从 `origin/main` 新建 worktree 与功能分支：
+
+     ```bash
+     git fetch origin
+     git worktree add <path> -b feat/<主题> origin/main
+     ```
+
+  2. 在独立 worktree 内完成改动并通过本地门禁。
+  3. 提交并推送功能分支：
+
+     ```bash
+     git push -u origin feat/<主题>
+     ```
+
+  4. 用 `gh pr create` 开拉取请求，合并到 `main`。
+  5. 合并完成后删除功能分支并移除 worktree：
+
+     ```bash
+     git push origin --delete feat/<主题>
+     git branch -d feat/<主题>
+     git worktree remove <path>
+     ```
+
+- 同一仓库的多个 worktree 共享主工作树的 `core.hooksPath` 配置，不要在独立 worktree 内重装或改写 hook。
 - 修改前确认工作区状态，保留其他会话已有的改动。
 - 先提交本仓库，再由 `research-workspace` 更新对应 gitlink。
+- 本仓无运行中的远端 CI，质量事实来源是本地门禁与共享 pre-push。
 - 不提交 `outputs/`、凭证、本地环境文件和券商数据。
 
 ## 环境和本地门禁

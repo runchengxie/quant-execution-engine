@@ -27,7 +27,7 @@ def sim_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_mock_sim_is_registered_paper_backend() -> None:
     capabilities = get_broker_capabilities("mock-sim")
-    assert capabilities.supports_live_submit is True
+    assert capabilities.supports_live_submit is False
     assert capabilities.supports_cancel is True
     assert capabilities.supports_order_query is True
     assert capabilities.supports_open_order_listing is True
