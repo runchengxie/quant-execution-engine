@@ -77,7 +77,7 @@ class MockSimBrokerAdapter(BrokerAdapter):
     backend_name = "mock-sim"
     capabilities = BrokerCapabilityMatrix(
         name="mock-sim",
-        supports_live_submit=True,
+        supports_live_submit=False,
         supports_cancel=True,
         supports_order_query=True,
         supports_open_order_listing=True,
@@ -92,6 +92,7 @@ class MockSimBrokerAdapter(BrokerAdapter):
         notes={
             "mode": "paper",
             "scope": "deterministic offline simulation only",
+            "live_submit": "false: submit/cancel/query are simulated, never routed to a real broker",
             "state_dir_env": MOCK_SIM_STATE_DIR_ENV,
             "clock_env": MOCK_SIM_CLOCK_ENV,
             "price_env": MOCK_SIM_PRICE_ENV,
