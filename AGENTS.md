@@ -101,3 +101,9 @@ make test-all
 - 历史记录：`docs/archive/`
 
 中文说明使用自然、直接的表达和中文标点。保留必要的命令、路径、配置键和 API 名称。历史迁移记录放入 `docs/archive/`。
+
+## Worktree-first 目录规范
+
+开发代码使用 `/home/richard/code/.worktrees/` 下的独立 worktree。生产预演、执行和审计任务
+必须使用 `/home/richard/code/production/` 下固定版本目录。订单审计、状态、凭证和其他运行数据
+放在仓库外的专用目录，不随 worktree 清理。任何路径迁移都必须同步检查 systemd、cron 和审计文档。
