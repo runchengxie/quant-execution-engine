@@ -4,7 +4,7 @@ import json
 import subprocess
 import sys
 from dataclasses import FrozenInstanceError, asdict
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta, timezone
 from decimal import Decimal
 from pathlib import Path
 from typing import cast
@@ -48,7 +48,7 @@ from quant_execution_engine.serialization import (
 
 pytestmark = pytest.mark.unit
 
-UTC_NOW = datetime(2026, 7, 13, 8, 30, tzinfo=timezone.utc)
+UTC_NOW = datetime(2026, 7, 13, 8, 30, tzinfo=UTC)
 
 
 def _instrument() -> InstrumentId:
@@ -83,7 +83,7 @@ def _intent(*, quantity: str = "1", opens_short: bool = False) -> OrderIntent:
         account_label="main",
         run_id="run-001",
         target_source="alpha-research",
-        target_as_of=datetime(2026, 7, 12, tzinfo=timezone.utc),
+        target_as_of=datetime(2026, 7, 12, tzinfo=UTC),
         target_input_path="targets.json",
         metadata={"reason": "rebalance"},
     )
@@ -148,7 +148,7 @@ def test_domain_rejects_naive_datetime_but_legacy_reader_migrates_it() -> None:
         naive_timezone=timezone(timedelta(hours=8)),
     )
 
-    assert migrated.created_at == datetime(2026, 7, 13, 0, 30, tzinfo=timezone.utc)
+    assert migrated.created_at == datetime(2026, 7, 13, 0, 30, tzinfo=UTC)
     assert migrated.quantity == Decimal("1.25")
 
 
@@ -276,7 +276,7 @@ def test_legacy_target_reader_allows_negative_and_fractional_domain_values() -> 
     )
 
     assert target.target_quantity == Decimal("-1.5")
-    assert target.as_of == datetime(2026, 7, 13, tzinfo=timezone.utc)
+    assert target.as_of == datetime(2026, 7, 13, tzinfo=UTC)
 
 
 def test_capability_validation_is_separate_from_domain_construction() -> None:
