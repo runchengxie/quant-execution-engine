@@ -5,7 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 from collections.abc import Mapping
-from datetime import timezone, tzinfo
+from datetime import UTC, tzinfo
 from decimal import Decimal
 
 from ._serialization_common import (
@@ -48,7 +48,7 @@ def portfolio_target_from_v1(
     portfolio_id: str = "default",
     source: str | None = None,
     default_market: str = "US",
-    naive_timezone: tzinfo = timezone.utc,
+    naive_timezone: tzinfo = UTC,
 ) -> PortfolioTarget:
     """Migrate one legacy ``TargetEntry`` mapping into a portfolio target."""
 
@@ -103,7 +103,7 @@ def portfolio_target_to_v1(target: PortfolioTarget) -> dict[str, object]:
 def order_intent_from_v1(
     value: object,
     *,
-    naive_timezone: tzinfo = timezone.utc,
+    naive_timezone: tzinfo = UTC,
 ) -> OrderIntent:
     """Migrate a persisted v1 ``execution_state.OrderIntent`` mapping."""
 
@@ -209,7 +209,7 @@ def order_event_from_v1(
     *,
     event_id: str | None = None,
     intent_id: str | None = None,
-    naive_timezone: tzinfo = timezone.utc,
+    naive_timezone: tzinfo = UTC,
 ) -> OrderEvent:
     """Migrate a legacy ``BrokerOrderRecord`` mapping into an order event."""
 
@@ -283,7 +283,7 @@ def order_event_to_v1(event: OrderEvent) -> dict[str, object]:
 def fill_from_v1(
     value: object,
     *,
-    naive_timezone: tzinfo = timezone.utc,
+    naive_timezone: tzinfo = UTC,
 ) -> Fill:
     """Migrate a legacy broker/state fill mapping into a typed fill."""
 
