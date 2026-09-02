@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass
-from enum import Enum
+from enum import StrEnum
 from typing import Protocol, cast
 
 
@@ -14,7 +14,7 @@ def getenv_both(name_new: str, name_old: str, default: str | None = None) -> str
     return os.getenv(name_new) or os.getenv(name_old) or default
 
 
-class Env(str, Enum):
+class Env(StrEnum):
     REAL = "real"
     PAPER = "paper"
 
