@@ -13,7 +13,7 @@ entry-point logic and re-exports the helpers.
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -138,7 +138,7 @@ def _build_order_trace_artifact(
             except Exception as exc:
                 warnings.append(f"{order_ref}: {exc}")
         payload = {
-            "captured_at": datetime.now(timezone.utc).isoformat(),
+            "captured_at": datetime.now(UTC).isoformat(),
             "run_id": run_id,
             "broker_name": broker_name,
             "account_label": account_label,
@@ -219,7 +219,7 @@ def create_evidence_bundle(
     bundle_root = output_dir or (_outputs_dir(root) / "evidence-bundles")
     bundle_path = bundle_root / normalized_run_id
     bundle_path.mkdir(parents=True, exist_ok=True)
-    generated_at = created_at or datetime.now(timezone.utc).isoformat()
+    generated_at = created_at or datetime.now(UTC).isoformat()
     dry_run = bool(summary.get("dry_run")) if summary.get("dry_run") is not None else None
 
     trace_capture = _build_order_trace_artifact(
