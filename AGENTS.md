@@ -54,7 +54,6 @@
 - 同一仓库的多个 worktree 共享主工作树的 `core.hooksPath` 配置，不要在独立 worktree 内重装或改写 hook。
 - 修改前确认工作区状态，保留其他会话已有的改动。
 - 先提交本仓库，再由 `research-workspace` 更新对应 gitlink。
-- 本仓的 PR workflow 只运行不接触真实券商和账户的质量门禁。本地门禁与共享 pre-push 继续负责提交前检查。
 - 不提交 `outputs/`、凭证、本地环境文件和券商数据。
 
 ## 环境和本地门禁
@@ -73,6 +72,17 @@ make test-all
 默认 `pytest` 排除 `integration`、`e2e` 和 `slow` 标记。维护性预算由 `make maintainability` 检查。
 
 在 `research-workspace` 托管检出中，`core.hooksPath` 指向 superproject 的共享钩子目录。共享 `pre-push` 会先校验推送引用，再按清单运行仓库检查。单独克隆本仓库时不会继承这套钩子，推送前需手动运行 `make quality`。
+
+## GitHub Actions 策略
+
+工作区统一采用以下默认规则：
+
+- public 仓库默认启用 GitHub Actions，用于拉取请求的轻量自动检查。
+- private 仓库默认关闭 GitHub Actions，避免持续占用私有仓库的 Actions 额度。
+- private 仓库如需启用远端 CI，应在仓库文档中记录原因、检查范围和资源成本，并由维护者明确批准。
+- 本地完整门禁继续由仓库自身检查和工作区共享 `pre-push` 承担。
+
+本仓库是 public 仓库，`.github/workflows/ci.yml` 运行不接触真实券商和账户的 PR 检查。远端 CI 提供快速反馈，本地 `make quality` 与共享 `pre-push` 继续负责完整提交前检查。
 
 ## 执行安全
 
