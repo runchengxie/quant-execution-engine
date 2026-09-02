@@ -46,5 +46,8 @@ jobs:
       - name: Typecheck
         run: make typecheck
 
+      - name: Dependency audit
+        run: uv run pip-audit --progress-spinner off
+
       - name: Unit tests
         run: make test
