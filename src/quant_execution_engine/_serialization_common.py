@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import math
 from collections.abc import Mapping
-from datetime import datetime, time, timezone, tzinfo
+from datetime import UTC, datetime, time, tzinfo
 from decimal import Decimal, InvalidOperation
 from typing import TypeAlias, TypeVar, cast
 
@@ -77,7 +77,7 @@ def legacy_decimal(value: object, field_name: str) -> Decimal:
 def datetime_to_wire(value: datetime) -> str:
     if value.tzinfo is None or value.utcoffset() is None:
         raise WireFormatError("schema v2 timestamps must be timezone-aware")
-    return value.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+    return value.astimezone(UTC).isoformat().replace("+00:00", "Z")
 
 
 def _parse_iso_datetime(value: object, field_name: str) -> datetime:
@@ -97,14 +97,14 @@ def datetime_from_wire(value: object, field_name: str) -> datetime:
     parsed = _parse_iso_datetime(value, field_name)
     if parsed.tzinfo is None or parsed.utcoffset() is None:
         raise WireFormatError(f"{field_name} must be timezone-aware in schema v2")
-    return parsed.astimezone(timezone.utc)
+    return parsed.astimezone(UTC)
 
 
 def migrate_legacy_datetime(
     value: object,
     field_name: str,
     *,
-    naive_timezone: tzinfo = timezone.utc,
+    naive_timezone: tzinfo = UTC,
 ) -> datetime:
     """Parse a legacy timestamp, explicitly assigning a zone when it is naive."""
 
@@ -122,7 +122,7 @@ def migrate_legacy_datetime(
         parsed = parsed.replace(tzinfo=naive_timezone)
     if parsed.utcoffset() is None:
         raise WireFormatError(f"naive_timezone cannot localize legacy {field_name}")
-    return parsed.astimezone(timezone.utc)
+    return parsed.astimezone(UTC)
 
 
 def wire_mapping(value: object, field_name: str) -> Mapping[str, object]:
