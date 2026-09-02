@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from ..models import AccountSnapshot, Quote
@@ -12,7 +12,7 @@ from ..models import AccountSnapshot, Quote
 def utc_now_iso() -> str:
     """Return an ISO-8601 UTC timestamp string."""
 
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 class BrokerError(RuntimeError):

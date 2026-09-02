@@ -23,7 +23,7 @@ import json
 import os
 import subprocess
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -176,7 +176,7 @@ def _render_evidence(
     audit_logs = sorted(orders_dir.glob("*.jsonl")) if orders_dir.exists() else []
     latest_audit = str(audit_logs[-1]) if audit_logs else None
     payload = {
-        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "generated_at": datetime.now(UTC).isoformat(),
         "broker": broker,
         "broker_mode": "paper",
         "run_dir": str(run_dir),

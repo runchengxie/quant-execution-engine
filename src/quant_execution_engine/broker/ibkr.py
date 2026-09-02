@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from ..models import AccountSnapshot, Position, Quote
@@ -204,7 +204,7 @@ class IbkrPaperBrokerAdapter(BrokerAdapter):
             time_value = (
                 getattr(ticker, "time", None)
                 or getattr(ticker, "rtTime", None)
-                or datetime.now(timezone.utc)
+                or datetime.now(UTC)
             )
             results[canonical] = Quote(
                 symbol=canonical,

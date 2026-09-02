@@ -19,14 +19,13 @@ class _PrunePlan:
 
 
 def _build_prune_plan(state: ExecutionState, cutoff) -> _PrunePlan:
-    from datetime import datetime, timezone
+    from datetime import UTC, datetime
 
     prunable_parent_ids = {
         parent.parent_order_id
         for parent in state.parent_orders
         if parent.status in TERMINAL_PARENT_STATUSES
-        and (_parse_timestamp(parent.updated_at) or datetime.min.replace(tzinfo=timezone.utc))
-        <= cutoff
+        and (_parse_timestamp(parent.updated_at) or datetime.min.replace(tzinfo=UTC)) <= cutoff
     }
     prunable_children = [
         child for child in state.child_orders if child.parent_order_id in prunable_parent_ids

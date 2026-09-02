@@ -87,7 +87,8 @@ def test_docs_match_current_type_tools_and_automation() -> None:
 
     assert "mypy" not in pyproject
     assert "当前工具链不使用 `mypy`" in docs
-    assert "当前仓库没有启用 GitHub Actions 测试工作流" in docs
+    assert "本仓库是 public 仓库" in docs
+    assert ".github/workflows/ci.yml" in docs
     assert ".github/workflows/tests.yml" not in docs
 
 

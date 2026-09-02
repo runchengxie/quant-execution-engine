@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -53,7 +53,7 @@ def _trade(
     canonical: str = "AAPL.US",
     order_ref: str = "child-1",
 ) -> SimpleNamespace:
-    now = datetime(2026, 4, 16, 0, 0, tzinfo=timezone.utc)
+    now = datetime(2026, 4, 16, 0, 0, tzinfo=UTC)
     return SimpleNamespace(
         order=SimpleNamespace(
             orderId=order_id,
@@ -135,7 +135,7 @@ class FakeIbkrRuntime:
                 bid=185.2,
                 ask=185.3,
                 volume=1000000,
-                time=datetime(2026, 4, 16, 0, 0, tzinfo=timezone.utc),
+                time=datetime(2026, 4, 16, 0, 0, tzinfo=UTC),
             )
         }
 
@@ -197,7 +197,7 @@ class FakeIbkrRuntime:
                     exchange="NYSE",
                     side="BOT",
                 ),
-                time=datetime(2026, 4, 16, 0, 1, tzinfo=timezone.utc),
+                time=datetime(2026, 4, 16, 0, 1, tzinfo=UTC),
             )
         ]
 
@@ -296,7 +296,7 @@ def test_ibkr_runtime_falls_back_to_delayed_market_data(
                         bid=185.2,
                         ask=185.3,
                         volume=1000000,
-                        time=datetime(2026, 4, 16, 0, 0, tzinfo=timezone.utc),
+                        time=datetime(2026, 4, 16, 0, 0, tzinfo=UTC),
                     )
                 ]
             return [

@@ -6,7 +6,7 @@ tracked stale open orders with zero fills (``retry_stale_orders``).
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from ._recovery_actions_reprice import OrderLifecycleRecoveryRepriceMixin
 from .execution_helpers import load_account_state
@@ -35,13 +35,12 @@ class OrderLifecycleRecoveryStaleMixin(OrderLifecycleRecoveryRepriceMixin):
             self.state_store,
             account_label,
         )
-        cutoff = datetime.now(timezone.utc) - timedelta(minutes=int(older_than_minutes))
+        cutoff = datetime.now(UTC) - timedelta(minutes=int(older_than_minutes))
         warnings: list[str] = []
         targets = sorted(
             self._find_stale_retry_targets(state, cutoff=cutoff, warnings=warnings),
             key=lambda record: (
-                self._timestamp_for_stale_retry(record)
-                or datetime.min.replace(tzinfo=timezone.utc),
+                self._timestamp_for_stale_retry(record) or datetime.min.replace(tzinfo=UTC),
                 record.broker_order_id,
             ),
         )
