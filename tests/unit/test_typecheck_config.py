@@ -1,0 +1,25 @@
+from __future__ import annotations
+
+import tomllib
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[2]
+
+
+def test_optional_sdk_unresolved_import_ignore_is_scoped_to_longport_loader() -> None:
+    config = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    ty = config["tool"]["ty"]
+
+    assert ty.get("rules", {}).get("unresolved-import") is None
+
+    unresolved_import_overrides = [
+        override
+        for override in ty.get("overrides", [])
+        if override.get("rules", {}).get("unresolved-import") == "ignore"
+    ]
+    assert unresolved_import_overrides == [
+        {
+            "include": ["src/quant_execution_engine/broker/_longport_sdk.py"],
+            "rules": {"unresolved-import": "ignore"},
+        }
+    ]
