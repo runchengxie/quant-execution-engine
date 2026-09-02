@@ -98,10 +98,13 @@ exclude = [
 
 [tool.ty.rules]
 redundant-cast = "ignore"
-# Optional broker SDKs (longport/longbridge) are not installed in the base venv;
-# their imports are guarded at runtime. Keep unresolved-import ignored so base
-# typecheck does not require the optional `longport`/`ibkr` extras.
-unresolved-import = "ignore"
+
+[[tool.ty.overrides]]
+include = [
+  "src/quant_execution_engine/broker/_longport_sdk.py",
+  "tests/integration/test_longport_quote_integration.py",
+]
+rules = { unresolved-import = "ignore" }
 
 [tool.coverage.run]
 source = ["src/quant_execution_engine"]
