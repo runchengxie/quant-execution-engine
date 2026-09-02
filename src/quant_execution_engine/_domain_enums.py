@@ -6,20 +6,17 @@ standard library and is imported by the model and capability submodules.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal
-from enum import Enum
-from typing import TypeVar, cast
+from enum import Enum, StrEnum
+from typing import TypeVar
 
 _EnumMember = TypeVar("_EnumMember", bound=Enum)
 _Instance = TypeVar("_Instance")
 
 
-class _StringEnum(str, Enum):
-    """Python 3.10 compatible string enum."""
-
-    def __str__(self) -> str:
-        return cast(str, self.value)
+class _StringEnum(StrEnum):
+    """Shared string enum base for execution-domain values."""
 
 
 class OrderSide(_StringEnum):
@@ -148,4 +145,4 @@ def _aware_utc(value: object, field_name: str) -> datetime:
         raise TypeError(f"{field_name} must be a datetime")
     if value.tzinfo is None or value.utcoffset() is None:
         raise ValueError(f"{field_name} must be timezone-aware")
-    return value.astimezone(timezone.utc)
+    return value.astimezone(UTC)
