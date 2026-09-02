@@ -114,6 +114,8 @@ make test-all
 
 默认测试只证明离线行为回归通过。模拟盘和实盘成熟度还需结合受监督演练、审计日志和本地证据判断。
 
-## 自动化状态
+## GitHub Actions 状态
 
-当前仓库没有启用 GitHub Actions 测试工作流。质量检查在本地 Makefile 和 superproject 共享钩子中完成。
+本仓库是 public 仓库，`.github/workflows/ci.yml` 在拉取请求和手动触发时运行公开质量检查。当前远端 CI 覆盖 Ruff、格式、`ty` 和默认单元测试，不接触真实券商、账户或凭证。
+
+GitHub Actions 用于提供快速反馈。本地 `make quality` 和 `research-workspace` 共享 `pre-push` 继续负责完整提交前检查。远端 CI 通过不能替代需要真实环境或人工监督的集成、端到端和券商演练。
