@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from .broker.base import BrokerAdapter, BrokerOrderRecord, ResolvedBrokerAccount, utc_now_iso
@@ -190,8 +190,8 @@ class OrderLifecycleReconcileOpsIntentMixin:
         except ValueError:
             return None
         if parsed.tzinfo is None:
-            parsed = parsed.replace(tzinfo=timezone.utc)
-        return parsed.astimezone(timezone.utc)
+            parsed = parsed.replace(tzinfo=UTC)
+        return parsed.astimezone(UTC)
 
     def _timestamp_for_stale_retry(
         self,
