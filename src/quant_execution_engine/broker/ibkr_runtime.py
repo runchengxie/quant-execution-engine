@@ -8,7 +8,7 @@ import os
 import time
 from collections.abc import Iterable
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from .base import BrokerImportError, BrokerOrderRequest, BrokerValidationError
@@ -460,7 +460,7 @@ def coerce_iso(value: Any) -> str:
     """Normalize IBKR time-like payloads to ISO-8601 UTC text."""
 
     if value in (None, ""):
-        return datetime.now(timezone.utc).isoformat()
+        return datetime.now(UTC).isoformat()
     if isinstance(value, datetime):
         parsed = value
     else:
@@ -469,5 +469,5 @@ def coerce_iso(value: Any) -> str:
         except Exception:
             return str(value)
     if parsed.tzinfo is None:
-        parsed = parsed.replace(tzinfo=timezone.utc)
-    return parsed.astimezone(timezone.utc).isoformat()
+        parsed = parsed.replace(tzinfo=UTC)
+    return parsed.astimezone(UTC).isoformat()
