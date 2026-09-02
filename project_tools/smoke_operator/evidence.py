@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from quant_execution_engine.broker import is_paper_broker
@@ -36,7 +36,7 @@ def write_evidence(
     evidence_path = Path(evidence_output)
     evidence_path.parent.mkdir(parents=True, exist_ok=True)
     payload = {
-        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "generated_at": datetime.now(UTC).isoformat(),
         "broker": broker,
         "broker_mode": "paper" if is_paper_broker(broker) else "real",
         "account_label": account_label,
