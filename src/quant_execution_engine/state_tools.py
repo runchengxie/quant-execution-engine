@@ -10,7 +10,7 @@ unchanged.
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
 from ._state_aggregates import _build_state_indexes, _recompute_parent_aggregates
@@ -97,7 +97,7 @@ class StateMaintenanceService:
 
         state = self.state_store.load(broker_name, account_label)
         state_path = self.state_store.path_for(broker_name, account_label)
-        cutoff = datetime.now(timezone.utc) - timedelta(days=int(older_than_days))
+        cutoff = datetime.now(UTC) - timedelta(days=int(older_than_days))
         plan = _build_prune_plan(state, cutoff)
 
         result = StatePruneResult(
