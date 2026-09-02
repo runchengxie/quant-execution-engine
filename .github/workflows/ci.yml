@@ -1,0 +1,50 @@
+name: Pull request quality
+
+on:
+  pull_request:
+    paths:
+      - "src/**"
+      - "tests/**"
+      - "scripts/**"
+      - "project_tools/**"
+      - "Makefile"
+      - "pyproject.toml"
+      - "uv.lock"
+      - ".github/workflows/ci.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: quant-execution-engine-ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          python-version: "3.11"
+
+      - name: Install development dependencies
+        run: make sync
+
+      - name: Lint
+        run: make lint
+
+      - name: Format check
+        run: make format
+
+      - name: Typecheck
+        run: make typecheck
+
+      - name: Unit tests
+        run: make test
