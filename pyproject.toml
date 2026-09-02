@@ -100,7 +100,10 @@ exclude = [
 redundant-cast = "ignore"
 
 [[tool.ty.overrides]]
-include = ["src/quant_execution_engine/broker/_longport_sdk.py"]
+include = [
+  "src/quant_execution_engine/broker/_longport_sdk.py",
+  "tests/integration/test_longport_quote_integration.py",
+]
 rules = { unresolved-import = "ignore" }
 
 [tool.coverage.run]
