@@ -54,7 +54,7 @@
 - 同一仓库的多个 worktree 共享主工作树的 `core.hooksPath` 配置，不要在独立 worktree 内重装或改写 hook。
 - 修改前确认工作区状态，保留其他会话已有的改动。
 - 先提交本仓库，再由 `research-workspace` 更新对应 gitlink。
-- 本仓无运行中的远端 CI，质量事实来源是本地门禁与共享 pre-push。
+- 本仓的 PR workflow 只运行不接触真实券商和账户的质量门禁。本地门禁与共享 pre-push 继续负责提交前检查。
 - 不提交 `outputs/`、凭证、本地环境文件和券商数据。
 
 ## 环境和本地门禁
