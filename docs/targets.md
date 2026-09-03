@@ -7,7 +7,7 @@
 ```json
 {
   "asof": "2026-04-09",
-  "source": "strategy-pipeline",
+    "source": "strategy-pipeline-internal",
   "target_gross_exposure": 1.0,
   "targets": [
     {
