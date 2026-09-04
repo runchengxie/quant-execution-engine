@@ -7,6 +7,7 @@ import pytest
 
 from quant_execution_engine.targets import (
     normalize_execution_symbol,
+    prune_target_weights,
     read_targets_json,
     resolve_target_output_path,
     write_targets_json,
@@ -28,6 +29,29 @@ def test_resolve_target_output_path_uses_current_directory(tmp_path, monkeypatch
     assert resolve_target_output_path("artifacts/targets.json") == (
         tmp_path / "artifacts" / "targets.json"
     ).resolve()
+
+
+def test_prune_target_weights_keeps_cumulative_boundary_and_order() -> None:
+    result = prune_target_weights(
+        [0.1, 0.5, 0.3, 0.1],
+        cumulative_target_weight=0.6,
+    )
+
+    assert result.retained_indices == (1, 2)
+    assert result.output_weights == (0.5, 0.3)
+    assert result.metadata["dropped_count"] == 2
+
+
+def test_prune_target_weights_can_apply_minimum_and_renormalize() -> None:
+    result = prune_target_weights(
+        [0.1, 0.2, 0.7],
+        min_target_weight=0.2,
+        renormalize_target_weights=True,
+    )
+
+    assert result.retained_indices == (1, 2)
+    assert result.output_weights == pytest.approx((0.2222222222, 0.7777777778))
+    assert result.metadata["output_weight_sum"] == pytest.approx(1.0)
 
 
 def test_normalize_execution_symbol_rejects_market_conflicts() -> None:
