@@ -6,6 +6,8 @@ Defines the canonical, market-aware targets format used by rebalance execution.
 from __future__ import annotations
 
 import json
+import math
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -32,6 +34,104 @@ def resolve_target_output_path(value: str | Path) -> Path:
     """Resolve a targets artifact path relative to the current working directory."""
     path = Path(value).expanduser()
     return path.resolve() if path.is_absolute() else (Path.cwd() / path).resolve()
+
+
+@dataclass(frozen=True, slots=True)
+class TargetPruningResult:
+    """Result of applying execution-target weight pruning rules."""
+
+    retained_indices: tuple[int, ...]
+    output_weights: tuple[float, ...]
+    metadata: dict[str, object]
+
+
+def prune_target_weights(
+    weights: Sequence[float],
+    *,
+    min_target_weight: float | None = None,
+    cumulative_target_weight: float | None = None,
+    renormalize_target_weights: bool = False,
+) -> TargetPruningResult:
+    """Apply minimum and cumulative weight rules in stable input order.
+
+    The returned indices refer to the original sequence.  The cumulative rule
+    keeps the first item crossing the requested limit so the result does not
+    silently exclude the target boundary.
+    """
+    values = tuple(float(value) for value in weights)
+    if not values:
+        raise ValueError("target pruning requires at least one weight")
+    if any(not math.isfinite(value) for value in values):
+        raise ValueError("target weights must be finite")
+    if any(value < 0 for value in values):
+        raise ValueError("target weights must be non-negative")
+    if min_target_weight is not None and (
+        min_target_weight < 0 or not math.isfinite(float(min_target_weight))
+    ):
+        raise ValueError("min_target_weight must be finite and non-negative")
+    if cumulative_target_weight is not None and (
+        cumulative_target_weight <= 0
+        or cumulative_target_weight > 1.0
+        or not math.isfinite(float(cumulative_target_weight))
+    ):
+        raise ValueError("cumulative_target_weight must be finite and in (0, 1]")
+
+    original_weight_sum = sum(values)
+    eligible = [
+        index
+        for index, value in enumerate(values)
+        if min_target_weight is None or value >= float(min_target_weight)
+    ]
+    retained = eligible
+    if cumulative_target_weight is not None:
+        if not eligible:
+            raise ValueError("target pruning removed every holding")
+        ordered = sorted(eligible, key=lambda index: (-values[index], index))
+        running = 0.0
+        retained_set: set[int] = set()
+        crossing_index: int | None = None
+        for index in ordered:
+            running += values[index]
+            if running <= float(cumulative_target_weight):
+                retained_set.add(index)
+            if crossing_index is None and running >= float(cumulative_target_weight):
+                crossing_index = index
+                break
+        if crossing_index is not None:
+            retained_set.add(crossing_index)
+        else:
+            retained_set.update(ordered)
+        retained = [index for index in eligible if index in retained_set]
+
+    if not retained:
+        raise ValueError("target pruning removed every holding")
+    retained_weight_sum = sum(values[index] for index in retained)
+    output = [values[index] for index in retained]
+    if renormalize_target_weights:
+        output = [value * original_weight_sum / retained_weight_sum for value in output]
+    output_weight_sum = sum(output)
+    return TargetPruningResult(
+        retained_indices=tuple(retained),
+        output_weights=tuple(output),
+        metadata={
+            "enabled": bool(
+                min_target_weight is not None
+                or cumulative_target_weight is not None
+                or renormalize_target_weights
+            ),
+            "min_target_weight": min_target_weight,
+            "cumulative_target_weight": cumulative_target_weight,
+            "renormalize_target_weights": renormalize_target_weights,
+            "input_count": len(values),
+            "input_weight_sum": original_weight_sum,
+            "retained_count": len(retained),
+            "retained_weight_sum_before_renormalization": retained_weight_sum,
+            "dropped_count": len(values) - len(retained),
+            "dropped_weight_sum": max(0.0, original_weight_sum - retained_weight_sum),
+            "output_weight_sum": output_weight_sum,
+            "cash_weight_from_pruning": max(0.0, original_weight_sum - output_weight_sum),
+        },
+    )
 
 
 def normalize_execution_symbol(
