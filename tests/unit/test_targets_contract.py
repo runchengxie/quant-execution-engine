@@ -5,9 +5,25 @@ from pathlib import Path
 
 import pytest
 
-from quant_execution_engine.targets import read_targets_json, write_targets_json
+from quant_execution_engine.targets import (
+    normalize_execution_symbol,
+    read_targets_json,
+    write_targets_json,
+)
 
 pytestmark = pytest.mark.unit
+
+
+def test_normalize_execution_symbol_maps_exchange_symbols() -> None:
+    assert normalize_execution_symbol("600519.SH", "CN") == ("600519.SH", "CN")
+    assert normalize_execution_symbol("858.SZ", "CN") == ("000858.SZ", "CN")
+    assert normalize_execution_symbol("700.HK", None) == ("700", "HK")
+    assert normalize_execution_symbol("AAPL", "US") == ("AAPL", "US")
+
+
+def test_normalize_execution_symbol_rejects_market_conflicts() -> None:
+    with pytest.raises(ValueError, match="conflicts with market"):
+        normalize_execution_symbol("600519.SH", "HK")
 
 
 def test_write_targets_json_canonical_roundtrip(tmp_path: Path) -> None:

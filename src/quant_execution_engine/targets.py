@@ -15,6 +15,61 @@ CN_SYMBOL_SUFFIXES = {"SH", "SZ", "BJ", "XSHG", "XSHE"}
 CN_CANONICAL_SUFFIX = {"SH": "SH", "SZ": "SZ", "BJ": "BJ", "XSHG": "SH", "XSHE": "SZ"}
 KNOWN_MARKETS = {"US", "HK", "CN", "SG"}
 
+_EXECUTION_MARKET_SUFFIXES = {
+    ".HK": "HK",
+    ".XHKG": "HK",
+    ".US": "US",
+    ".CN": "CN",
+    ".SH": "CN",
+    ".SZ": "CN",
+    ".BJ": "CN",
+    ".XSHG": "CN",
+    ".XSHE": "CN",
+}
+
+
+def normalize_execution_symbol(
+    symbol: object,
+    market: object | None = None,
+) -> tuple[str, str]:
+    """Normalize a symbol and market for execution-facing artifacts.
+
+    Exchange suffixes are accepted on input. Chinese symbols are zero-padded
+    to six digits, and Hong Kong numeric symbols are emitted without leading
+    zeroes, matching broker-facing target formats.
+    """
+
+    text = str(symbol or "").strip().upper()
+    if not text:
+        raise ValueError("execution target symbol cannot be empty")
+
+    requested_market = _normalize_market(str(market or "")) or None
+    if requested_market is not None and requested_market not in KNOWN_MARKETS:
+        raise ValueError(f"unsupported execution target market: {market!r}")
+
+    for suffix, suffix_market in _EXECUTION_MARKET_SUFFIXES.items():
+        if not text.endswith(suffix):
+            continue
+        if requested_market is not None and requested_market != suffix_market:
+            raise ValueError(
+                f"execution target symbol {text!r} conflicts with market {requested_market!r}"
+            )
+        base = text[: -len(suffix)]
+        if suffix_market == "CN":
+            canonical_suffix = {".XSHG": ".SH", ".XSHE": ".SZ"}.get(suffix, suffix)
+            if base.isdigit():
+                base = base.zfill(6)
+            return f"{base}{canonical_suffix}", suffix_market
+        if suffix_market == "HK" and base.isdigit():
+            base = base.lstrip("0") or "0"
+        return base, suffix_market
+
+    if requested_market is None:
+        raise ValueError(f"cannot infer execution target market for symbol {text!r}")
+    if requested_market == "HK" and text.isdigit():
+        text = text.lstrip("0") or "0"
+    return text, requested_market
+
 
 def _canonical_cn_symbol(base: str, suffix: str | None = None) -> str:
     base_text = str(base or "").upper().strip()
