@@ -8,6 +8,7 @@ import pytest
 from quant_execution_engine.targets import (
     normalize_execution_symbol,
     read_targets_json,
+    resolve_target_output_path,
     write_targets_json,
 )
 
@@ -19,6 +20,14 @@ def test_normalize_execution_symbol_maps_exchange_symbols() -> None:
     assert normalize_execution_symbol("858.SZ", "CN") == ("000858.SZ", "CN")
     assert normalize_execution_symbol("700.HK", None) == ("700", "HK")
     assert normalize_execution_symbol("AAPL", "US") == ("AAPL", "US")
+
+
+def test_resolve_target_output_path_uses_current_directory(tmp_path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+
+    assert resolve_target_output_path("artifacts/targets.json") == (
+        tmp_path / "artifacts" / "targets.json"
+    ).resolve()
 
 
 def test_normalize_execution_symbol_rejects_market_conflicts() -> None:

@@ -28,6 +28,12 @@ _EXECUTION_MARKET_SUFFIXES = {
 }
 
 
+def resolve_target_output_path(value: str | Path) -> Path:
+    """Resolve a targets artifact path relative to the current working directory."""
+    path = Path(value).expanduser()
+    return path.resolve() if path.is_absolute() else (Path.cwd() / path).resolve()
+
+
 def normalize_execution_symbol(
     symbol: object,
     market: object | None = None,
