@@ -26,9 +26,10 @@ def test_normalize_execution_symbol_maps_exchange_symbols() -> None:
 def test_resolve_target_output_path_uses_current_directory(tmp_path, monkeypatch) -> None:
     monkeypatch.chdir(tmp_path)
 
-    assert resolve_target_output_path("artifacts/targets.json") == (
-        tmp_path / "artifacts" / "targets.json"
-    ).resolve()
+    assert (
+        resolve_target_output_path("artifacts/targets.json")
+        == (tmp_path / "artifacts" / "targets.json").resolve()
+    )
 
 
 def test_prune_target_weights_keeps_cumulative_boundary_and_order() -> None:
@@ -77,6 +78,7 @@ def test_write_targets_json_canonical_roundtrip(tmp_path: Path) -> None:
     assert "schema_version" not in raw
     assert raw["target_gross_exposure"] == 0.9
     assert raw["targets"][1]["market"] == "HK"
+    assert "notes" not in raw
 
     parsed = read_targets_json(out_path, require_canonical=True)
     assert parsed.target_gross_exposure == pytest.approx(0.9)
