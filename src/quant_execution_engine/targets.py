@@ -414,8 +414,9 @@ def write_targets_json(
         "source": source,
         "target_gross_exposure": float(target_gross_exposure or 0.0),
         "targets": [entry.to_payload() for entry in entries],
-        "notes": notes or None,
     }
+    if notes:
+        payload["notes"] = notes
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
