@@ -14,7 +14,7 @@ dev = [
   "pytest-cov",
   "ruff>=0.5",
   "ty>=0.0.55",
-  "research-dev-metrics",
+  "research-code-quality",
 ]
 
 [project.optional-dependencies]
@@ -34,7 +34,7 @@ stockq = "quant_execution_engine.cli:app"
 qexec = "quant_execution_engine.cli:app"
 
 [tool.uv.sources]
-research-dev-metrics = { git = "https://github.com/runchengxie/research-dev-metrics.git", rev = "e1d6e278b0645a23adb523ada9fa8d4743c2e3bf" }
+research-code-quality = { git = "https://github.com/runchengxie/research-code-quality.git", rev = "3f6c668" }
 
 [tool.setuptools]
 package-dir = {"" = "src"}

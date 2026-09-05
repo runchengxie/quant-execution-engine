@@ -704,7 +704,7 @@ dev = [
     { name = "pip-audit" },
     { name = "pytest" },
     { name = "pytest-cov" },
-    { name = "research-dev-metrics" },
+    { name = "research-code-quality" },
     { name = "ruff" },
     { name = "ty" },
 ]
@@ -729,7 +729,7 @@ dev = [
     { name = "pip-audit", specifier = ">=2.7" },
     { name = "pytest", specifier = ">=8" },
     { name = "pytest-cov" },
-    { name = "research-dev-metrics", git = "https://github.com/runchengxie/research-dev-metrics.git?rev=e1d6e278b0645a23adb523ada9fa8d4743c2e3bf" },
+    { name = "research-code-quality", git = "https://github.com/runchengxie/research-code-quality.git?rev=3f6c668" },
     { name = "ruff", specifier = ">=0.5" },
     { name = "ty", specifier = ">=0.0.55" },
 ]
@@ -750,9 +750,9 @@ wheels = [
 ]
 
 [[package]]
-name = "research-dev-metrics"
+name = "research-code-quality"
 version = "0.1.2"
-source = { git = "https://github.com/runchengxie/research-dev-metrics.git?rev=e1d6e278b0645a23adb523ada9fa8d4743c2e3bf#e1d6e278b0645a23adb523ada9fa8d4743c2e3bf" }
+source = { git = "https://github.com/runchengxie/research-code-quality.git?rev=3f6c668#3f6c668df755a885b6db5999a8a8a593c579f05e" }
 
 [[package]]
 name = "rich"
