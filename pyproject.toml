@@ -34,7 +34,7 @@ stockq = "quant_execution_engine.cli:app"
 qexec = "quant_execution_engine.cli:app"
 
 [tool.uv.sources]
-research-code-quality = { git = "https://github.com/runchengxie/research-code-quality.git", rev = "3f6c668" }
+research-code-quality = { git = "https://github.com/runchengxie/research-code-quality.git", rev = "3ff7580" }
 
 [tool.setuptools]
 package-dir = {"" = "src"}
