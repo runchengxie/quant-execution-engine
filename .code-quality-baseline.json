@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "roots": [
+    "src",
+    "scripts",
+    "research",
+    "tests"
+  ],
+  "metrics": {
+    "python_files": 129,
+    "python_lines": 28172,
+    "long_lines_over_100": 0,
+    "functions_over_100": 15,
+    "functions_over_250": 1,
+    "functions_over_500": 0,
+    "c901_file_ignores": 2,
+    "files_over_800": 3,
+    "files_over_1200": 2,
+    "tests_over_1000": 3
+  }
+}
