@@ -18,7 +18,7 @@ dev = [
 ]
 
 [project.optional-dependencies]
-cli = ["rich>=13"]
+cli = ["rich>=15.0.0"]
 longport = ["longport>=0.2.77"]
 alpaca = ["alpaca-py", "pytz"]
 ibkr = ["ib-insync>=0.9.86"]
