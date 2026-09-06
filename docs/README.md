@@ -1,31 +1,40 @@
 # 文档首页
 
+> status: active
+> owner: quant-execution-engine
+> audience: human and agent
+> last_verified: 2026-09-06
+> source_of_truth: yes
+> superseded_by: n/a
+
 本目录记录 `quant-execution-engine` 的命令、配置、券商能力、测试和专项演练。
 
 ## 按任务查找
 
 | 任务 | 文档 |
 | --- | --- |
-| 查看当前券商和能力 | [current-capabilities.md](current-capabilities.md) |
+| 查看当前券商和能力 | [reference/README.md](reference/README.md) |
 | 理解执行领域对象 | [typed-execution-domain.md](typed-execution-domain.md) |
-| 核对框架和适配器边界 | [architecture.md](architecture.md) |
-| 查询 `qexec` 命令 | [cli.md](cli.md) |
-| 配置凭证和风控 | [configuration.md](configuration.md) |
-| 查看 `targets.json` 格式 | [targets.md](targets.md) |
+| 核对框架和适配器边界 | [architecture/README.md](architecture/README.md) |
+| 查询 `qexec` 命令 | [reference/cli.md](reference/cli.md) |
+| 配置凭证和风控 | [reference/configuration.md](reference/configuration.md) |
+| 查看 `targets.json` 格式 | [reference/targets.md](reference/targets.md) |
 | 理解研究交接和审计 | [research-handoff-governance.md](research-handoff-governance.md) |
 | 运行离线证据链 | [evidence.md](evidence.md) |
-| 运行测试 | [testing.md](testing.md) |
-| 理解架构 | [architecture.md](architecture.md) |
+| 运行测试 | [operations/testing.md](operations/testing.md) |
+| 理解架构 | [architecture/README.md](architecture/README.md) |
 | 理解订单生命周期 | [execution-foundation.md](execution-foundation.md) |
-| Alpaca 模拟盘演练 | [alpaca-paper-smoke.md](alpaca-paper-smoke.md) |
-| 盈透模拟盘演练 | [ibkr-paper-smoke.md](ibkr-paper-smoke.md) |
-| 长桥模拟盘失败场景 | [longport-paper-failure-smoke.md](longport-paper-failure-smoke.md) |
-| 长桥实盘谨慎演练 | [longport-real-smoke.md](longport-real-smoke.md) |
+| Alpaca 模拟盘演练 | [operations/brokers/alpaca-paper-smoke.md](operations/brokers/alpaca-paper-smoke.md) |
+| 盈透模拟盘演练 | [operations/brokers/ibkr-paper-smoke.md](operations/brokers/ibkr-paper-smoke.md) |
+| 长桥模拟盘失败场景 | [operations/brokers/longport-paper-failure-smoke.md](operations/brokers/longport-paper-failure-smoke.md) |
+| 长桥实盘谨慎演练 | [operations/brokers/longport-real-smoke.md](operations/brokers/longport-real-smoke.md) |
 | 历史记录 | [archive/README.md](archive/README.md) |
 
 ## 推荐阅读顺序
 
 1. [根目录 README](../README.md)
+
+编码代理默认读取根 README、本页、一个分类 README 和目标页面，不递归读取全部 Markdown。
 2. [当前能力](current-capabilities.md)
 3. [配置](configuration.md)
 4. [命令行](cli.md)

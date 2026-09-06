@@ -36,7 +36,7 @@ def test_entry_docs_use_concise_chinese_style() -> None:
 
 def test_testing_docs_match_makefile_targets() -> None:
     makefile = (ROOT / "Makefile").read_text(encoding="utf-8")
-    docs = (ROOT / "docs" / "testing.md").read_text(encoding="utf-8")
+    docs = (ROOT / "docs" / "operations" / "testing.md").read_text(encoding="utf-8")
 
     for target in (
         "test",
@@ -83,7 +83,7 @@ def test_readme_local_dry_run_example_is_versioned() -> None:
 
 def test_docs_match_current_type_tools_and_automation() -> None:
     pyproject = (ROOT / "pyproject.toml").read_text(encoding="utf-8").lower()
-    docs = (ROOT / "docs" / "testing.md").read_text(encoding="utf-8")
+    docs = (ROOT / "docs" / "operations" / "testing.md").read_text(encoding="utf-8")
 
     assert "mypy" not in pyproject
     assert "当前工具链不使用 `mypy`" in docs
@@ -95,7 +95,7 @@ def test_docs_match_current_type_tools_and_automation() -> None:
 def test_docs_record_current_framework_boundary() -> None:
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
     agents = (ROOT / "AGENTS.md").read_text(encoding="utf-8")
-    architecture = (ROOT / "docs" / "architecture.md").read_text(encoding="utf-8")
+    architecture = (ROOT / "docs" / "architecture" / "overview.md").read_text(encoding="utf-8")
     capabilities = (ROOT / "docs" / "current-capabilities.md").read_text(encoding="utf-8")
     docs = "\n".join((readme, agents, architecture, capabilities))
 

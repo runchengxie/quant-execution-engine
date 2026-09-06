@@ -1,0 +1,255 @@
+# 配置说明
+
+当前券商后端支持范围、凭证来源规则和证据成熟度以 [current-capabilities.md](current-capabilities.md) 为准。本文聚焦配置入口。
+
+## 环境变量
+
+### 长桥实盘
+
+必需：
+
+- `LONGPORT_APP_KEY`
+- `LONGPORT_APP_SECRET`
+- `LONGPORT_ACCESS_TOKEN`
+
+提交保护：
+
+- `qexec rebalance --execute` 在实盘路径下要求 `QEXEC_ENABLE_LIVE=1`。
+- 仓库根目录下的 `.env*` 或 `.envrc*` 如果包含长桥实盘凭证，命令行工具会拒绝执行。
+- 这条保护用于防止实盘密钥留在仓库本地文件里。模拟盘路径不受这个限制。
+- `.env.example` 只示范本地模拟盘与冒烟测试配置，不包含 `LONGPORT_ACCESS_TOKEN` 实盘占位符。
+
+可选：
+
+- `LONGPORT_REGION`
+- `LONGPORT_ENABLE_OVERNIGHT`
+- `LONGPORT_TRADING_WINDOW_START`
+- `LONGPORT_TRADING_WINDOW_END`
+- `FX_<CCY>_USD`，例如 `FX_HKD_USD=0.128`。
+- `LONGPORT_FX_<CCY>_USD`，例如 `LONGPORT_FX_HKD_USD=0.128`。
+
+### 长桥模拟盘
+
+必需：
+
+- `LONGPORT_APP_KEY`
+- `LONGPORT_APP_SECRET`
+- `LONGPORT_ACCESS_TOKEN_TEST`
+
+说明：
+
+- 长桥实盘和模拟盘共用应用密钥与秘密，但使用不同的访问令牌。
+- 当前长桥模拟盘后端会优先读取 `LONGPORT_ACCESS_TOKEN_TEST`。
+
+弃用兼容读取：
+
+- 旧的 `LONGBRIDGE_*` 前缀仍会兼容读取，但新配置和文档应使用 `LONGPORT_*`。
+- `LONGPORT_ACCESS_TOKEN_REAL` 仍会作为 `LONGPORT_ACCESS_TOKEN` 的兼容兜底。
+- `LONGPORT_FX_<CCY>_USD` 会作为 `FX_<CCY>_USD` 的兼容兜底。
+
+兼容限额变量：
+
+- `LONGPORT_MAX_NOTIONAL_PER_ORDER`
+- `LONGPORT_MAX_QTY_PER_ORDER`
+
+这两个变量仍会被兼容读取，但当前命令行工具主执行路径更推荐通过 `execution.risk.*` 配置本地风控阈值。
+
+### 长桥证券读取优先级
+
+当前项目刻意把长桥的模拟盘和实盘路径分开处理：
+
+- 长桥模拟盘：优先读取仓库根目录 `.env` 或 `.env.local`，其次读取当前进程环境变量，最后才回退到 `~/.config/qexec/longport-live.env`。
+- 长桥实盘：优先读取 `~/.config/qexec/longport-live.env`，其次读取当前进程环境变量。
+
+这样做的目的很直接：
+
+- 模拟盘和冒烟测试以项目内测试配置为主，不容易被外部残留环境变量带偏。
+- 实盘路径默认走用户私有配置，避免把实盘令牌放进仓库本地文件。
+
+另外：
+
+- `QEXEC_ENABLE_LIVE` 先读当前进程环境变量。未设置时回退到 `~/.config/qexec/longport-live.env`。
+- `qexec config --broker longport` 和 `qexec config --broker longport-paper` 会显示各项配置的命中来源，便于排查到底读到了哪一层配置。
+
+### Alpaca 模拟盘
+
+必需：
+
+- `ALPACA_API_KEY` 或 `APCA_API_KEY_ID`
+- `ALPACA_SECRET_KEY` 或 `APCA_API_SECRET_KEY`
+
+说明：
+
+- Alpaca 支持来自可选依赖 `alpaca-py`，安装方式为 `uv sync --extra alpaca`。
+- 当前适配器是纯模拟盘验证路径。
+
+### 盈透证券模拟盘
+
+必需：
+
+- 本地已启动并登录的盈透网关。
+- `IBKR_HOST`，默认 `127.0.0.1`。
+- `IBKR_PORT` 或 `IBKR_PORT_PAPER`，默认 `4002`。
+- `IBKR_CLIENT_ID`，默认 `1`。
+
+可选：
+
+- `IBKR_ACCOUNT_ID`
+- `IBKR_CONNECT_TIMEOUT_SECONDS`，默认 `5`。
+
+说明：
+
+- 当前盈透证券模拟盘后端按本地盈透网关配合应用编程接口路线运行。
+- 当前只支持美股正股的最小切片。非美股标的会在适配器层快速失败。
+- `qexec config --broker ibkr-paper` 会显示主机、模拟盘端口、客户编号、账户编号与超时时间的有效值和来源。
+- 真实多账户路由不在当前范围内。`--account` 仍只接受 `main`。
+
+### 离线证据链
+
+`local-dry-run` 和 `mock-sim` 不需要凭证，也不走网络。它们通过环境变量把审计日志、执行状态和证据 JSON 重定向到隔离运行目录：
+
+- `QEXEC_OUTPUTS_DIR`：把审计日志、执行状态和证据产物写入该目录，未设置时使用仓库根目录下的 `outputs/`。
+- `QEXEC_MOCK_SIM_STATE_DIR`：`mock-sim` 的模拟券商侧状态目录，默认 `outputs/mock-sim`。
+- `QEXEC_MOCK_SIM_CLOCK`：`mock-sim` 的合成时间戳，默认 `2026-01-01T00:00:00+00:00`。
+- `QEXEC_MOCK_SIM_PRICE`：`mock-sim` 的合成价格覆盖，未设置时按标的确定性生成。
+- `QEXEC_MOCK_SIM_CASH_USD`：`mock-sim` 的初始现金，默认 `1000000`。
+
+`mock-sim` 的确定性合成时间与价格让同一次运行可以稳定复现。运行方式见 [evidence.md](evidence.md)。
+
+### 安装模型
+
+- 最小命令行安装：`uv sync --extra cli`
+- 开发环境：`uv sync --group dev --extra cli`
+- 长桥：`uv sync --group dev --extra cli --extra longport`
+- Alpaca：`uv sync --group dev --extra cli --extra alpaca`
+- 盈透：`uv sync --group dev --extra cli --extra ibkr`
+- 全量券商依赖：`uv sync --group dev --extra cli --extra full`
+- 当前命令行工具没有默认券商。请在本地配置文件里设置 `broker.backend`，或每次传 `--broker`。
+
+### `.envrc.example`
+
+仓库里的 `.envrc.example` 和被追踪的 `.envrc` 使用同一套模型，默认使用：
+
+```bash
+uv sync --group dev --extra cli
+```
+
+如果 `.env` 或 `.env.local` 或当前命令行环境中已经有对应券商的环境变量，它会自动追加相关可选依赖：
+
+- Alpaca 变量命中时追加 `--extra alpaca`。
+- 长桥或已弃用的长桥兼容变量命中时追加 `--extra longport`。
+- 盈透变量命中时追加 `--extra ibkr`。
+
+`.envrc` 仍然是仓库本地文件。实盘推荐：
+
+```bash
+export LONGPORT_APP_KEY=...
+export LONGPORT_APP_SECRET=...
+export LONGPORT_ACCESS_TOKEN=...
+export QEXEC_ENABLE_LIVE=1
+```
+
+或使用仓库外部的用户私有文件：
+
+```bash
+mkdir -p ~/.config/qexec
+cat > ~/.config/qexec/longport-live.env <<'EOF'
+export LONGPORT_APP_KEY=...
+export LONGPORT_APP_SECRET=...
+export LONGPORT_ACCESS_TOKEN=...
+export QEXEC_ENABLE_LIVE=1
+EOF
+```
+
+也可以通过 `UV_SYNC_ARGS` 显式覆盖，例如：
+
+```bash
+UV_SYNC_ARGS="--group dev --extra cli --extra longport --extra ibkr"
+```
+
+## 本地配置文件
+
+复制模板：
+
+```bash
+cp config/template.yaml config/config.yaml
+```
+
+当前执行引擎主要读取这些字段：
+
+- `broker`
+- `execution`
+- `fees`
+- `fractional_preview`
+- `fx`
+
+示例：
+
+```yaml
+broker:
+  backend: null
+  default_account: main
+  accounts:
+    main: {}
+
+execution:
+  state_dir: outputs/state
+  risk:
+    max_qty_per_order: 0
+    max_notional_per_order: 0
+    max_spread_bps: 0
+    max_participation_rate: 0
+    max_market_impact_bps: 0
+  kill_switch:
+    env_var: QEXEC_KILL_SWITCH
+    failure_threshold: 3
+
+fees:
+  domicile: HK
+  commission: 0.0
+  platform_per_share: 0.005
+  fractional_pct_lt1: 0.012
+  fractional_cap_lt1: 0.99
+  sell_reg_fees_bps: 0.0
+
+fractional_preview:
+  enable: true
+  default_step: 0.001
+
+fx:
+  to_usd:
+    HKD: 0.128
+```
+
+也兼容这种汇率结构：
+
+```yaml
+fx:
+  rates:
+    HKDUSD: 0.128
+```
+
+`qexec rebalance` 统一以 USD 计算组合价值、目标手数和名义金额风控。对于
+`HK`、`CN`、`SG` 市场，执行引擎会在调仓计划生成前使用相应 FX 配置将
+行情会换算为 USD。缺少汇率时拒绝生成计划，避免以混合币种继续计算。
+因此港股 `targets.json` 通过 `longport-paper` 或 `longport` 调仓前，必须
+配置 `FX_HKD_USD`（或上面的 `fx.to_usd.HKD` / `fx.rates.HKDUSD`）。
+
+## 加载顺序
+
+配置文件按这个顺序查找：
+
+1. `config/config.yaml`
+2. `config.yaml`
+
+都不存在时，运行时使用空配置。
+
+## 行为说明
+
+- `execution.risk.*` 是当前命令行工具主执行路径的主要本地风控来源。
+- 长桥交易时段配置只是会话接口不可用时的本地降级判断。
+- 长桥最大数量与名义金额配置更偏兼容层或遗留客户端语义。当前主执行路径仍以 `execution.risk.*` 作为主要风控来源。
+- 紧急停单变量和可选路径可以手动停掉新的券商提交。
+- 默认账户是命令行工具未传 `--account` 时使用的标签。适配器不支持该标签时会直接报错。
+- 执行状态目录控制幂等与恢复状态文件目录，默认是 `outputs/state`。
+- 盈透证券目前依赖本地已启动的盈透网关，当前配置层只开放模拟盘运行路径，暂不支持切换到实盘券商后端。

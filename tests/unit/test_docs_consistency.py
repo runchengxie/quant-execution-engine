@@ -46,7 +46,7 @@ def _pytest_markers() -> set[str]:
 
 
 def test_cli_docs_cover_top_level_qexec_commands() -> None:
-    docs = (ROOT / "docs" / "cli.md").read_text(encoding="utf-8")
+    docs = (ROOT / "docs" / "reference" / "cli.md").read_text(encoding="utf-8")
 
     missing = sorted(
         command
@@ -58,7 +58,7 @@ def test_cli_docs_cover_top_level_qexec_commands() -> None:
 
 
 def test_testing_docs_cover_pytest_markers() -> None:
-    docs = (ROOT / "docs" / "testing.md").read_text(encoding="utf-8")
+    docs = (ROOT / "docs" / "operations" / "testing.md").read_text(encoding="utf-8")
 
     missing = sorted(marker for marker in _pytest_markers() if f"`{marker}`" not in docs)
 
@@ -68,17 +68,17 @@ def test_testing_docs_cover_pytest_markers() -> None:
 def test_broker_smoke_docs_cover_registered_backends() -> None:
     capabilities = (ROOT / "docs" / "current-capabilities.md").read_text(encoding="utf-8")
     docs_index = (ROOT / "docs" / "README.md").read_text(encoding="utf-8")
-    testing = (ROOT / "docs" / "testing.md").read_text(encoding="utf-8")
+    testing = (ROOT / "docs" / "operations" / "testing.md").read_text(encoding="utf-8")
 
     registered = sorted(ALPACA_BROKERS | IBKR_BROKERS | LONGPORT_BROKERS | PAPER_BROKERS)
     missing_from_matrix = [broker for broker in registered if f"`{broker}`" not in capabilities]
     assert missing_from_matrix == []
 
     smoke_docs = {
-        "alpaca-paper": "alpaca-paper-smoke.md",
-        "ibkr-paper": "ibkr-paper-smoke.md",
-        "longport-paper": "longport-paper-failure-smoke.md",
-        "longport": "longport-real-smoke.md",
+            "alpaca-paper": "operations/brokers/alpaca-paper-smoke.md",
+            "ibkr-paper": "operations/brokers/ibkr-paper-smoke.md",
+            "longport-paper": "operations/brokers/longport-paper-failure-smoke.md",
+            "longport": "operations/brokers/longport-real-smoke.md",
     }
     missing_docs: list[str] = []
     missing_links: list[str] = []
@@ -88,7 +88,8 @@ def test_broker_smoke_docs_cover_registered_backends() -> None:
         if not doc_path.is_file():
             missing_docs.append(doc_name)
             continue
-        if doc_name not in docs_index or doc_name not in testing:
+        doc_basename = Path(doc_name).name
+        if doc_basename not in docs_index or doc_basename not in testing:
             missing_links.append(doc_name)
         doc_text = doc_path.read_text(encoding="utf-8")
         if f"`{broker}`" not in doc_text and f"--broker {broker}" not in doc_text:
