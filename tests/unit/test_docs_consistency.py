@@ -75,10 +75,10 @@ def test_broker_smoke_docs_cover_registered_backends() -> None:
     assert missing_from_matrix == []
 
     smoke_docs = {
-            "alpaca-paper": "operations/brokers/alpaca-paper-smoke.md",
-            "ibkr-paper": "operations/brokers/ibkr-paper-smoke.md",
-            "longport-paper": "operations/brokers/longport-paper-failure-smoke.md",
-            "longport": "operations/brokers/longport-real-smoke.md",
+        "alpaca-paper": "operations/brokers/alpaca-paper-smoke.md",
+        "ibkr-paper": "operations/brokers/ibkr-paper-smoke.md",
+        "longport-paper": "operations/brokers/longport-paper-failure-smoke.md",
+        "longport": "operations/brokers/longport-real-smoke.md",
     }
     missing_docs: list[str] = []
     missing_links: list[str] = []
