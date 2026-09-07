@@ -1,5 +1,7 @@
 # quant-execution-engine
 
+> 迁移状态：migration-only。新的通用执行接口、预演、风控和审计能力进入 `quant-platform`。本仓库保留历史执行复现和迁移兼容。
+
 `quant-execution-engine` 是量化研发工作区的交易执行层。它读取标准 `targets.json`，完成执行前检查、调仓预演、券商下单、订单追踪、异常恢复和审计。
 
 ```text
