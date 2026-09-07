@@ -1,5 +1,9 @@
 # AGENTS.md
 
+## 迁移通知
+
+`research-workspace` 处于 sunset 过渡期。新的通用执行接口、预演、风控和审计能力进入 `quant-platform`，策略专属规则进入 `quant-research`。本仓库只维护历史复现和兼容迁移。
+
 本文件说明 `quant-execution-engine` 的协作边界和本地门禁。
 
 ## 仓库职责
