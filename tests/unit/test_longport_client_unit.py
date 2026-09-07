@@ -9,6 +9,7 @@ import pytest
 import quant_execution_engine.broker.longport as longport_mod
 from quant_execution_engine.broker.base import BrokerImportError
 from quant_execution_engine.broker.longport import BrokerLimits, LongPortClient
+from quant_execution_engine.broker.longport_support import Env
 
 
 @pytest.mark.unit
@@ -253,7 +254,7 @@ def test_portfolio_snapshot_basic(monkeypatch: pytest.MonkeyPatch) -> None:
 @pytest.mark.unit
 def test_place_order_dry_run_returns_estimate() -> None:
     client = LongPortClient.__new__(LongPortClient)
-    client.env = SimpleNamespace(value="real")
+    client.env = Env.REAL
     client.limits = BrokerLimits()
 
     with (
@@ -273,7 +274,7 @@ def test_place_order_dry_run_returns_estimate() -> None:
 @pytest.mark.unit
 def test_place_order_live_mode_is_currently_simulated() -> None:
     client = LongPortClient.__new__(LongPortClient)
-    client.env = SimpleNamespace(value="real")
+    client.env = Env.REAL
     client.limits = BrokerLimits()
 
     with (
