@@ -13,7 +13,7 @@ dev = [
   "pytest>=9.1.1",
   "pytest-cov",
   "ruff>=0.5",
-  "ty>=0.0.77",
+  "ty>=0.0.78",
   "research-code-quality",
 ]
 
